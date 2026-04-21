@@ -134,7 +134,7 @@ export function getNavigationItems(user) {
   if (can(user, "security.read")) {
     items.push({
       id: "admin-security",
-      label: "Безопасность",
+      label: "Администрирование",
       to: "/admin/security",
     });
   }

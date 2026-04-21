@@ -9,13 +9,52 @@ import {
 } from "../data/mockData";
 import { can, getNavigationItems, getScopeBadges } from "../rbac/permissions";
 
-const STORAGE_KEY = "newdiary-mock-api-v2";
-const SESSION_ID = "session-istoki-april-2026";
+const STORAGE_KEY = "newdiary-mock-api-v4";
+
+const SESSION_CATALOG = [
+  {
+    id: "session-vypusknoy-2026",
+    name: "Выпускной",
+    cycle: "Июнь 2026",
+    dateLabel: "18 июня 2026",
+    location: "Москва",
+  },
+  {
+    id: "session-istoki-school-2026",
+    name: "Истоки. Школа",
+    cycle: "Летняя школа / Июль 2026",
+    dateLabel: "12-15 июля 2026",
+    location: "Печоры",
+  },
+];
+
+const DEFAULT_SESSION_ID = "session-istoki-school-2026";
 
 const GROUPS = [
-  { id: "group-1", label: "Группа 1", sessionId: SESSION_ID, curatorId: "user-curator-1" },
-  { id: "group-2", label: "Группа 2", sessionId: SESSION_ID, curatorId: "user-curator-2" },
-  { id: "group-3", label: "Группа 3", sessionId: SESSION_ID, curatorId: "user-curator-3" },
+  {
+    id: "group-vypusknoy-1",
+    label: "Группа Выпускной",
+    sessionId: "session-vypusknoy-2026",
+    curatorId: "user-curator-2",
+  },
+  {
+    id: "group-school-1",
+    label: "Группа 1",
+    sessionId: "session-istoki-school-2026",
+    curatorId: "user-curator-1",
+  },
+  {
+    id: "group-school-2",
+    label: "Группа 2",
+    sessionId: "session-istoki-school-2026",
+    curatorId: "user-curator-2",
+  },
+  {
+    id: "group-school-3",
+    label: "Группа 3",
+    sessionId: "session-istoki-school-2026",
+    curatorId: "user-curator-3",
+  },
 ];
 
 const USERS = [
@@ -24,9 +63,9 @@ const USERS = [
     fullName: "Боря Соколов",
     role: "participant",
     roleLabel: "Участник",
-    sessionId: SESSION_ID,
-    sessionLabel: "Истоки / Апрель 2026",
-    groupId: "group-1",
+    sessionId: DEFAULT_SESSION_ID,
+    sessionLabel: "Истоки. Школа",
+    groupId: "group-school-1",
     groupLabel: "Группа 1",
   },
   {
@@ -34,19 +73,39 @@ const USERS = [
     fullName: "Марина Чернова",
     role: "curator",
     roleLabel: "Куратор",
-    sessionId: SESSION_ID,
-    sessionLabel: "Истоки / Апрель 2026",
-    groupId: "group-1",
+    sessionId: DEFAULT_SESSION_ID,
+    sessionLabel: "Истоки. Школа",
+    groupId: "group-school-1",
     groupLabel: "Группа 1",
+  },
+  {
+    id: "user-curator-2",
+    fullName: "Даниил Крылов",
+    role: "curator",
+    roleLabel: "Куратор",
+    sessionId: DEFAULT_SESSION_ID,
+    sessionLabel: "Истоки. Школа",
+    groupId: "group-school-2",
+    groupLabel: "Группа 2",
+  },
+  {
+    id: "user-curator-3",
+    fullName: "Елена Лисицына",
+    role: "curator",
+    roleLabel: "Куратор",
+    sessionId: DEFAULT_SESSION_ID,
+    sessionLabel: "Истоки. Школа",
+    groupId: "group-school-3",
+    groupLabel: "Группа 3",
   },
   {
     id: "user-organizer-1",
     fullName: "Алексей Волков",
     role: "organizer",
     roleLabel: "Организатор",
-    sessionId: SESSION_ID,
-    sessionLabel: "Истоки / Апрель 2026",
-    groupId: "group-1",
+    sessionId: DEFAULT_SESSION_ID,
+    sessionLabel: "Истоки. Школа",
+    groupId: "group-school-1",
     groupLabel: "Все группы",
   },
   {
@@ -61,16 +120,24 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function createSessionInfo(session) {
+  return {
+    ...sessionInfo,
+    name: session.name,
+    cycle: session.cycle,
+    dateLabel: session.dateLabel,
+    location: session.location,
+  };
+}
+
 function buildSeedDatabase() {
   return {
-    sessions: [
-      {
-        id: SESSION_ID,
-        ...sessionInfo,
-      },
-    ],
-    groups: GROUPS,
-    users: USERS,
+    sessions: SESSION_CATALOG.map((session) => ({
+      id: session.id,
+      ...createSessionInfo(session),
+    })),
+    groups: cloneJson(GROUPS),
+    users: cloneJson(USERS),
     reference: {
       stateScale,
       reflectionPrompts,
@@ -78,23 +145,23 @@ function buildSeedDatabase() {
     participantDiaryByUserId: {
       "user-participant-1": {
         currentDayId: "day-2",
-        history: participantHistory,
+        history: cloneJson(participantHistory),
       },
     },
     curatorDashboardByGroupId: {
-      "group-1": {
+      "group-school-1": {
         ...curatorOverview,
-        groupId: "group-1",
-        sessionId: SESSION_ID,
+        groupId: "group-school-1",
+        sessionId: DEFAULT_SESSION_ID,
       },
     },
     organizerDashboardBySessionId: {
-      [SESSION_ID]: {
+      [DEFAULT_SESSION_ID]: {
         ...organizerOverview,
-        sessionId: SESSION_ID,
+        sessionId: DEFAULT_SESSION_ID,
       },
     },
-    adminDashboard: adminOverview,
+    adminDashboard: cloneJson(adminOverview),
   };
 }
 
@@ -132,6 +199,16 @@ function createHttpError(status, message) {
   return error;
 }
 
+function getSession(db, sessionId) {
+  const session = db.sessions.find((item) => item.id === sessionId);
+
+  if (!session) {
+    throw createHttpError(404, "Событие не найдено");
+  }
+
+  return session;
+}
+
 function getViewer(db, viewerId) {
   const viewer = db.users.find((user) => user.id === viewerId);
 
@@ -152,10 +229,18 @@ function ensureAccess(db, viewerId, permission, subject = {}) {
   return viewer;
 }
 
-function enrichBootstrap(viewer) {
+function getViewerSessionInfo(db, viewer) {
+  if (!viewer?.sessionId) {
+    return sessionInfo;
+  }
+
+  return getSession(db, viewer.sessionId);
+}
+
+function enrichBootstrap(db, viewer) {
   return {
     viewer,
-    sessionInfo,
+    sessionInfo: getViewerSessionInfo(db, viewer),
     stateScale,
     reflectionPrompts,
     navigation: getNavigationItems(viewer),
@@ -163,10 +248,8 @@ function enrichBootstrap(viewer) {
   };
 }
 
-async function listUsers() {
-  await delay();
-
-  return USERS.map((user) => ({
+function toPublicUser(user) {
+  return {
     id: user.id,
     fullName: user.fullName,
     role: user.role,
@@ -175,16 +258,87 @@ async function listUsers() {
     sessionLabel: user.sessionLabel ?? null,
     groupId: user.groupId ?? null,
     groupLabel: user.groupLabel ?? null,
-  }));
+  };
+}
+
+function getDefaultGroupForSession(db, sessionId) {
+  return db.groups.find((group) => group.sessionId === sessionId) ?? null;
+}
+
+function createParticipantUser({ fullName, sessionId, sessionLabel, group }) {
+  const userId = `user-participant-${Math.random().toString(36).slice(2, 10)}`;
+
+  return {
+    id: userId,
+    fullName,
+    role: "participant",
+    roleLabel: "Участник",
+    sessionId,
+    sessionLabel,
+    groupId: group.id,
+    groupLabel: group.label,
+  };
+}
+
+async function listUsers() {
+  await delay();
+  const db = readDatabase();
+  return db.users.map(toPublicUser);
+}
+
+async function listPublicEvents() {
+  await delay();
+  return cloneJson(
+    SESSION_CATALOG.map((session) => ({
+      id: session.id,
+      label: session.name,
+      description: `${session.cycle} · ${session.dateLabel} · ${session.location}`,
+    })),
+  );
+}
+
+async function registerParticipant({ fullName, sessionId }) {
+  await delay();
+
+  const db = readDatabase();
+  const trimmedName = String(fullName || "").trim();
+
+  if (!trimmedName) {
+    throw createHttpError(400, "Укажите имя участника");
+  }
+
+  const session = getSession(db, sessionId);
+  const group = getDefaultGroupForSession(db, sessionId);
+
+  if (!group) {
+    throw createHttpError(400, "Для выбранного события ещё не настроены группы");
+  }
+
+  const nextUser = createParticipantUser({
+    fullName: trimmedName,
+    sessionId,
+    sessionLabel: session.name,
+    group,
+  });
+
+  db.users.push(nextUser);
+  db.participantDiaryByUserId[nextUser.id] = {
+    currentDayId: "day-2",
+    history: cloneJson(participantHistory),
+  };
+
+  writeDatabase(db);
+
+  return {
+    user: toPublicUser(nextUser),
+  };
 }
 
 async function getBootstrap({ viewerId }) {
   await delay();
-
   const db = readDatabase();
   const viewer = getViewer(db, viewerId);
-
-  return enrichBootstrap(viewer);
+  return enrichBootstrap(db, viewer);
 }
 
 async function getParticipantDiary({ viewerId, sessionId }) {
@@ -318,7 +472,7 @@ async function getOrganizerDashboard({ viewerId, sessionId }) {
   const dashboard = db.organizerDashboardBySessionId[sessionId];
 
   if (!dashboard) {
-    throw createHttpError(404, "Данные заезда не найдены");
+    throw createHttpError(404, "Данные события не найдены");
   }
 
   return cloneJson(dashboard);
@@ -335,6 +489,8 @@ async function getAdminDashboard({ viewerId }) {
 
 export const mockServer = {
   listUsers,
+  listPublicEvents,
+  registerParticipant,
   getBootstrap,
   getParticipantDiary,
   updateParticipantEntry,

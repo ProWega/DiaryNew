@@ -1,31 +1,58 @@
-import { useAdminDashboard } from "../api/hooks";
+import { useAdminWorkspace } from "../api/hooks";
 import FeedbackState from "../components/FeedbackState";
-import AdminSecurityView from "../views/AdminSecurityView";
+import AdminCabinetView from "../views/AdminCabinetView";
 
 function AdminSecurityPage() {
-  const { data, loading, error, refresh } = useAdminDashboard();
+  const {
+    data,
+    loading,
+    error,
+    refresh,
+    saving,
+    mutationError,
+    createUser,
+    updateUser,
+    updateUserStatus,
+    upsertAssignment,
+    createSession,
+    updateSession,
+    updateRegistration,
+  } = useAdminWorkspace();
 
   if (loading && !data) {
     return (
       <FeedbackState
-        title="Загружаем контур безопасности"
-        description="Получаем матрицу ролей, политику хранения и последние аудит-события."
+        title="Загружаем админский кабинет"
+        description="Получаем пользователей, роли, заезды, назначения, статусы регистрации и аудит."
       />
     );
   }
 
-  if (error) {
+  if (error || !data) {
     return (
       <FeedbackState
-        title="Не удалось загрузить админ-раздел"
-        description="У текущего пользователя нет доступа к security-разделу или mock API вернул ошибку."
+        title="Не удалось загрузить админский раздел"
+        description="Проверьте backend API, права текущего пользователя и подключение к PostgreSQL."
         actionLabel="Повторить"
         onAction={refresh}
       />
     );
   }
 
-  return <AdminSecurityView dashboard={data} />;
+  return (
+    <AdminCabinetView
+      workspace={data}
+      saving={saving}
+      mutationError={mutationError}
+      onCreateUser={createUser}
+      onUpdateUser={updateUser}
+      onUpdateUserStatus={updateUserStatus}
+      onUpsertAssignment={upsertAssignment}
+      onCreateSession={createSession}
+      onUpdateSession={updateSession}
+      onUpdateRegistration={updateRegistration}
+    />
+  );
 }
 
 export default AdminSecurityPage;

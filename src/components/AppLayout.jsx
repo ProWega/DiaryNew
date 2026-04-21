@@ -11,6 +11,7 @@ function AppLayout() {
     users,
     currentUser,
     switchUser,
+    logout,
     bootstrap,
     loading,
     usersError,
@@ -32,6 +33,11 @@ function AppLayout() {
 
     switchUser(userId);
     navigate(getDefaultRoute(nextUser), { replace: true });
+  }
+
+  function handleLogout() {
+    logout();
+    navigate("/register", { replace: true });
   }
 
   if (usersError || bootstrapError) {
@@ -90,6 +96,9 @@ function AppLayout() {
                 {user.roleLabel}: {user.fullName}
               </button>
             ))}
+            <button type="button" className="ghost-button" onClick={handleLogout}>
+              Новая регистрация
+            </button>
           </div>
         </div>
       </header>

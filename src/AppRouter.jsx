@@ -9,6 +9,7 @@ import {
   ParticipantDynamicsPage,
   ParticipantTodayPage,
 } from "./pages/ParticipantPage";
+import RegistrationPage from "./pages/RegistrationPage";
 import { getDefaultRoute } from "./rbac/permissions";
 
 function AppRouter() {
@@ -16,15 +17,18 @@ function AppRouter() {
 
   return (
     <Routes>
-      <Route path="/" element={<AppLayout />}>
-        <Route
-          index
-          element={
-            currentUser ? (
-              <Navigate to={getDefaultRoute(currentUser)} replace />
-            ) : null
-          }
-        />
+      <Route
+        path="/register"
+        element={
+          currentUser ? <Navigate to={getDefaultRoute(currentUser)} replace /> : <RegistrationPage />
+        }
+      />
+
+      <Route
+        path="/"
+        element={currentUser ? <AppLayout /> : <Navigate to="/register" replace />}
+      >
+        <Route index element={<Navigate to={getDefaultRoute(currentUser)} replace />} />
 
         <Route
           path="participant/session/:sessionId/today"
@@ -66,15 +70,13 @@ function AppRouter() {
             </RouteGuard>
           }
         />
-        <Route
-          path="*"
-          element={
-            currentUser ? (
-              <Navigate to={getDefaultRoute(currentUser)} replace />
-            ) : null
-          }
-        />
+        <Route path="*" element={<Navigate to={getDefaultRoute(currentUser)} replace />} />
       </Route>
+
+      <Route
+        path="*"
+        element={currentUser ? <Navigate to={getDefaultRoute(currentUser)} replace /> : <Navigate to="/register" replace />}
+      />
     </Routes>
   );
 }

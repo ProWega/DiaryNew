@@ -32,7 +32,39 @@ function useAsyncResource(loader, enabled = true) {
     refresh();
   }, [refresh]);
 
-  return { data, loading, error, setData, refresh };
+  return { data, loading, error, setData, setError, refresh };
+}
+
+function useMutation(setData) {
+  const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState(null);
+
+  const runMutation = useCallback(
+    async (executor) => {
+      setSaving(true);
+      setMutationError(null);
+
+      try {
+        const nextData = await executor();
+        if (nextData) {
+          setData(nextData);
+        }
+        return nextData;
+      } catch (error) {
+        setMutationError(error);
+        return null;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [setData],
+  );
+
+  return {
+    saving,
+    mutationError,
+    runMutation,
+  };
 }
 
 export function useParticipantDiary(sessionId) {
@@ -144,16 +176,177 @@ export function useCuratorDashboard(sessionId, groupId) {
   );
 }
 
-export function useOrganizerDashboard(sessionId) {
+export function useOrganizerWorkspace(sessionId) {
   const { currentUser } = useAuth();
-
-  return useAsyncResource(
-    useCallback(
-      () => jsonApi.getOrganizerDashboard(currentUser.id, sessionId),
-      [currentUser?.id, sessionId],
-    ),
+  const resource = useAsyncResource(
+    useCallback(async () => {
+      const [workspace, overview] = await Promise.all([
+        jsonApi.getOrganizerWorkspace(currentUser.id, sessionId),
+        jsonApi.getOrganizerSessionOverview(currentUser.id),
+      ]);
+      return {
+        ...workspace,
+        sessionCatalog: overview.sessions || [],
+      };
+    }, [currentUser?.id, sessionId]),
     Boolean(currentUser?.id && sessionId),
   );
+  const mutation = useMutation(resource.setData);
+
+  const createSession = useCallback(
+    (payload) => jsonApi.createOrganizerSession(currentUser.id, payload),
+    [currentUser?.id],
+  );
+
+  const updateSession = useCallback(
+    (payload) =>
+      mutation.runMutation(async () => {
+        await jsonApi.updateOrganizerSession(currentUser.id, sessionId, payload);
+        return resource.refresh();
+      }),
+    [currentUser?.id, mutation, resource, sessionId],
+  );
+
+  const updateRegistration = useCallback(
+    (payload) =>
+      mutation.runMutation(async () => {
+        await jsonApi.updateOrganizerRegistration(currentUser.id, sessionId, payload);
+        return resource.refresh();
+      }),
+    [currentUser?.id, mutation, resource, sessionId],
+  );
+
+  const createProgram = useCallback(
+    (payload) =>
+      mutation.runMutation(() => jsonApi.createOrganizerProgram(currentUser.id, sessionId, payload)),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateProgram = useCallback(
+    (programId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerProgram(currentUser.id, sessionId, programId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const selectProgram = useCallback(
+    (programId) =>
+      mutation.runMutation(() =>
+        jsonApi.selectOrganizerProgram(currentUser.id, sessionId, programId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const createProgramDay = useCallback(
+    (programId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.createOrganizerProgramDay(currentUser.id, sessionId, programId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateProgramDay = useCallback(
+    (programId, dayId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerProgramDay(currentUser.id, sessionId, programId, dayId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateEvent = useCallback(
+    (programId, dayId, eventId, patch) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId, patch),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const addParallelEvent = useCallback(
+    (programId, dayId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.addOrganizerParallelEvent(currentUser.id, sessionId, programId, dayId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const activateEvent = useCallback(
+    (programId, dayId, eventId) =>
+      mutation.runMutation(() =>
+        jsonApi.activateOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const createSurvey = useCallback(
+    (payload) =>
+      mutation.runMutation(() => jsonApi.createOrganizerSurvey(currentUser.id, sessionId, payload)),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateSurvey = useCallback(
+    (surveyId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerSurvey(currentUser.id, sessionId, surveyId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const addSurveyQuestion = useCallback(
+    (surveyId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.addOrganizerSurveyQuestion(currentUser.id, sessionId, surveyId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateSurveyQuestion = useCallback(
+    (surveyId, questionId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerSurveyQuestion(
+          currentUser.id,
+          sessionId,
+          surveyId,
+          questionId,
+          payload,
+        ),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const publishSurvey = useCallback(
+    (surveyId, filters) =>
+      mutation.runMutation(() =>
+        jsonApi.publishOrganizerSurvey(currentUser.id, sessionId, surveyId, filters),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  return {
+    ...resource,
+    saving: mutation.saving,
+    mutationError: mutation.mutationError,
+    createSession,
+    updateSession,
+    updateRegistration,
+    createProgram,
+    updateProgram,
+    selectProgram,
+    createProgramDay,
+    updateProgramDay,
+    updateEvent,
+    addParallelEvent,
+    activateEvent,
+    createSurvey,
+    updateSurvey,
+    addSurveyQuestion,
+    updateSurveyQuestion,
+    publishSurvey,
+  };
+}
+
+export function useOrganizerDashboard(sessionId) {
+  return useOrganizerWorkspace(sessionId);
 }
 
 export function useAdminDashboard() {
@@ -163,4 +356,35 @@ export function useAdminDashboard() {
     useCallback(() => jsonApi.getAdminDashboard(currentUser.id), [currentUser?.id]),
     Boolean(currentUser?.id),
   );
+}
+
+export function useAdminWorkspace() {
+  const { currentUser } = useAuth();
+  const resource = useAsyncResource(
+    useCallback(() => jsonApi.getAdminWorkspace(currentUser.id), [currentUser?.id]),
+    Boolean(currentUser?.id),
+  );
+  const mutation = useMutation(resource.setData);
+
+  const refreshAfter = useCallback(
+    (executor) =>
+      mutation.runMutation(async () => {
+        await executor();
+        return resource.refresh();
+      }),
+    [mutation, resource],
+  );
+
+  return {
+    ...resource,
+    saving: mutation.saving,
+    mutationError: mutation.mutationError,
+    createUser: (payload) => refreshAfter(() => jsonApi.createAdminUser(currentUser.id, payload)),
+    updateUser: (userId, payload) => refreshAfter(() => jsonApi.updateAdminUser(currentUser.id, userId, payload)),
+    updateUserStatus: (userId, status) => refreshAfter(() => jsonApi.updateAdminUserStatus(currentUser.id, userId, status)),
+    upsertAssignment: (userId, payload) => refreshAfter(() => jsonApi.upsertAdminAssignment(currentUser.id, userId, payload)),
+    createSession: (payload) => refreshAfter(() => jsonApi.createAdminSession(currentUser.id, payload)),
+    updateSession: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminSession(currentUser.id, sessionId, payload)),
+    updateRegistration: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminRegistration(currentUser.id, sessionId, payload)),
+  };
 }
