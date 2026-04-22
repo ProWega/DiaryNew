@@ -155,12 +155,17 @@ function getNavigationItems(user) {
   if (user.role === "participant") {
     items.push({
       id: "participant-today",
-      label: "Сегодня",
+      label: "Состояние",
       to: `/participant/session/${user.sessionId}/today`,
     });
     items.push({
+      id: "participant-self",
+      label: "Узнать себя",
+      to: `/participant/session/${user.sessionId}/self`,
+    });
+    items.push({
       id: "participant-dynamics",
-      label: "Моя динамика",
+      label: "Динамика",
       to: `/participant/session/${user.sessionId}/dynamics`,
     });
   }

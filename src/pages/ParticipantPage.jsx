@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useParticipantDiary } from "../api/hooks";
 import { useAuth } from "../auth/AuthContext";
 import FeedbackState from "../components/FeedbackState";
 import { buildPortrait, calculateMetrics, formatAverage } from "../lib/metrics";
 import ParticipantRoutedView from "../views/ParticipantRoutedView";
+import ParticipantSelfKnowledgeView from "../views/ParticipantSelfKnowledgeView";
 
 function ParticipantPage({ mode }) {
-  const navigate = useNavigate();
   const { sessionId } = useParams();
   const { bootstrap } = useAuth();
   const { data, loading, error, refresh, updateEntry, updateReflection } =
@@ -112,10 +112,6 @@ function ParticipantPage({ mode }) {
     );
   }
 
-  function navigateToMode(nextMode) {
-    navigate(`/participant/session/${sessionId}/${nextMode}`);
-  }
-
   function setReflection(nextValueOrUpdater) {
     const nextValue =
       typeof nextValueOrUpdater === "function"
@@ -144,8 +140,6 @@ function ParticipantPage({ mode }) {
   return (
     <ParticipantRoutedView
       mode={mode}
-      navigateToMode={navigateToMode}
-      sessionInfo={bootstrap.sessionInfo}
       stateScale={bootstrap.stateScale}
       reflectionPrompts={bootstrap.reflectionPrompts}
       todayEvents={todayEvents}
@@ -172,4 +166,24 @@ export function ParticipantTodayPage() {
 
 export function ParticipantDynamicsPage() {
   return <ParticipantPage mode="dynamics" />;
+}
+
+export function ParticipantSelfKnowledgePage() {
+  const { bootstrap, currentUser } = useAuth();
+
+  if (!bootstrap || !currentUser) {
+    return (
+      <FeedbackState
+        title="Загружаем раздел"
+        description="Собираем данные личного кабинета."
+      />
+    );
+  }
+
+  return (
+    <ParticipantSelfKnowledgeView
+      currentUser={currentUser}
+      sessionInfo={bootstrap.sessionInfo}
+    />
+  );
 }

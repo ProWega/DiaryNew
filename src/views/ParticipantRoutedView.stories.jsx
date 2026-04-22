@@ -165,8 +165,6 @@ function ParticipantDiaryStory(args) {
   return (
     <ParticipantRoutedView
       mode={args.mode}
-      navigateToMode={() => {}}
-      sessionInfo={{ editWindow: "До конца дня" }}
       stateScale={stateScale}
       reflectionPrompts={reflectionPrompts}
       todayEvents={currentDay.events}

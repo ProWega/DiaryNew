@@ -18,8 +18,6 @@ function isReflectionAnswered(reflection) {
 
 function ParticipantRoutedView({
   mode,
-  navigateToMode,
-  sessionInfo,
   stateScale,
   reflectionPrompts,
   todayEvents,
@@ -76,54 +74,16 @@ function ParticipantRoutedView({
 
   return (
     <section className="role-view participant-view">
-      <div className="hero-card participant-hero-card">
-        <div>
-          <p className="eyebrow">Роль: участник</p>
-          <h2>Дневник состояний по событиям дня</h2>
-          <p className="subtle">
-            Заполнение занимает 1–2 минуты: выберите состояние, при желании добавьте причину и закройте день рефлексией.
-          </p>
-        </div>
-
-        <div className="hero-stats">
-          <MetricBadge label="Заполнено" value={`${todayMetrics.completion}%`} />
-          <MetricBadge
-            label="Средний уровень"
-            value={formatAverage(todayMetrics.average)}
-          />
-          <MetricBadge label="Амплитуда" value={`${todayMetrics.amplitude}`} />
-          <MetricBadge
-            label="Резкие переходы"
-            value={`${todayMetrics.sharpTransitions}`}
-          />
-        </div>
-      </div>
-
-      <div className="subnav">
-        <button
-          type="button"
-          className={mode === "today" ? "subnav-pill is-active" : "subnav-pill"}
-          onClick={() => navigateToMode("today")}
-        >
-          Сегодня
-        </button>
-        <button
-          type="button"
-          className={mode === "dynamics" ? "subnav-pill is-active" : "subnav-pill"}
-          onClick={() => navigateToMode("dynamics")}
-        >
-          Моя динамика
-        </button>
-        <span className="soft-pill is-outline">{sessionInfo.editWindow}</span>
-      </div>
-
       {mode === "today" ? (
         <div className="participant-layout">
           <div className="event-column participant-stepper">
             <div className="participant-flow-head">
               <div>
-                <p className="eyebrow">Быстрый ввод</p>
+                <p className="eyebrow">Состояние</p>
                 <h3>Событие {activeEventPosition} из {todayEvents.length}</h3>
+                <p className="participant-flow-copy">
+                  Отметьте, как вы сейчас после события. Можно добавить пару слов, если хочется.
+                </p>
               </div>
               <div className="participant-progress-meter" aria-label={`Заполнено ${completionValue}%`}>
                 <span style={{ width: `${completionValue}%` }} />
@@ -191,7 +151,7 @@ function ParticipantRoutedView({
                       variant="arc"
                       animated
                       showDescriptions
-                      label="Шкала состояния после события"
+                      label="Как вы сейчас после события?"
                     />
 
                     {event.stateId ? (
@@ -200,7 +160,7 @@ function ParticipantRoutedView({
                           <textarea
                             rows="3"
                             value={event.comment}
-                            placeholder="Что повлияло на состояние?"
+                            placeholder="Можно добавить пару слов, если хочется"
                             onChange={(eventInput) =>
                               updateEventComment(event.id, eventInput.target.value)
                             }
@@ -217,7 +177,7 @@ function ParticipantRoutedView({
                             Сложно оценить
                           </button>
                           <span className="confidence-note">
-                            Уверенность: {event.confidence === "low" ? "low" : "high"}
+                            {event.confidence === "low" ? "Отметка сохранена как примерная" : "Отметка сохранена"}
                           </span>
                         </div>
                       </>

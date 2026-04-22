@@ -74,6 +74,7 @@ export function can(user, permission, subject = {}) {
   switch (permission) {
     case "participant.diary.read":
     case "participant.diary.write":
+    case "participant.self.read":
     case "participant.dynamics.read":
       return (
         hasRole(user, "participant") &&
@@ -145,15 +146,23 @@ export function getNavigationItems(user) {
   if (can(user, "participant.diary.read", { sessionId: user.sessionId })) {
     items.push({
       id: "participant-today",
-      label: "Сегодня",
+      label: "Состояние",
       to: `/participant/session/${user.sessionId}/today`,
+    });
+  }
+
+  if (can(user, "participant.self.read", { sessionId: user.sessionId })) {
+    items.push({
+      id: "participant-self",
+      label: "Узнать себя",
+      to: `/participant/session/${user.sessionId}/self`,
     });
   }
 
   if (can(user, "participant.dynamics.read", { sessionId: user.sessionId })) {
     items.push({
       id: "participant-dynamics",
-      label: "Моя динамика",
+      label: "Динамика",
       to: `/participant/session/${user.sessionId}/dynamics`,
     });
   }

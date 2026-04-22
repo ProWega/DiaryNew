@@ -8,6 +8,7 @@ import MagicLinkPage from "./pages/MagicLinkPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import {
   ParticipantDynamicsPage,
+  ParticipantSelfKnowledgePage,
   ParticipantTodayPage,
 } from "./pages/ParticipantPage";
 import RegistrationPage from "./pages/RegistrationPage";
@@ -39,6 +40,14 @@ function AppRouter() {
           element={
             <RouteGuard permission="participant.diary.read">
               <ParticipantTodayPage />
+            </RouteGuard>
+          }
+        />
+        <Route
+          path="participant/session/:sessionId/self"
+          element={
+            <RouteGuard permission="participant.self.read">
+              <ParticipantSelfKnowledgePage />
             </RouteGuard>
           }
         />
