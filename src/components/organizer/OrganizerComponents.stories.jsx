@@ -50,7 +50,6 @@ export default {
     disabled: { control: "boolean" },
     saving: { control: "boolean" },
     open: { control: "boolean" },
-    viewMode: { control: "radio", options: ["cards", "table"] },
   },
 };
 
@@ -606,7 +605,6 @@ export const ProgramScheduleToolbarControls = {
     programs: workspace.programWorkspace.programs,
     currentProgram: program,
     currentDay: day,
-    viewMode: "table",
     slotMinutes: 15,
     title: "Конструктор программы",
     programLabel: "Программа",
@@ -618,7 +616,6 @@ export const ProgramScheduleToolbarControls = {
   render: (args) => (
     <ProgramScheduleToolbar
       {...args}
-      onViewModeChange={(mode) => console.log("viewMode", mode)}
       onSelectProgram={(id) => console.log("program", id)}
       onSelectDay={(id) => console.log("day", id)}
       onCreateDay={() => console.log("create-day")}

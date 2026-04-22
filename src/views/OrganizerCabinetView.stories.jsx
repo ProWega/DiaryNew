@@ -12,10 +12,6 @@ export default {
       control: "radio",
       options: ["sessions", "program", "groups", "participants"],
     },
-    initialProgramViewMode: {
-      control: "radio",
-      options: ["cards", "table"],
-    },
     scheduleSlotMinutes: { control: { type: "number", min: 5, max: 60, step: 5 } },
     defaultEventDurationMinutes: { control: { type: "number", min: 15, max: 180, step: 15 } },
     saving: { control: "boolean" },
@@ -248,7 +244,6 @@ export const SessionsTab = {
   args: {
     workspace: organizerWorkspaceFixture,
     initialTab: "sessions",
-    initialProgramViewMode: "table",
     scheduleSlotMinutes: 15,
     defaultEventDurationMinutes: 60,
     saving: false,
@@ -260,15 +255,6 @@ export const ProgramTab = {
   args: {
     ...SessionsTab.args,
     initialTab: "program",
-    initialProgramViewMode: "table",
-  },
-  render: renderCabinet,
-};
-
-export const ProgramCardsMode = {
-  args: {
-    ...ProgramTab.args,
-    initialProgramViewMode: "cards",
   },
   render: renderCabinet,
 };
@@ -276,7 +262,6 @@ export const ProgramCardsMode = {
 export const ProgramTableMode = {
   args: {
     ...ProgramTab.args,
-    initialProgramViewMode: "table",
   },
   render: renderCabinet,
 };

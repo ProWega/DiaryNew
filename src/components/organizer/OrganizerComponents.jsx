@@ -831,11 +831,6 @@ export function ProgramScheduleToolbar({
   programs = [],
   currentProgram,
   currentDay,
-  viewMode = "table",
-  viewModeItems = [
-    { id: "cards", label: "Текущий" },
-    { id: "table", label: "Таблица" },
-  ],
   slotMinutes = 15,
   title = "Конструктор программы",
   programLabel = "Программа",
@@ -850,7 +845,6 @@ export function ProgramScheduleToolbar({
   draftLabel = "Вернуть в черновик",
   publishingLabel = "Сохраняем статус...",
   getProgramLabel,
-  onViewModeChange,
   onSelectProgram,
   onSelectDay,
   onCreateDay,
@@ -882,15 +876,6 @@ export function ProgramScheduleToolbar({
             {safeCurrentProgram?.eventContext?.title || "Выберите программу"} · шаг сетки {slotMinutes} мин.
           </p>
         </div>
-        {onViewModeChange ? (
-          <Tabs
-            items={viewModeItems}
-            activeId={viewMode}
-            disabled={disabled || saving}
-            onChange={onViewModeChange}
-            ariaLabel="Вид программы"
-          />
-        ) : null}
       </div>
 
       <div className="program-toolbar-controls">

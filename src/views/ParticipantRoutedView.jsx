@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DistributionBars, EmotionLineChart } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
+import StateScalePicker from "../components/participant/StateScalePicker";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
 
 const reflectionFields = ["q1", "q2", "q3"];
@@ -183,29 +184,15 @@ function ParticipantRoutedView({
                       </div>
                     </div>
 
-                    <div className="state-row participant-state-grid">
-                      {stateScale.map((stateOption) => (
-                        <button
-                          key={stateOption.id}
-                          type="button"
-                          aria-pressed={event.stateId === stateOption.id}
-                          className={
-                            event.stateId === stateOption.id
-                              ? "state-pill participant-state-pill is-selected"
-                              : "state-pill participant-state-pill"
-                          }
-                          style={{
-                            "--state-surface": stateOption.surface,
-                            "--state-border": stateOption.color,
-                            "--state-text": stateOption.textColor,
-                          }}
-                          onClick={() => updateEventState(event.id, stateOption.id)}
-                        >
-                          <span>{stateOption.icon}</span>
-                          <span>{stateOption.shortLabel || stateOption.label}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <StateScalePicker
+                      value={event.stateId}
+                      onChange={(stateId) => updateEventState(event.id, stateId)}
+                      states={stateScale}
+                      variant="arc"
+                      animated
+                      showDescriptions
+                      label="Шкала состояния после события"
+                    />
 
                     {event.stateId ? (
                       <>

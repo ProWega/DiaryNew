@@ -3,18 +3,14 @@ import MetricBadge from "../components/MetricBadge";
 import Tabs from "../components/ui/Tabs";
 import { AlertCard, SoftPill } from "../components/ui/Pills";
 import {
-  EventEditorCard,
   GroupsSummary,
-  ParallelEventComposer,
   ParticipantDetailsCard,
   ParticipantSearchPanel,
-  ProgramDayComposer,
   createProgramDayDraft,
-  ProgramMetaEditor,
+  ProgramCreateCard,
   ProgramScheduleInspector,
   ProgramScheduleTable,
   ProgramScheduleToolbar,
-  ProgramSelector,
 } from "../components/organizer/OrganizerComponents";
 import { SessionCatalog, SessionEditorForm } from "../components/admin/AdminComponents";
 import { formatPublicationDate } from "../lib/organizerWorkspace";
@@ -24,11 +20,6 @@ const TAB_OPTIONS = [
   { id: "program", label: "Программа" },
   { id: "groups", label: "Группы" },
   { id: "participants", label: "Участники" },
-];
-
-const PROGRAM_VIEW_OPTIONS = [
-  { id: "table", label: "Таблица" },
-  { id: "cards", label: "Карточки" },
 ];
 
 function asArray(value) {
@@ -316,7 +307,6 @@ class ProgramTableErrorBoundary extends Component {
 function OrganizerCabinetView({
   workspace,
   initialTab = "program",
-  initialProgramViewMode = "table",
   scheduleSlotMinutes = 15,
   defaultEventDurationMinutes = 60,
   saving = false,
@@ -344,7 +334,6 @@ function OrganizerCabinetView({
   const [activeTab, setActiveTab] = useState(
     TAB_OPTIONS.some((item) => item.id === initialTab) ? initialTab : "sessions",
   );
-  const [programViewMode, setProgramViewMode] = useState(initialProgramViewMode);
   const [sessionQuery, setSessionQuery] = useState("");
   const [sessionDraft, setSessionDraft] = useState(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
@@ -367,10 +356,6 @@ function OrganizerCabinetView({
   useEffect(() => {
     setActiveTab(TAB_OPTIONS.some((item) => item.id === initialTab) ? initialTab : "sessions");
   }, [initialTab]);
-
-  useEffect(() => {
-    setProgramViewMode(initialProgramViewMode);
-  }, [initialProgramViewMode]);
 
   useEffect(() => {
     const currentSession =
@@ -585,12 +570,6 @@ function OrganizerCabinetView({
     setScheduleUndoStack([]);
     setScheduleRedoStack([]);
     return nextWorkspace;
-  }
-
-  function switchToCardsMode() {
-    setProgramViewMode("cards");
-    setSelectedScheduleEventId(null);
-    setScheduleDraftEvent(null);
   }
 
   function pushScheduleUndo(action) {
@@ -904,7 +883,7 @@ function OrganizerCabinetView({
   }
 
   useEffect(() => {
-    if (activeTab !== "program" || programViewMode !== "table") {
+    if (activeTab !== "program") {
       return undefined;
     }
 
@@ -934,7 +913,7 @@ function OrganizerCabinetView({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTab, programViewMode, scheduleDraftEvent, scheduleRedoStack, scheduleUndoStack, scheduleHistoryBusy]);
+  }, [activeTab, scheduleDraftEvent, scheduleRedoStack, scheduleUndoStack, scheduleHistoryBusy]);
 
   function renderTableFallback(error) {
     return (
@@ -944,9 +923,6 @@ function OrganizerCabinetView({
           detail={error?.message || "Не удалось отрисовать календарную сетку программы."}
           tone="severity-high"
         />
-        <button type="button" className="ghost-button" onClick={switchToCardsMode}>
-          Открыть текущий вид
-        </button>
       </article>
     );
   }
@@ -991,84 +967,67 @@ function OrganizerCabinetView({
 
       {activeTab === "program" ? (
         <div className="organizer-section-stack">
-          <div className="scope-strip program-view-strip">
-            <Tabs
-              items={PROGRAM_VIEW_OPTIONS}
-              activeId={programViewMode}
-              onChange={setProgramViewMode}
-              disabled={saving}
-              ariaLabel="Вид программы"
+          <ProgramTableErrorBoundary
+            resetKey={`${currentProgram?.id || "none"}:${currentDay?.id || "none"}`}
+            fallback={renderTableFallback}
+          >
+            <ProgramScheduleToolbar
+              programs={programWorkspace.programs}
+              currentProgram={currentProgram}
+              currentDay={currentDay}
+              slotMinutes={scheduleSlotMinutes}
+              saving={saving}
+              onSelectProgram={(programId) => void handleProgramSelect(programId)}
+              onSelectDay={setSelectedDayId}
+              onCreateDay={() => void handleProgramDayCreate()}
+              onDeleteDay={(dayId) => void handleProgramDayDelete(dayId)}
+              onPublishProgram={() => currentProgram?.id ? onPublishProgram(currentProgram.id) : null}
+              onDraftProgram={() => currentProgram?.id ? onDraftProgram(currentProgram.id) : null}
             />
-            <div className="pill-grid">
-              <SoftPill>{currentProgram?.title || "Программа не выбрана"}</SoftPill>
-              <SoftPill outline>{currentDay?.label || "День не выбран"}</SoftPill>
-            </div>
-          </div>
 
-          {programViewMode === "table" ? (
-            <ProgramTableErrorBoundary
-              resetKey={`${programViewMode}:${currentProgram?.id || "none"}:${currentDay?.id || "none"}`}
-              fallback={renderTableFallback}
-            >
-              <ProgramScheduleToolbar
-                programs={programWorkspace.programs}
-                currentProgram={currentProgram}
-                currentDay={currentDay}
-                viewMode={programViewMode}
-                viewModeItems={PROGRAM_VIEW_OPTIONS}
+            <div className="organizer-table-mode-grid">
+              <ProgramScheduleTable
+                program={currentProgram}
+                day={currentDay}
                 slotMinutes={scheduleSlotMinutes}
+                defaultDurationMinutes={defaultEventDurationMinutes}
+                minDurationMinutes={scheduleSlotMinutes}
+                columns={currentFlowColumns}
+                flows={currentFlowColumns}
+                columnOrder={currentDay?.flowOrder}
+                allowColumnReorder
+                allowCreateFlow
+                clearSelectionOnEmptyClick
+                createOnEmptyClickWhenIdle
+                selectedEventId={selectedScheduleEventId}
+                draftEvent={scheduleDraftEvent}
+                eventTypes={eventTypes}
+                speakersCatalog={speakersCatalog}
                 saving={saving}
-                onViewModeChange={setProgramViewMode}
-                onSelectProgram={(programId) => void handleProgramSelect(programId)}
-                onSelectDay={setSelectedDayId}
-                onCreateDay={() => void handleProgramDayCreate()}
-                onDeleteDay={(dayId) => void handleProgramDayDelete(dayId)}
-                onPublishProgram={() => currentProgram?.id ? onPublishProgram(currentProgram.id) : null}
-                onDraftProgram={() => currentProgram?.id ? onDraftProgram(currentProgram.id) : null}
+                onSelectEvent={(_dayId, eventId) => {
+                  setSelectedScheduleEventId(eventId);
+                  setScheduleDraftEvent(null);
+                }}
+                onSelectEmptySlot={(_dayId, draft) => {
+                  setSelectedScheduleEventId(null);
+                  setScheduleDraftEvent(draft);
+                }}
+                onClearSelection={() => {
+                  setSelectedScheduleEventId(null);
+                  setScheduleDraftEvent(null);
+                }}
+                onReorderColumns={handleFlowOrderChange}
+                onCreateFlow={handleCreateFlow}
+                onRenameFlow={handleRenameFlow}
+                onUpdateFlows={(dayId, flows) => persistProgramDayFlows(dayId, flows)}
+                onActivateEvent={(dayId, eventId) =>
+                  currentProgram?.id ? void onActivateEvent(currentProgram.id, dayId, eventId) : null
+                }
+                onUpdateEvent={handleScheduleUpdate}
               />
 
-              <div className="organizer-table-mode-grid">
-                <ProgramScheduleTable
-                  program={currentProgram}
-                  day={currentDay}
-                  slotMinutes={scheduleSlotMinutes}
-                  defaultDurationMinutes={defaultEventDurationMinutes}
-                  minDurationMinutes={scheduleSlotMinutes}
-                  columns={currentFlowColumns}
-                  flows={currentFlowColumns}
-                  columnOrder={currentDay?.flowOrder}
-                  allowColumnReorder
-                  allowCreateFlow
-                  clearSelectionOnEmptyClick
-                  createOnEmptyClickWhenIdle
-                  selectedEventId={selectedScheduleEventId}
-                  draftEvent={scheduleDraftEvent}
-                  eventTypes={eventTypes}
-                  speakersCatalog={speakersCatalog}
-                  saving={saving}
-                  onSelectEvent={(_dayId, eventId) => {
-                    setSelectedScheduleEventId(eventId);
-                    setScheduleDraftEvent(null);
-                  }}
-                  onSelectEmptySlot={(_dayId, draft) => {
-                    setSelectedScheduleEventId(null);
-                    setScheduleDraftEvent(draft);
-                  }}
-                  onClearSelection={() => {
-                    setSelectedScheduleEventId(null);
-                    setScheduleDraftEvent(null);
-                  }}
-                  onReorderColumns={handleFlowOrderChange}
-                  onCreateFlow={handleCreateFlow}
-                  onRenameFlow={handleRenameFlow}
-                  onUpdateFlows={(dayId, flows) => persistProgramDayFlows(dayId, flows)}
-                  onActivateEvent={(dayId, eventId) =>
-                    currentProgram?.id ? void onActivateEvent(currentProgram.id, dayId, eventId) : null
-                  }
-                  onUpdateEvent={handleScheduleUpdate}
-                />
-
-                <div className="organizer-table-side">
+              <div className="organizer-table-side">
+                {currentProgram ? (
                   <ProgramScheduleInspector
                     mode={scheduleInspectorMode}
                     program={currentProgram}
@@ -1088,66 +1047,15 @@ function OrganizerCabinetView({
                       setScheduleDraftEvent(null);
                     }}
                   />
-                </div>
-              </div>
-            </ProgramTableErrorBoundary>
-          ) : (
-            <div className="organizer-focus-grid">
-              <ProgramSelector
-                programs={programWorkspace.programs}
-                currentProgram={currentProgram}
-                currentDay={currentDay}
-                activeEventId={programWorkspace.activeEventId}
-                saving={saving}
-                onSelectProgram={(programId) => void handleProgramSelect(programId)}
-                onSelectDay={setSelectedDayId}
-                onActivateEvent={(programId, dayId, eventId) => void onActivateEvent(programId, dayId, eventId)}
-              />
-
-              <div className="organizer-event-stack">
-                {currentProgram ? (
-                  <ProgramMetaEditor
-                    program={currentProgram}
+                ) : (
+                  <ProgramCreateCard
                     saving={saving}
-                    onSave={(payload) => onUpdateProgram(currentProgram.id, payload)}
-                    onPublish={() => onPublishProgram(currentProgram.id)}
+                    onCreate={handleCreateProgram}
                   />
-                ) : null}
-
-                {currentDay ? (
-                  <>
-                    <ProgramDayComposer
-                      program={currentProgram}
-                      currentDay={currentDay}
-                      saving={saving}
-                      onCreate={handleProgramDayCreate}
-                      onUpdate={(dayId, payload) => onUpdateProgramDay(currentProgram.id, dayId, payload)}
-                      onDelete={handleProgramDayDelete}
-                    />
-                    {asArray(currentDay.events).map((event) => (
-                      <EventEditorCard
-                        key={event.id}
-                        event={event}
-                        eventTypes={eventTypes}
-                        speakersCatalog={speakersCatalog}
-                        isActive={programWorkspace.activeEventId === event.id}
-                        saving={saving}
-                        onSave={(patch) => onUpdateEvent(currentProgram.id, currentDay.id, event.id, patch)}
-                        onActivate={() => onActivateEvent(currentProgram.id, currentDay.id, event.id)}
-                      />
-                    ))}
-                    <ParallelEventComposer
-                      day={currentDay}
-                      speakersCatalog={speakersCatalog}
-                      eventTypes={eventTypes}
-                      saving={saving}
-                      onSubmit={(payload) => onAddParallelEvent(currentProgram.id, currentDay.id, payload)}
-                    />
-                  </>
-                ) : null}
+                )}
               </div>
             </div>
-          )}
+          </ProgramTableErrorBoundary>
         </div>
       ) : null}
 
