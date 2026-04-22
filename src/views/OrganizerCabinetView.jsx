@@ -16,14 +16,12 @@ import {
   ProgramScheduleToolbar,
   ProgramSelector,
 } from "../components/organizer/OrganizerComponents";
-import { RegistrationAccessPanel } from "../components/access/AccessComponents";
 import { SessionCatalog, SessionEditorForm } from "../components/admin/AdminComponents";
 import { formatPublicationDate } from "../lib/organizerWorkspace";
 
 const TAB_OPTIONS = [
   { id: "sessions", label: "Мои заезды" },
   { id: "program", label: "Программа" },
-  { id: "registration", label: "Доступ к регистрации" },
   { id: "groups", label: "Группы" },
   { id: "participants", label: "Участники" },
 ];
@@ -325,7 +323,6 @@ function OrganizerCabinetView({
   mutationError,
   onCreateSession = async () => null,
   onUpdateSession = async () => null,
-  onUpdateRegistration = async () => null,
   onSessionCreated = () => {},
   onCreateProgram = async () => null,
   onUpdateProgram = async () => null,
@@ -342,14 +339,16 @@ function OrganizerCabinetView({
 }) {
   const safeWorkspace = useMemo(() => normalizeOrganizerWorkspace(workspace), [workspace]);
   const programWorkspace = safeWorkspace.programWorkspace;
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(
+    TAB_OPTIONS.some((item) => item.id === initialTab) ? initialTab : "sessions",
+  );
   const [programViewMode, setProgramViewMode] = useState(initialProgramViewMode);
   const [sessionQuery, setSessionQuery] = useState("");
   const [sessionDraft, setSessionDraft] = useState(null);
-  const [registrationDraft, setRegistrationDraft] = useState(safeWorkspace.registration || {});
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isCreatingSessionSaving, setIsCreatingSessionSaving] = useState(false);
   const [createSessionError, setCreateSessionError] = useState(null);
+  const [sessionSaveError, setSessionSaveError] = useState(null);
   const [selectedProgramId, setSelectedProgramId] = useState(programWorkspace.currentProgramId);
   const [selectedDayId, setSelectedDayId] = useState(null);
   const [selectedScheduleEventId, setSelectedScheduleEventId] = useState(null);
@@ -364,7 +363,7 @@ function OrganizerCabinetView({
   );
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    setActiveTab(TAB_OPTIONS.some((item) => item.id === initialTab) ? initialTab : "sessions");
   }, [initialTab]);
 
   useEffect(() => {
@@ -386,14 +385,6 @@ function OrganizerCabinetView({
     if (!isCreatingSession) {
       setSessionDraft(currentSession);
     }
-    setRegistrationDraft({
-      ...currentSession,
-      registrationStatus: safeWorkspace.registration?.status || currentSession.registrationStatus,
-      registrationStartsAt: safeWorkspace.registration?.startsAt || currentSession.registrationStartsAt,
-      registrationEndsAt: safeWorkspace.registration?.endsAt || currentSession.registrationEndsAt,
-      registrationCapacity: safeWorkspace.registration?.capacity ?? currentSession.registrationCapacity,
-      registrationPolicy: safeWorkspace.registration?.policy || currentSession.registrationPolicy || {},
-    });
   }, [isCreatingSession, safeWorkspace]);
 
   useEffect(() => {
@@ -483,6 +474,7 @@ function OrganizerCabinetView({
 
   async function handleCreateSession(payload) {
     setCreateSessionError(null);
+    setSessionSaveError(null);
     setIsCreatingSessionSaving(true);
 
     try {
@@ -499,6 +491,17 @@ function OrganizerCabinetView({
     } finally {
       setIsCreatingSessionSaving(false);
     }
+  }
+
+  async function handleUpdateSession(payload) {
+    setSessionSaveError(null);
+    const nextWorkspace = await onUpdateSession(payload);
+    if (!nextWorkspace) {
+      setSessionSaveError(mutationError || new Error("Не удалось сохранить параметры заезда"));
+      return null;
+    }
+
+    return nextWorkspace;
   }
 
   async function handleProgramSelect(programId) {
@@ -1167,14 +1170,12 @@ function OrganizerCabinetView({
                 setIsCreatingSession(true);
                 setSessionDraft({
                   name: "",
-                  cycle: "",
-                  dateLabel: "",
-                  location: "",
                   startDate: "",
                   endDate: "",
                   description: "",
+                  registrationStartsAt: "",
+                  registrationEndsAt: "",
                   registrationStatus: "draft",
-                  registrationPolicy: { mode: "public", note: "" },
                 });
               }}
             >
@@ -1191,28 +1192,22 @@ function OrganizerCabinetView({
               <SessionEditorForm
                 value={sessionDraft}
                 mode={isCreatingSession ? "create" : "edit"}
+                preset="organizer"
                 saving={saving || isCreatingSessionSaving}
+                error={isCreatingSession ? createSessionError : mutationError || sessionSaveError}
                 onChange={setSessionDraft}
                 onSubmit={(payload) =>
-                  isCreatingSession ? handleCreateSession(payload) : onUpdateSession(payload)
+                  isCreatingSession ? handleCreateSession(payload) : handleUpdateSession(payload)
                 }
                 onCancel={() => {
                   setCreateSessionError(null);
+                  setSessionSaveError(null);
                   setIsCreatingSession(false);
                 }}
               />
             ) : null}
           </div>
         </div>
-      ) : null}
-
-      {activeTab === "registration" ? (
-        <RegistrationAccessPanel
-          value={registrationDraft}
-          saving={saving}
-          onChange={setRegistrationDraft}
-          onSubmit={onUpdateRegistration}
-        />
       ) : null}
 
       {activeTab === "groups" ? (

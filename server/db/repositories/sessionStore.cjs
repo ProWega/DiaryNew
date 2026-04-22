@@ -11,6 +11,38 @@ function normalizeDate(value) {
   return normalizeDateInput(value);
 }
 
+function normalizeDateTime(value) {
+  if (value === "" || value === undefined || value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throwValidationError("Некорректная дата регистрации");
+    }
+    return value.toISOString();
+  }
+
+  const stringValue = String(value).trim();
+  if (!stringValue) {
+    return null;
+  }
+
+  if (!/\b\d{4}\b/.test(stringValue)) {
+    throwValidationError("Некорректная дата регистрации");
+  }
+
+  const normalizedValue = /^\d{4}-\d{2}-\d{2}$/.test(stringValue)
+    ? `${stringValue}T00:00`
+    : stringValue;
+  const parsed = new Date(normalizedValue);
+  if (Number.isNaN(parsed.getTime())) {
+    throwValidationError("Некорректная дата регистрации");
+  }
+
+  return normalizedValue;
+}
+
 function normalizeCapacity(value) {
   if (value === "" || value === undefined || value === null) {
     return null;
@@ -18,6 +50,41 @@ function normalizeCapacity(value) {
 
   const capacity = Number(value);
   return Number.isFinite(capacity) && capacity >= 0 ? Math.floor(capacity) : null;
+}
+
+function hasPayloadField(payload, ...keys) {
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(payload, key));
+}
+
+function getPayloadField(payload, ...keys) {
+  const key = keys.find((item) => Object.prototype.hasOwnProperty.call(payload, item));
+  return key ? payload[key] : undefined;
+}
+
+function throwValidationError(message) {
+  const error = new Error(message);
+  error.status = 400;
+  throw error;
+}
+
+function getComparableTime(value, dateOnly = false) {
+  if (!value) {
+    return null;
+  }
+
+  const normalizedValue = dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? `${value}T00:00`
+    : value;
+  const time = new Date(normalizedValue).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function validateDateOrder(startValue, endValue, message, dateOnly = false) {
+  const startTime = getComparableTime(startValue, dateOnly);
+  const endTime = getComparableTime(endValue, dateOnly);
+  if (startTime !== null && endTime !== null && endTime < startTime) {
+    throwValidationError(message);
+  }
 }
 
 function mapSession(row) {
@@ -176,10 +243,14 @@ async function assertRegistrationAvailable(sessionId) {
 
 async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) {
   const sessionId = payload.id || createId("session");
-  const startsAt = normalizeDate(payload.registrationStartsAt);
-  const endsAt = normalizeDate(payload.registrationEndsAt);
+  const startDate = normalizeDate(payload.startDate);
+  const endDate = normalizeDate(payload.endDate);
+  const startsAt = normalizeDateTime(payload.registrationStartsAt);
+  const endsAt = normalizeDateTime(payload.registrationEndsAt);
   const registrationStatus = normalizeRegistrationStatus(payload.registrationStatus);
   const capacity = normalizeCapacity(payload.registrationCapacity);
+  validateDateOrder(startDate, endDate, "Дата окончания заезда не может быть раньше даты начала", true);
+  validateDateOrder(startsAt, endsAt, "Дата окончания регистрации не может быть раньше даты начала регистрации");
 
   await query(
     `
@@ -212,8 +283,8 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
       payload.cycle || "",
       payload.dateLabel || "",
       payload.location || "",
-      normalizeDate(payload.startDate),
-      normalizeDate(payload.endDate),
+      startDate,
+      endDate,
       payload.description || "",
       registrationStatus,
       startsAt,
@@ -266,8 +337,8 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
       payload.name || payload.title || "Новый заезд",
       payload.eventType || "Форумное событие",
       payload.location || "",
-      normalizeDate(payload.startDate),
-      normalizeDate(payload.endDate),
+      startDate,
+      endDate,
       capacity || 0,
       payload.description || "",
     ],
@@ -290,7 +361,7 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
         flow_meta = excluded.flow_meta,
         updated_at = now()
     `,
-    [dayId, programId, sessionId, payload.dateLabel || "", normalizeDate(payload.startDate)],
+    [dayId, programId, sessionId, payload.dateLabel || "", startDate],
   );
 
   if (assignOrganizerId) {
@@ -317,31 +388,83 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
   return visibleSessions.find((session) => session.id === sessionId);
 }
 
-async function updateSession({ actorId, sessionId, payload = {} }) {
+async function updateSession({
+  actorId,
+  sessionId,
+  payload = {},
+  allowExtendedRegistrationFields = true,
+} = {}) {
+  const currentResult = await query("select * from sessions where id = $1 limit 1", [sessionId]);
+  const current = currentResult.rows[0];
+  if (!current) {
+    const error = new Error("Заезд не найден");
+    error.status = 404;
+    throw error;
+  }
+
+  const nextStartDate = hasPayloadField(payload, "startDate")
+    ? normalizeDate(payload.startDate)
+    : toIsoDate(current.start_date) || null;
+  const nextEndDate = hasPayloadField(payload, "endDate")
+    ? normalizeDate(payload.endDate)
+    : toIsoDate(current.end_date) || null;
+  const nextRegistrationStartsAt = hasPayloadField(payload, "registrationStartsAt", "startsAt")
+    ? normalizeDateTime(getPayloadField(payload, "registrationStartsAt", "startsAt"))
+    : current.registration_starts_at;
+  const nextRegistrationEndsAt = hasPayloadField(payload, "registrationEndsAt", "endsAt")
+    ? normalizeDateTime(getPayloadField(payload, "registrationEndsAt", "endsAt"))
+    : current.registration_ends_at;
+  const nextRegistrationCapacity = allowExtendedRegistrationFields && hasPayloadField(payload, "registrationCapacity", "capacity")
+    ? normalizeCapacity(getPayloadField(payload, "registrationCapacity", "capacity"))
+    : current.registration_capacity;
+  const nextRegistrationPolicy = allowExtendedRegistrationFields && hasPayloadField(payload, "registrationPolicy", "policy")
+    ? getPayloadField(payload, "registrationPolicy", "policy") || {}
+    : current.registration_policy || {};
+  const nextRegistrationStatus = hasPayloadField(payload, "registrationStatus", "status")
+    ? normalizeRegistrationStatus(getPayloadField(payload, "registrationStatus", "status"))
+    : current.registration_status || "draft";
+
+  validateDateOrder(nextStartDate, nextEndDate, "Дата окончания заезда не может быть раньше даты начала", true);
+  validateDateOrder(
+    nextRegistrationStartsAt,
+    nextRegistrationEndsAt,
+    "Дата окончания регистрации не может быть раньше даты начала регистрации",
+  );
+
   await query(
     `
       update sessions
       set
-        name = coalesce($2, name),
-        cycle = coalesce($3, cycle),
-        date_label = coalesce($4, date_label),
-        location = coalesce($5, location),
-        start_date = coalesce($6, start_date),
-        end_date = coalesce($7, end_date),
-        description = coalesce($8, description),
-        updated_by = $9,
+        name = $2,
+        cycle = $3,
+        date_label = $4,
+        location = $5,
+        start_date = $6,
+        end_date = $7,
+        description = $8,
+        registration_status = $9,
+        registration_starts_at = $10,
+        registration_ends_at = $11,
+        registration_capacity = $12,
+        registration_policy = $13::jsonb,
+        updated_by = $14,
         updated_at = now()
       where id = $1
     `,
     [
       sessionId,
-      payload.name ?? null,
-      payload.cycle ?? null,
-      payload.dateLabel ?? null,
-      payload.location ?? null,
-      normalizeDate(payload.startDate),
-      normalizeDate(payload.endDate),
-      payload.description ?? null,
+      hasPayloadField(payload, "name") ? payload.name : current.name,
+      hasPayloadField(payload, "cycle") ? payload.cycle : current.cycle,
+      hasPayloadField(payload, "dateLabel") ? payload.dateLabel : current.date_label,
+      hasPayloadField(payload, "location") ? payload.location : current.location,
+      nextStartDate,
+      nextEndDate,
+      hasPayloadField(payload, "description") ? payload.description : current.description,
+      nextRegistrationStatus,
+      nextRegistrationStartsAt,
+      nextRegistrationEndsAt,
+      nextRegistrationCapacity,
+      JSON.stringify(nextRegistrationPolicy),
       actorId || null,
     ],
   );
@@ -360,6 +483,9 @@ async function updateSession({ actorId, sessionId, payload = {} }) {
 async function updateRegistration({ actorId, sessionId, payload = {} }) {
   const status = normalizeRegistrationStatus(payload.registrationStatus || payload.status);
   const capacity = normalizeCapacity(payload.registrationCapacity ?? payload.capacity);
+  const startsAt = normalizeDateTime(payload.registrationStartsAt ?? payload.startsAt);
+  const endsAt = normalizeDateTime(payload.registrationEndsAt ?? payload.endsAt);
+  validateDateOrder(startsAt, endsAt, "Дата окончания регистрации не может быть раньше даты начала регистрации");
 
   await query(
     `
@@ -377,8 +503,8 @@ async function updateRegistration({ actorId, sessionId, payload = {} }) {
     [
       sessionId,
       status,
-      normalizeDate(payload.registrationStartsAt ?? payload.startsAt),
-      normalizeDate(payload.registrationEndsAt ?? payload.endsAt),
+      startsAt,
+      endsAt,
       capacity,
       JSON.stringify(payload.registrationPolicy || payload.policy || { mode: "public" }),
       actorId || null,

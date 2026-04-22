@@ -71,6 +71,23 @@ function isOrganizerViewer(viewer) {
   );
 }
 
+function pickOrganizerSessionPayload(body = {}) {
+  const allowedKeys = [
+    "name",
+    "description",
+    "startDate",
+    "endDate",
+    "registrationStartsAt",
+    "registrationEndsAt",
+    "registrationStatus",
+  ];
+  return Object.fromEntries(
+    allowedKeys
+      .filter((key) => Object.prototype.hasOwnProperty.call(body, key))
+      .map((key) => [key, body[key]]),
+  );
+}
+
 function requireOrganizer(req, _res, next) {
   const viewerId = req.header("x-viewer-id") || req.query.viewerId;
   Promise.resolve()
@@ -1023,9 +1040,10 @@ app.post(
       throw createHttpError(403, "Недостаточно прав для создания заезда");
     }
 
+    const payload = isAdminViewer(viewer) ? req.body || {} : pickOrganizerSessionPayload(req.body || {});
     const session = await createSession({
       actorId: viewer.id,
-      payload: req.body || {},
+      payload,
       assignOrganizerId: isOrganizerViewer(viewer) && !isAdminViewer(viewer) ? viewer.id : req.body?.organizerId || null,
     });
     res.status(201).json(session);
@@ -1036,7 +1054,15 @@ app.patch(
   "/api/organizer/sessions/:sessionId",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    res.json(await updateSession({ actorId: req.viewer.id, sessionId: req.params.sessionId, payload: req.body || {} }));
+    const payload = isAdminViewer(req.viewer) ? req.body || {} : pickOrganizerSessionPayload(req.body || {});
+    res.json(
+      await updateSession({
+        actorId: req.viewer.id,
+        sessionId: req.params.sessionId,
+        payload,
+        allowExtendedRegistrationFields: false,
+      }),
+    );
   }),
 );
 

@@ -10,7 +10,7 @@ export default {
   argTypes: {
     initialTab: {
       control: "radio",
-      options: ["sessions", "program", "registration", "groups", "participants"],
+      options: ["sessions", "program", "groups", "participants"],
     },
     initialProgramViewMode: {
       control: "radio",
@@ -209,10 +209,6 @@ const actions = {
     console.log("updateSession", args);
     return organizerWorkspaceFixture;
   },
-  onUpdateRegistration: async (...args) => {
-    console.log("updateRegistration", args);
-    return organizerWorkspaceFixture;
-  },
   onCreateProgramDay: async (...args) => {
     console.log("createProgramDay", args);
     return organizerWorkspaceFixture;
@@ -275,14 +271,6 @@ export const ProgramTableDenseControls = {
     workspace: calendarWorkspaceFixture,
     scheduleSlotMinutes: 15,
     defaultEventDurationMinutes: 60,
-  },
-  render: renderCabinet,
-};
-
-export const RegistrationTab = {
-  args: {
-    ...SessionsTab.args,
-    initialTab: "registration",
   },
   render: renderCabinet,
 };

@@ -20,5 +20,32 @@ export function MySessions() {
 }
 
 export function CreateSession() {
-  return <SessionEditorForm value={{ name: "", cycle: "", registrationStatus: "draft" }} mode="create" onChange={noop} onSubmit={noop} />;
+  return (
+    <SessionEditorForm
+      value={{
+        name: "",
+        description: "",
+        startDate: "",
+        endDate: "",
+        registrationStartsAt: "",
+        registrationEndsAt: "",
+        registrationStatus: "draft",
+      }}
+      mode="create"
+      preset="organizer"
+      onChange={noop}
+      onSubmit={noop}
+    />
+  );
+}
+
+export function EditSessionParameters() {
+  return (
+    <SessionEditorForm
+      value={organizerWorkspaceFixture.sessionCatalog[0]}
+      preset="organizer"
+      onChange={noop}
+      onSubmit={noop}
+    />
+  );
 }

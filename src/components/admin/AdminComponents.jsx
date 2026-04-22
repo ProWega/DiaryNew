@@ -229,6 +229,7 @@ export function SessionCatalog({ sessions = [], selectedSessionId, query = "", o
 export function SessionEditorForm({
   value,
   mode = "edit",
+  preset = "admin",
   saving = false,
   disabled = false,
   error,
@@ -238,6 +239,19 @@ export function SessionEditorForm({
 }) {
   const form = value || {};
   const isDisabled = disabled || saving || mode === "view";
+  const isOrganizerPreset = preset === "organizer";
+  const registrationStatusOptions = isOrganizerPreset
+    ? [
+        { value: "draft", label: "Черновик" },
+        { value: "open", label: "Открыта" },
+        { value: "closed", label: "Закрыта" },
+      ]
+    : [
+        { value: "draft", label: "Черновик" },
+        { value: "open", label: "Открыта" },
+        { value: "closed", label: "Закрыта" },
+        { value: "archived", label: "Архив" },
+      ];
 
   function update(key, nextValue) {
     onChange?.({ ...form, [key]: nextValue });
@@ -256,21 +270,59 @@ export function SessionEditorForm({
         <Field label="Название" wide>
           <input value={form.name || ""} disabled={isDisabled} onChange={(event) => update("name", event.target.value)} />
         </Field>
-        <Field label="Цикл / период">
-          <input value={form.cycle || ""} disabled={isDisabled} onChange={(event) => update("cycle", event.target.value)} />
-        </Field>
-        <Field label="Подпись дат">
-          <input value={form.dateLabel || ""} disabled={isDisabled} onChange={(event) => update("dateLabel", event.target.value)} />
-        </Field>
+        {!isOrganizerPreset ? (
+          <>
+            <Field label="Цикл / период">
+              <input value={form.cycle || ""} disabled={isDisabled} onChange={(event) => update("cycle", event.target.value)} />
+            </Field>
+            <Field label="Подпись дат">
+              <input value={form.dateLabel || ""} disabled={isDisabled} onChange={(event) => update("dateLabel", event.target.value)} />
+            </Field>
+          </>
+        ) : null}
         <Field label="Дата начала">
           <input type="date" value={form.startDate || ""} disabled={isDisabled} onChange={(event) => update("startDate", event.target.value)} />
         </Field>
         <Field label="Дата окончания">
           <input type="date" value={form.endDate || ""} disabled={isDisabled} onChange={(event) => update("endDate", event.target.value)} />
         </Field>
-        <Field label="Площадка" wide>
-          <input value={form.location || ""} disabled={isDisabled} onChange={(event) => update("location", event.target.value)} />
-        </Field>
+        {isOrganizerPreset ? (
+          <>
+            <Field label="Открыть регистрацию">
+              <input
+                type="datetime-local"
+                value={String(form.registrationStartsAt || "").slice(0, 16)}
+                disabled={isDisabled}
+                onChange={(event) => update("registrationStartsAt", event.target.value)}
+              />
+            </Field>
+            <Field label="Закрыть регистрацию">
+              <input
+                type="datetime-local"
+                value={String(form.registrationEndsAt || "").slice(0, 16)}
+                disabled={isDisabled}
+                onChange={(event) => update("registrationEndsAt", event.target.value)}
+              />
+            </Field>
+            <Field label="Статус регистрации">
+              <select
+                value={form.registrationStatus || "draft"}
+                disabled={isDisabled}
+                onChange={(event) => update("registrationStatus", event.target.value)}
+              >
+                {registrationStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        ) : (
+          <Field label="Площадка" wide>
+            <input value={form.location || ""} disabled={isDisabled} onChange={(event) => update("location", event.target.value)} />
+          </Field>
+        )}
         <Field label="Описание" wide>
           <textarea rows={3} value={form.description || ""} disabled={isDisabled} onChange={(event) => update("description", event.target.value)} />
         </Field>
