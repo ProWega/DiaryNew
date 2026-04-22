@@ -1374,6 +1374,46 @@ app.patch(
 );
 
 app.post(
+  "/api/organizer/sessions/:sessionId/programs/:programId/publish",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const firstEvent = (program.days || []).flatMap((day) => day.events || [])[0] || null;
+
+      program.status = "published";
+      draft.programWorkspace.currentProgramId = program.id;
+      draft.programWorkspace.activeEventId = firstEvent?.id || null;
+
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
+app.post(
+  "/api/organizer/sessions/:sessionId/programs/:programId/draft",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const firstEvent = (program.days || []).flatMap((day) => day.events || [])[0] || null;
+
+      program.status = "draft";
+      draft.programWorkspace.currentProgramId = program.id;
+      draft.programWorkspace.activeEventId = firstEvent?.id || null;
+
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
+app.post(
   "/api/organizer/sessions/:sessionId/programs/:programId/select",
   requireOrganizer,
   asyncHandler(async (req, res) => {

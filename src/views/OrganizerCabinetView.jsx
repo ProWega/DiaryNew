@@ -27,8 +27,8 @@ const TAB_OPTIONS = [
 ];
 
 const PROGRAM_VIEW_OPTIONS = [
-  { id: "cards", label: "Текущий" },
   { id: "table", label: "Таблица" },
+  { id: "cards", label: "Карточки" },
 ];
 
 function asArray(value) {
@@ -316,7 +316,7 @@ class ProgramTableErrorBoundary extends Component {
 function OrganizerCabinetView({
   workspace,
   initialTab = "program",
-  initialProgramViewMode = "cards",
+  initialProgramViewMode = "table",
   scheduleSlotMinutes = 15,
   defaultEventDurationMinutes = 60,
   saving = false,
@@ -326,6 +326,8 @@ function OrganizerCabinetView({
   onSessionCreated = () => {},
   onCreateProgram = async () => null,
   onUpdateProgram = async () => null,
+  onPublishProgram = async () => null,
+  onDraftProgram = async () => null,
   onSelectProgram = async () => null,
   onCreateProgramDay = async () => null,
   onUpdateProgramDay = async () => null,
@@ -1021,6 +1023,8 @@ function OrganizerCabinetView({
                 onSelectDay={setSelectedDayId}
                 onCreateDay={() => void handleProgramDayCreate()}
                 onDeleteDay={(dayId) => void handleProgramDayDelete(dayId)}
+                onPublishProgram={() => currentProgram?.id ? onPublishProgram(currentProgram.id) : null}
+                onDraftProgram={() => currentProgram?.id ? onDraftProgram(currentProgram.id) : null}
               />
 
               <div className="organizer-table-mode-grid">
@@ -1106,6 +1110,7 @@ function OrganizerCabinetView({
                     program={currentProgram}
                     saving={saving}
                     onSave={(payload) => onUpdateProgram(currentProgram.id, payload)}
+                    onPublish={() => onPublishProgram(currentProgram.id)}
                   />
                 ) : null}
 

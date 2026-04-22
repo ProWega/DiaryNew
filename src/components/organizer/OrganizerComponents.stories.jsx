@@ -119,6 +119,10 @@ const emptyDayProgram = {
   ...program,
   days: [emptyDay],
 };
+const draftProgram = {
+  ...program,
+  status: "draft",
+};
 
 const durationDay = {
   ...day,
@@ -619,8 +623,35 @@ export const ProgramScheduleToolbarControls = {
       onSelectDay={(id) => console.log("day", id)}
       onCreateDay={() => console.log("create-day")}
       onDeleteDay={(id) => console.log("delete-day", id)}
+      onPublishProgram={() => console.log("publish-program")}
+      onDraftProgram={() => console.log("draft-program")}
     />
   ),
+};
+
+export const ProgramScheduleToolbarDraft = {
+  ...ProgramScheduleToolbarControls,
+  args: {
+    ...ProgramScheduleToolbarControls.args,
+    currentProgram: draftProgram,
+  },
+};
+
+export const ProgramScheduleToolbarPublished = {
+  ...ProgramScheduleToolbarControls,
+  args: {
+    ...ProgramScheduleToolbarControls.args,
+    currentProgram: program,
+  },
+};
+
+export const ProgramScheduleToolbarSaving = {
+  ...ProgramScheduleToolbarControls,
+  args: {
+    ...ProgramScheduleToolbarControls.args,
+    currentProgram: draftProgram,
+    saving: true,
+  },
 };
 
 export const ProgramDayTabsControls = {
@@ -1088,15 +1119,31 @@ export const ProgramMetaEditorFilled = {
     program,
     saving: false,
   },
-  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} />,
+  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} onPublish={noopAsync} />,
+};
+
+export const ProgramMetaEditorDraftPublish = {
+  args: {
+    program: draftProgram,
+    saving: false,
+  },
+  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} onPublish={noopAsync} />,
+};
+
+export const ProgramMetaEditorPublished = {
+  args: {
+    program,
+    saving: false,
+  },
+  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} onPublish={noopAsync} />,
 };
 
 export const ProgramMetaEditorSaving = {
   args: {
-    program,
+    program: draftProgram,
     saving: true,
   },
-  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} />,
+  render: (args) => <ProgramMetaEditor {...args} onSave={noopAsync} onPublish={noopAsync} />,
 };
 
 export const ProgramCreate = {

@@ -1,6 +1,19 @@
+import { useEffect, useMemo, useState } from "react";
 import { DistributionBars, EmotionLineChart } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
+
+const reflectionFields = ["q1", "q2", "q3"];
+
+function getFirstPendingEventId(events) {
+  return events.find((event) => !event.stateId)?.id || events[0]?.id || "";
+}
+
+function isReflectionAnswered(reflection) {
+  return ["q1", "q2", "q3", "freeText"].some((field) =>
+    String(reflection?.[field] || "").trim(),
+  );
+}
 
 function ParticipantRoutedView({
   mode,
@@ -23,12 +36,46 @@ function ParticipantRoutedView({
   overallAverages,
   formatAverage,
 }) {
+  const [activeEventId, setActiveEventId] = useState("");
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
   const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
+  const defaultActiveEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
+  const activeEvent =
+    todayEvents.find((event) => event.id === activeEventId) ||
+    todayEvents.find((event) => event.id === defaultActiveEventId) ||
+    todayEvents[0];
+  const activeEventIndex = Math.max(
+    todayEvents.findIndex((event) => event.id === activeEvent?.id),
+    0,
+  );
+  const answeredEventCount = todayEvents.filter((event) => Boolean(event.stateId)).length;
+  const reflectionAnswered = isReflectionAnswered(reflection);
+  const checklistTotal = todayEvents.length + 1;
+  const checklistAnswered = answeredEventCount + (reflectionAnswered ? 1 : 0);
+  const completionValue = Math.max(0, Math.min(todayMetrics.completion || 0, 100));
+  const activeEventPosition = todayEvents.length ? activeEventIndex + 1 : 0;
+
+  useEffect(() => {
+    setActiveEventId((previous) => {
+      if (todayEvents.some((event) => event.id === previous)) {
+        return previous;
+      }
+
+      return defaultActiveEventId;
+    });
+  }, [defaultActiveEventId, todayEvents]);
+
+  function moveActiveEvent(direction) {
+    const nextEvent = todayEvents[activeEventIndex + direction];
+
+    if (nextEvent) {
+      setActiveEventId(nextEvent.id);
+    }
+  }
 
   return (
-    <section className="role-view">
-      <div className="hero-card">
+    <section className="role-view participant-view">
+      <div className="hero-card participant-hero-card">
         <div>
           <p className="eyebrow">Роль: участник</p>
           <h2>Дневник состояний по событиям дня</h2>
@@ -71,88 +118,178 @@ function ParticipantRoutedView({
 
       {mode === "today" ? (
         <div className="participant-layout">
-          <div className="event-column">
-            {todayEvents.map((event) => (
-              <article key={event.id} className="event-card">
-                <div className="event-head">
-                  <div>
-                    <span className="event-time">{event.time}</span>
-                    <h3>{event.title}</h3>
-                    <p>{event.type}</p>
-                  </div>
-                  <div className="tag-row">
-                    {event.tags.map((tag) => (
-                      <span key={tag} className="tag-chip">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+          <div className="event-column participant-stepper">
+            <div className="participant-flow-head">
+              <div>
+                <p className="eyebrow">Быстрый ввод</p>
+                <h3>Событие {activeEventPosition} из {todayEvents.length}</h3>
+              </div>
+              <div className="participant-progress-meter" aria-label={`Заполнено ${completionValue}%`}>
+                <span style={{ width: `${completionValue}%` }} />
+              </div>
+              <div className="participant-progress-meta">
+                <span>{answeredEventCount} из {todayEvents.length} событий</span>
+                <span>{checklistAnswered} из {checklistTotal} пунктов дня</span>
+              </div>
+            </div>
 
-                <div className="state-row">
-                  {stateScale.map((state) => (
+            <div className="participant-event-list">
+              {todayEvents.map((event, index) => {
+                const isActive = event.id === activeEvent?.id;
+                const state = event.stateId ? getStateInfo(event.stateId) : null;
+
+                if (!isActive) {
+                  return (
                     <button
-                      key={state.id}
+                      key={event.id}
                       type="button"
-                      className={
-                        event.stateId === state.id ? "state-pill is-selected" : "state-pill"
-                      }
-                      style={{
-                        "--state-surface": state.surface,
-                        "--state-border": state.color,
-                        "--state-text": state.textColor,
-                      }}
-                      onClick={() => updateEventState(event.id, state.id)}
+                      className={`participant-event-row ${state ? "is-complete" : "is-pending"}`}
+                      onClick={() => setActiveEventId(event.id)}
                     >
-                      <span>{state.icon}</span>
-                      <span>{state.label}</span>
+                      <span className="participant-event-index">{index + 1}</span>
+                      <span className="participant-event-row-main">
+                        <span className="event-time">{event.time}</span>
+                        <strong>{event.title}</strong>
+                        <small>{event.type}</small>
+                      </span>
+                      <span className="participant-event-row-state">
+                        {state ? (
+                          <>
+                            <span>{state.icon}</span>
+                            {state.shortLabel || state.label}
+                          </>
+                        ) : (
+                          "Без отметки"
+                        )}
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                }
 
-                <div className="input-row">
-                  <textarea
-                    rows="2"
-                    value={event.comment}
-                    placeholder="Что повлияло на состояние?"
-                    onChange={(eventInput) =>
-                      updateEventComment(event.id, eventInput.target.value)
-                    }
-                  />
-                </div>
+                return (
+                  <article key={event.id} className="event-card participant-event-card is-active">
+                    <div className="event-head participant-active-head">
+                      <div>
+                        <span className="event-time">{event.time}</span>
+                        <h3>{event.title}</h3>
+                        <p>{event.type}</p>
+                      </div>
+                      <div className="tag-row">
+                        {(event.tags || []).map((tag) => (
+                          <span key={tag} className="tag-chip">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
 
-                <div className="event-foot">
-                  <button
-                    type="button"
-                    className={event.confidence === "low" ? "ghost-button is-active" : "ghost-button"}
-                    onClick={() => updateEventConfidence(event.id)}
-                  >
-                    Сложно оценить
-                  </button>
-                  <span className="confidence-note">
-                    Уверенность: {event.confidence === "low" ? "low" : "high"}
-                  </span>
-                </div>
-              </article>
-            ))}
+                    <div className="state-row participant-state-grid">
+                      {stateScale.map((stateOption) => (
+                        <button
+                          key={stateOption.id}
+                          type="button"
+                          aria-pressed={event.stateId === stateOption.id}
+                          className={
+                            event.stateId === stateOption.id
+                              ? "state-pill participant-state-pill is-selected"
+                              : "state-pill participant-state-pill"
+                          }
+                          style={{
+                            "--state-surface": stateOption.surface,
+                            "--state-border": stateOption.color,
+                            "--state-text": stateOption.textColor,
+                          }}
+                          onClick={() => updateEventState(event.id, stateOption.id)}
+                        >
+                          <span>{stateOption.icon}</span>
+                          <span>{stateOption.shortLabel || stateOption.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {event.stateId ? (
+                      <>
+                        <div className="input-row participant-comment-row">
+                          <textarea
+                            rows="3"
+                            value={event.comment}
+                            placeholder="Что повлияло на состояние?"
+                            onChange={(eventInput) =>
+                              updateEventComment(event.id, eventInput.target.value)
+                            }
+                          />
+                        </div>
+
+                        <div className="event-foot">
+                          <button
+                            type="button"
+                            aria-pressed={event.confidence === "low"}
+                            className={event.confidence === "low" ? "ghost-button is-active" : "ghost-button"}
+                            onClick={() => updateEventConfidence(event.id)}
+                          >
+                            Сложно оценить
+                          </button>
+                          <span className="confidence-note">
+                            Уверенность: {event.confidence === "low" ? "low" : "high"}
+                          </span>
+                        </div>
+                      </>
+                    ) : null}
+
+                    <div className="participant-step-actions">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={activeEventIndex === 0}
+                        onClick={() => moveActiveEvent(-1)}
+                      >
+                        Назад
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={activeEventIndex >= todayEvents.length - 1}
+                        onClick={() => moveActiveEvent(1)}
+                      >
+                        Далее
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
 
           <div className="insight-column">
-            <article className="panel-card">
+            <article className="panel-card participant-summary-card">
               <div className="panel-head">
                 <div>
                   <p className="eyebrow">Итог дня</p>
-                  <h3>Рефлексия и заметки</h3>
+                  <h3>{completionValue}% заполнено</h3>
                 </div>
-                <button type="button" className="primary-button">
-                  Сохранить черновик
-                </button>
+                <MetricBadge compact label="Средний уровень" value={formatAverage(todayMetrics.average)} />
+              </div>
+              <div className="participant-progress-meter is-large" aria-label={`Заполнено ${completionValue}%`}>
+                <span style={{ width: `${completionValue}%` }} />
+              </div>
+              <div className="participant-progress-meta">
+                <span>{answeredEventCount} из {todayEvents.length} событий</span>
+                <span>Рефлексия: {reflectionAnswered ? "учтена" : "не заполнена"}</span>
+              </div>
+            </article>
+
+            <article className="panel-card participant-reflection-card">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">Рефлексия</p>
+                  <h3>Короткое завершение дня</h3>
+                </div>
+                <span className="confidence-tag">{reflectionAnswered ? "учтена" : "черновик"}</span>
               </div>
 
-              <div className="reflection-list">
+              <div className="reflection-list participant-reflection-list">
                 {reflectionPrompts.map((prompt, index) => {
-                  const keys = ["q1", "q2", "q3"];
-                  const field = keys[index];
+                  const field = reflectionFields[index] || `q${index + 1}`;
 
                   return (
                     <label key={prompt} className="reflection-item">
@@ -173,7 +310,7 @@ function ParticipantRoutedView({
                 })}
 
                 <label className="reflection-item">
-                  <span>Свободный текст</span>
+                  <span>Дополнить, если важно</span>
                   <textarea
                     rows="4"
                     value={reflection.freeText}
@@ -189,43 +326,49 @@ function ParticipantRoutedView({
               </div>
             </article>
 
-            <article className="panel-card">
-              <EmotionLineChart
-                title="Карта эмоций дня"
-                values={todayChartEvents.map((event) => getStateLevel(event.stateId))}
-                labels={todayChartEvents.map((event) => event.title)}
-              />
-            </article>
-
-            <article className="panel-card tone-card">
-              <div className="panel-head">
+            <details className="panel-card participant-analytics-drawer">
+              <summary>
                 <div>
-                  <p className="eyebrow">Психологический портрет дня</p>
-                  <h3>Автосводка по текущим отметкам</h3>
+                  <span className="eyebrow">Подробности</span>
+                  <strong>Графики и автосводка</strong>
                 </div>
-                <span className="confidence-tag">confidence: medium</span>
-              </div>
+                <span className="soft-pill is-outline">{todayChartEvents.length} отметок</span>
+              </summary>
 
-              <ul className="bullet-list">
-                {todayPortrait.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
+              <div className="participant-analytics-stack">
+                <div className="participant-analytics-block">
+                  <EmotionLineChart
+                    title="Карта эмоций дня"
+                    values={todayChartEvents.map((event) => getStateLevel(event.stateId))}
+                    labels={todayChartEvents.map((event) => event.title)}
+                  />
+                </div>
 
-            <article className="panel-card">
-              <div className="panel-head">
-                <div>
-                  <p className="eyebrow">Распределение состояний</p>
-                  <h3>Дневной профиль по шкале</h3>
+                <div className="participant-analytics-block tone-card">
+                  <div className="panel-head">
+                    <div>
+                      <p className="eyebrow">Психологический портрет дня</p>
+                      <h3>Автосводка по текущим отметкам</h3>
+                    </div>
+                    <span className="confidence-tag">confidence: medium</span>
+                  </div>
+
+                  <ul className="bullet-list">
+                    {todayPortrait.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="participant-analytics-block">
+                  <DistributionBars
+                    title="Дневной профиль по шкале"
+                    items={todayMetrics.distribution}
+                    total={todayChartEvents.length}
+                  />
                 </div>
               </div>
-
-              <DistributionBars
-                items={todayMetrics.distribution}
-                total={todayChartEvents.length}
-              />
-            </article>
+            </details>
           </div>
         </div>
       ) : null}

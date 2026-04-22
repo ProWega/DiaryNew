@@ -176,6 +176,20 @@ export const jsonApi = {
     });
   },
 
+  publishOrganizerProgram(viewerId, sessionId, programId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/programs/${programId}/publish`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  draftOrganizerProgram(viewerId, sessionId, programId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/programs/${programId}/draft`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
   selectOrganizerProgram(viewerId, sessionId, programId) {
     return requestJson(`/api/organizer/sessions/${sessionId}/programs/${programId}/select`, {
       method: "POST",

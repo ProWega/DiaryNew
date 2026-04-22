@@ -288,6 +288,22 @@ export function useOrganizerWorkspace(sessionId) {
     [currentUser?.id, mutation, sessionId],
   );
 
+  const publishProgram = useCallback(
+    (programId) =>
+      mutation.runMutation(() =>
+        jsonApi.publishOrganizerProgram(currentUser.id, sessionId, programId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const draftProgram = useCallback(
+    (programId) =>
+      mutation.runMutation(() =>
+        jsonApi.draftOrganizerProgram(currentUser.id, sessionId, programId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
   const selectProgram = useCallback(
     (programId) =>
       mutation.runMutation(() =>
@@ -427,6 +443,8 @@ export function useOrganizerWorkspace(sessionId) {
     updateRegistration,
     createProgram,
     updateProgram,
+    publishProgram,
+    draftProgram,
     selectProgram,
     createProgramDay,
     updateProgramDay,

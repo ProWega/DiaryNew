@@ -181,6 +181,14 @@ const actions = {
     console.log("updateProgram", args);
     return organizerWorkspaceFixture;
   },
+  onPublishProgram: async (...args) => {
+    console.log("publishProgram", args);
+    return organizerWorkspaceFixture;
+  },
+  onDraftProgram: async (...args) => {
+    console.log("draftProgram", args);
+    return organizerWorkspaceFixture;
+  },
   onSelectProgram: async (programId) => {
     console.log("selectProgram", programId);
     return organizerWorkspaceFixture;
@@ -240,7 +248,7 @@ export const SessionsTab = {
   args: {
     workspace: organizerWorkspaceFixture,
     initialTab: "sessions",
-    initialProgramViewMode: "cards",
+    initialProgramViewMode: "table",
     scheduleSlotMinutes: 15,
     defaultEventDurationMinutes: 60,
     saving: false,
@@ -252,6 +260,14 @@ export const ProgramTab = {
   args: {
     ...SessionsTab.args,
     initialTab: "program",
+    initialProgramViewMode: "table",
+  },
+  render: renderCabinet,
+};
+
+export const ProgramCardsMode = {
+  args: {
+    ...ProgramTab.args,
     initialProgramViewMode: "cards",
   },
   render: renderCabinet,
@@ -335,6 +351,30 @@ export const NewSessionDraftProgram = {
   args: {
     ...ProgramTableMode.args,
     workspace: draftProgramWorkspaceFixture,
+  },
+  render: renderCabinet,
+};
+
+export const DraftProgramPublishAction = {
+  args: {
+    ...ProgramTab.args,
+    workspace: draftProgramWorkspaceFixture,
+  },
+  render: renderCabinet,
+};
+
+export const PublishedProgramDraftAction = {
+  args: {
+    ...ProgramTab.args,
+    workspace: organizerWorkspaceFixture,
+  },
+  render: renderCabinet,
+};
+
+export const DraftProgramPublishError = {
+  args: {
+    ...DraftProgramPublishAction.args,
+    mutationError: new Error("Не удалось опубликовать программу"),
   },
   render: renderCabinet,
 };

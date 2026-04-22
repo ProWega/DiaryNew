@@ -846,16 +846,32 @@ export function ProgramScheduleToolbar({
   compact = false,
   disabled = false,
   saving = false,
+  publishLabel = "Опубликовать программу",
+  draftLabel = "Вернуть в черновик",
+  publishingLabel = "Сохраняем статус...",
   getProgramLabel,
   onViewModeChange,
   onSelectProgram,
   onSelectDay,
   onCreateDay,
   onDeleteDay,
+  onPublishProgram,
+  onDraftProgram,
 }) {
   const safePrograms = safeArray(programs).map((program, index) => normalizeComponentProgram(program, index));
   const safeCurrentProgram = currentProgram ? normalizeComponentProgram(currentProgram) : null;
   const safeCurrentDay = safeObject(currentDay);
+  const programStatus = safeCurrentProgram?.status || "draft";
+  const isDraft = programStatus === "draft";
+  const isPublished = programStatus === "published";
+  const canPublish = Boolean(safeCurrentProgram && onPublishProgram && isDraft);
+  const canDraft = Boolean(safeCurrentProgram && onDraftProgram && isPublished);
+  const publicationNote = isPublished
+    ? "Участники видят события этой программы в дневнике."
+    : isDraft
+      ? "Черновик скрыт от участников до публикации."
+      : "Архивная программа скрыта от участников.";
+
   return (
     <article className={compact ? "panel-card program-schedule-toolbar is-compact" : "panel-card program-schedule-toolbar"}>
       <div className="panel-head">
@@ -937,6 +953,38 @@ export function ProgramScheduleToolbar({
               ) : null}
             </div>
           ) : null}
+        </div>
+
+        <div className="program-publication-actions">
+          <span>Публикация</span>
+          <div className="program-publication-row">
+            {safeCurrentProgram ? (
+              <StatusPill tone={getProgramStatusTone(programStatus)}>
+                {getProgramStatusLabel(programStatus)}
+              </StatusPill>
+            ) : null}
+            {canPublish ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={disabled || saving}
+                onClick={() => onPublishProgram?.()}
+              >
+                {saving ? publishingLabel : publishLabel}
+              </button>
+            ) : null}
+            {canDraft ? (
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={disabled || saving}
+                onClick={() => onDraftProgram?.()}
+              >
+                {saving ? publishingLabel : draftLabel}
+              </button>
+            ) : null}
+          </div>
+          <p>{safeCurrentProgram ? publicationNote : "Выберите программу, чтобы управлять публикацией."}</p>
         </div>
       </div>
     </article>
@@ -2145,7 +2193,15 @@ function createProgramMetaForm(program = EMPTY_PROGRAM) {
   };
 }
 
-export function ProgramMetaEditor({ program = EMPTY_PROGRAM, saving = false, onSave }) {
+export function ProgramMetaEditor({
+  program = EMPTY_PROGRAM,
+  saving = false,
+  publishLabel = "Опубликовать программу",
+  publishSavingLabel = "Публикуем...",
+  publishedLabel = "Программа опубликована",
+  onSave,
+  onPublish,
+}) {
   const safeProgram = useMemo(() => normalizeComponentProgram(program), [program]);
   const [form, setForm] = useState(() => ({
     title: safeProgram.title || "",
@@ -2185,6 +2241,9 @@ export function ProgramMetaEditor({ program = EMPTY_PROGRAM, saving = false, onS
       eventContext: { ...previous.eventContext, [key]: value },
     }));
   }
+
+  const isPublished = safeProgram.status === "published";
+  const showPublishAction = Boolean(onPublish) || isPublished;
 
   return (
     <article className="panel-card">
@@ -2240,9 +2299,21 @@ export function ProgramMetaEditor({ program = EMPTY_PROGRAM, saving = false, onS
         </Field>
       </div>
 
-      <button type="button" className="primary-button" disabled={saving} onClick={() => void onSave?.(form)}>
-        Сохранить программу
-      </button>
+      <div className="card-actions">
+        <button type="button" className="primary-button" disabled={saving} onClick={() => void onSave?.(form)}>
+          Сохранить программу
+        </button>
+        {showPublishAction ? (
+          <button
+            type="button"
+            className={isPublished ? "ghost-button is-active" : "ghost-button"}
+            disabled={saving || isPublished || !onPublish}
+            onClick={() => void onPublish?.()}
+          >
+            {saving && !isPublished ? publishSavingLabel : isPublished ? publishedLabel : publishLabel}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

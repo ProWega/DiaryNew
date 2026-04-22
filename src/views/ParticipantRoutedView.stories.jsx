@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import FeedbackState from "../components/FeedbackState";
 import { reflectionPrompts, stateScale } from "../data/mockData";
 import { buildPortrait, calculateMetrics, formatAverage } from "../lib/metrics";
@@ -19,6 +20,28 @@ const baseEvents = [
   { id: "event-3", time: "12:00 - 13:00", title: "Рефлексия", type: "Группа", tags: ["дневник"], stateId: "relaxed" },
   { id: "event-4", time: "15:00 - 16:30", title: "Интенсив", type: "Лекция", tags: ["спикер"], stateId: "overstimulated" },
 ];
+
+function hasReflectionText(reflection) {
+  return ["q1", "q2", "q3", "freeText"].some((field) =>
+    String(reflection?.[field] || "").trim(),
+  );
+}
+
+function getProgress(events, reflection) {
+  const answeredEvents = events.filter((event) => Boolean(event.stateId)).length;
+  const answeredReflections = hasReflectionText(reflection) ? 1 : 0;
+  const totalEvents = events.length;
+  const totalReflections = 1;
+  const total = totalEvents + totalReflections;
+
+  return {
+    completion: total ? Math.round(((answeredEvents + answeredReflections) / total) * 100) : 0,
+    answeredEvents,
+    totalEvents,
+    answeredReflections,
+    totalReflections,
+  };
+}
 
 function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, reflectionAnswered = true } = {}) {
   const events = baseEvents.map((event, index) => ({
@@ -57,13 +80,87 @@ function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, refle
   };
 }
 
-function renderParticipant(args) {
-  const currentDay = makeDay(args);
+function ParticipantDiaryStory(args) {
+  const initialDay = useMemo(
+    () => makeDay(args),
+    [args.answeredEvents, args.reflectionAnswered],
+  );
+  const [events, setEvents] = useState(initialDay.events);
+  const [reflection, setReflectionState] = useState(initialDay.reflection);
+
+  useEffect(() => {
+    setEvents(initialDay.events);
+    setReflectionState(initialDay.reflection);
+  }, [initialDay]);
+
+  const progress = getProgress(events, reflection);
+  const currentDay = {
+    ...initialDay,
+    events,
+    reflection: {
+      ...reflection,
+      answered: progress.answeredReflections > 0,
+    },
+    progress,
+  };
   const history = [
     currentDay,
     makeDay({ id: "day-2", label: "День 2", answeredEvents: Math.max(args.answeredEvents - 1, 0), reflectionAnswered: false }),
   ];
   const metrics = calculateMetrics(currentDay.events, currentDay.progress);
+
+  function setReflection(nextValueOrUpdater) {
+    setReflectionState((previous) =>
+      typeof nextValueOrUpdater === "function"
+        ? nextValueOrUpdater(previous)
+        : nextValueOrUpdater,
+    );
+  }
+
+  function updateEventState(eventId, stateId) {
+    setEvents((previous) =>
+      previous.map((event) =>
+        event.id === eventId
+          ? {
+              ...event,
+              answered: true,
+              stateId,
+              respondedAt: "2026-07-13T12:00:00.000Z",
+            }
+          : event,
+      ),
+    );
+  }
+
+  function updateEventComment(eventId, comment) {
+    setEvents((previous) =>
+      previous.map((event) =>
+        event.id === eventId
+          ? {
+              ...event,
+              answered: true,
+              comment,
+              respondedAt: "2026-07-13T12:00:00.000Z",
+            }
+          : event,
+      ),
+    );
+  }
+
+  function updateEventConfidence(eventId) {
+    setEvents((previous) =>
+      previous.map((event) =>
+        event.id === eventId
+          ? {
+              ...event,
+              answered: true,
+              confidence: event.confidence === "low" ? "high" : "low",
+              respondedAt: "2026-07-13T12:00:00.000Z",
+            }
+          : event,
+      ),
+    );
+  }
 
   return (
     <ParticipantRoutedView
@@ -76,10 +173,10 @@ function renderParticipant(args) {
       todayMetrics={metrics}
       todayPortrait={buildPortrait(currentDay.events, metrics)}
       reflection={currentDay.reflection}
-      setReflection={() => {}}
-      updateEventState={() => {}}
-      updateEventComment={() => {}}
-      updateEventConfidence={() => {}}
+      setReflection={setReflection}
+      updateEventState={updateEventState}
+      updateEventComment={updateEventComment}
+      updateEventConfidence={updateEventConfidence}
       liveHistory={history}
       selectedDay={currentDay}
       setSelectedHistoryDay={() => {}}
@@ -93,6 +190,46 @@ function renderParticipant(args) {
     />
   );
 }
+
+function renderParticipant(args) {
+  return <ParticipantDiaryStory {...args} />;
+}
+
+export const MobileQuickInput = {
+  args: {
+    mode: "today",
+    answeredEvents: 1,
+    reflectionAnswered: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const SequentialIncompleteDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 2,
+    reflectionAnswered: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const CompletedMobileDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 4,
+    reflectionAnswered: true,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
 
 export const PartialDay = {
   args: {

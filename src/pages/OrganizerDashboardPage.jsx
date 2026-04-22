@@ -17,6 +17,8 @@ function OrganizerDashboardPage() {
     updateSession,
     createProgram,
     updateProgram,
+    publishProgram,
+    draftProgram,
     selectProgram,
     createProgramDay,
     updateProgramDay,
@@ -59,6 +61,8 @@ function OrganizerDashboardPage() {
       onSessionCreated={(session) => navigate(`/organizer/session/${session.id}`)}
       onCreateProgram={createProgram}
       onUpdateProgram={updateProgram}
+      onPublishProgram={publishProgram}
+      onDraftProgram={draftProgram}
       onSelectProgram={selectProgram}
       onCreateProgramDay={createProgramDay}
       onUpdateProgramDay={updateProgramDay}
