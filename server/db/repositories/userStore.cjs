@@ -9,6 +9,48 @@ const {
 } = require("./common.cjs");
 const { assertRegistrationAvailable } = require("./sessionStore.cjs");
 
+function getAssignmentFromRow(row) {
+  if (!row?.session_id) {
+    return null;
+  }
+
+  return {
+    session_id: row.session_id,
+    session_name: row.session_name,
+    group_id: row.group_id,
+    group_name: row.group_name,
+    role: row.effective_role || row.role,
+    assignment_status: row.assignment_status || "active",
+  };
+}
+
+function mapUsersWithAssignments(rows) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    if (!row?.id) {
+      continue;
+    }
+
+    const assignment = getAssignmentFromRow(row);
+    const existing = grouped.get(row.id);
+
+    if (!existing) {
+      grouped.set(row.id, {
+        ...row,
+        assignments: assignment ? [assignment] : [],
+      });
+      continue;
+    }
+
+    if (assignment) {
+      existing.assignments.push(assignment);
+    }
+  }
+
+  return Array.from(grouped.values()).map(toPublicUser).filter(Boolean);
+}
+
 async function listUsers() {
   const result = await query(`
     select
@@ -17,32 +59,29 @@ async function listUsers() {
       su.session_id,
       s.name as session_name,
       su.group_id,
-      g.name as group_name
+      g.name as group_name,
+      su.status as assignment_status,
+      su.created_at as assignment_created_at,
+      su.updated_at as assignment_updated_at
     from users u
     left join session_users su on su.user_id = u.id
     left join sessions s on s.id = su.session_id
     left join groups g on g.id = su.group_id
     order by
+      u.full_name,
+      case coalesce(su.status, 'active') when 'active' then 0 else 1 end,
+      su.updated_at desc nulls last,
+      su.created_at desc nulls last,
       case coalesce(su.role, u.role)
         when 'participant' then 1
         when 'curator' then 2
         when 'organizer' then 3
         else 4
       end,
-      u.full_name,
       s.start_date desc nulls last
   `);
 
-  const seen = new Set();
-  return result.rows
-    .map(toPublicUser)
-    .filter((user) => {
-      if (!user || seen.has(user.id)) {
-        return false;
-      }
-      seen.add(user.id);
-      return true;
-    });
+  return mapUsersWithAssignments(result.rows);
 }
 
 async function getUser(viewerId) {
@@ -54,19 +93,25 @@ async function getUser(viewerId) {
         su.session_id,
         s.name as session_name,
         su.group_id,
-        g.name as group_name
+        g.name as group_name,
+        su.status as assignment_status,
+        su.created_at as assignment_created_at,
+        su.updated_at as assignment_updated_at
       from users u
       left join session_users su on su.user_id = u.id
       left join sessions s on s.id = su.session_id
       left join groups g on g.id = su.group_id
       where u.id = $1
-      order by su.created_at nulls last
-      limit 1
+      order by
+        case coalesce(su.status, 'active') when 'active' then 0 else 1 end,
+        su.updated_at desc nulls last,
+        su.created_at desc nulls last,
+        s.start_date desc nulls last
     `,
     [viewerId],
   );
 
-  return toPublicUser(result.rows[0]);
+  return mapUsersWithAssignments(result.rows)[0] || null;
 }
 
 async function getRawUser(viewerId, sessionId) {
@@ -78,13 +123,20 @@ async function getRawUser(viewerId, sessionId) {
         su.session_id,
         s.name as session_name,
         su.group_id,
-        g.name as group_name
+        g.name as group_name,
+        su.status as assignment_status,
+        su.created_at as assignment_created_at,
+        su.updated_at as assignment_updated_at
       from users u
       left join session_users su on su.user_id = u.id
       left join sessions s on s.id = su.session_id
       left join groups g on g.id = su.group_id
       where u.id = $1 and ($2::text is null or su.session_id = $2 or su.session_id is null)
-      order by su.created_at nulls last
+      order by
+        case when su.session_id = $2 then 0 else 1 end,
+        case coalesce(su.status, 'active') when 'active' then 0 else 1 end,
+        su.updated_at desc nulls last,
+        su.created_at desc nulls last
       limit 1
     `,
     [viewerId, sessionId || null],
@@ -356,6 +408,10 @@ async function upsertUserAssignment({ actorId, userId, payload = {} }) {
     throw error;
   }
 
+  const role = payload.role || "participant";
+  const status = payload.status || "active";
+  const groupId = ["participant", "curator"].includes(role) ? payload.groupId || null : null;
+
   await query(
     `
       insert into session_users (session_id, user_id, group_id, role, status, updated_at)
@@ -370,9 +426,31 @@ async function upsertUserAssignment({ actorId, userId, payload = {} }) {
     [
       payload.sessionId,
       userId,
-      payload.groupId || null,
-      payload.role || "participant",
-      payload.status || "active",
+      groupId,
+      role,
+      status,
+    ],
+  );
+
+  if (role === "curator" && groupId && status === "active") {
+    await query(
+      "update groups set curator_id = $1, updated_at = now() where id = $2 and session_id = $3",
+      [userId, groupId, payload.sessionId],
+    );
+  }
+
+  await query(
+    `
+      update groups
+      set curator_id = null, updated_at = now()
+      where session_id = $1
+        and curator_id = $2
+        and ($3::text is null or id <> $3)
+    `,
+    [
+      payload.sessionId,
+      userId,
+      role === "curator" && groupId && status === "active" ? groupId : null,
     ],
   );
 
@@ -386,7 +464,7 @@ async function upsertUserAssignment({ actorId, userId, payload = {} }) {
       actorId || null,
       payload.sessionId,
       `${payload.sessionId}:${userId}`,
-      JSON.stringify({ userId, role: payload.role, groupId: payload.groupId, status: payload.status }),
+      JSON.stringify({ userId, role, groupId, status }),
     ],
   );
 
@@ -404,11 +482,16 @@ async function canAccessOrganizerSession(viewerId, sessionId) {
     return null;
   }
 
-  if (user.role === "admin") {
+  if (row.role === "admin" || user.role === "admin" || user.baseRole === "admin") {
     return user;
   }
 
-  return user.role === "organizer" && user.sessionId === sessionId ? user : null;
+  const hasOrganizerAssignment =
+    user.role === "organizer" &&
+    user.sessionId === sessionId &&
+    (row.assignment_status || "active") === "active";
+
+  return hasOrganizerAssignment ? user : null;
 }
 
 module.exports = {

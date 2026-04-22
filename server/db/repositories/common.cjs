@@ -16,6 +16,44 @@ function createId(prefix) {
   return `${prefix}-${randomUUID().slice(0, 8)}`;
 }
 
+function formatDateObject(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toIsoDate(value) {
+  if (value === "" || value === undefined || value === null) {
+    return "";
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : formatDateObject(value);
+  }
+
+  const stringValue = String(value).trim();
+  if (!stringValue) {
+    return "";
+  }
+
+  const isoMatch = stringValue.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1];
+  }
+
+  if (!/\b\d{4}\b/.test(stringValue)) {
+    return "";
+  }
+
+  const parsed = new Date(stringValue);
+  return Number.isNaN(parsed.getTime()) ? "" : formatDateObject(parsed);
+}
+
+function normalizeDateInput(value) {
+  return toIsoDate(value) || null;
+}
+
 function normalizeList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean);
@@ -36,15 +74,39 @@ function toPublicUser(row) {
     return null;
   }
 
+  const assignments = (Array.isArray(row.assignments) ? row.assignments : row.session_id ? [row] : [])
+    .map((assignment) => {
+      const role = assignment.effective_role || assignment.role || assignment.assignment_role || row.role;
+      const sessionId = assignment.session_id ?? assignment.sessionId ?? null;
+
+      if (!sessionId) {
+        return null;
+      }
+
+      return {
+        sessionId,
+        sessionLabel: assignment.session_name ?? assignment.sessionLabel ?? null,
+        groupId: assignment.group_id ?? assignment.groupId ?? null,
+        groupLabel: assignment.group_name ?? assignment.groupLabel ?? null,
+        role,
+        roleLabel: roleLabels[role] || role,
+        status: assignment.assignment_status ?? assignment.status ?? "active",
+      };
+    })
+    .filter(Boolean);
+  const role = row.effective_role || row.role;
+
   return {
     id: row.id,
     fullName: row.full_name,
-    role: row.effective_role || row.role,
-    roleLabel: roleLabels[row.effective_role || row.role] || row.role,
+    role,
+    baseRole: row.role,
+    roleLabel: roleLabels[role] || row.role,
     sessionId: row.session_id ?? null,
     sessionLabel: row.session_name ?? null,
     groupId: row.group_id ?? null,
     groupLabel: row.group_name ?? null,
+    assignments,
     age: row.age ?? null,
     gender: row.gender ?? null,
     status: row.status ?? "active",
@@ -125,7 +187,9 @@ module.exports = {
   getSessionInfo,
   getStateById,
   getStateScale,
+  normalizeDateInput,
   normalizeList,
   roleLabels,
+  toIsoDate,
   toPublicUser,
 };

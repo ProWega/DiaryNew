@@ -21,8 +21,12 @@ function OrganizerDashboardPage() {
     selectProgram,
     createProgramDay,
     updateProgramDay,
+    deleteProgramDay,
+    updateProgramDayFlowOrder,
+    updateProgramDayFlows,
     updateEvent,
     addParallelEvent,
+    deleteEvent,
     activateEvent,
   } = useOrganizerWorkspace(sessionId);
 
@@ -60,8 +64,12 @@ function OrganizerDashboardPage() {
       onSelectProgram={selectProgram}
       onCreateProgramDay={createProgramDay}
       onUpdateProgramDay={updateProgramDay}
+      onDeleteProgramDay={deleteProgramDay}
+      onUpdateProgramDayFlowOrder={updateProgramDayFlowOrder}
+      onUpdateProgramDayFlows={updateProgramDayFlows}
       onUpdateEvent={updateEvent}
       onAddParallelEvent={addParallelEvent}
+      onDeleteEvent={deleteEvent}
       onActivateEvent={activateEvent}
     />
   );

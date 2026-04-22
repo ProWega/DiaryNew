@@ -47,8 +47,11 @@ export function AuthProvider({ children }) {
         setSelectedUserId(null);
         setStoredUserId(null);
       }
+
+      return nextUsers;
     } catch (error) {
       setUsersError(error);
+      return [];
     } finally {
       setUsersLoading(false);
     }
@@ -158,6 +161,7 @@ export function AuthProvider({ children }) {
       switchUser,
       logout,
       bootstrap,
+      refreshUsers: loadUsers,
       refreshBootstrap,
       registrationOptions,
       registerParticipant,
@@ -176,6 +180,7 @@ export function AuthProvider({ children }) {
       bootstrapLoading,
       currentUser,
       logout,
+      loadUsers,
       refreshBootstrap,
       registerParticipant,
       registrationError,

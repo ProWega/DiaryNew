@@ -95,6 +95,7 @@ create table if not exists programs (
   participant_count integer default 0,
   event_description text,
   is_current boolean not null default false,
+  status text not null default 'draft',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -107,6 +108,8 @@ create table if not exists program_days (
   label text not null,
   date_label text,
   date_value date,
+  flow_order jsonb not null default '[]'::jsonb,
+  flow_meta jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -327,12 +330,50 @@ alter table sessions add column if not exists registration_policy jsonb not null
 alter table sessions add column if not exists created_by text;
 alter table sessions add column if not exists updated_by text;
 alter table users add column if not exists status text not null default 'active';
+alter table program_days add column if not exists flow_order jsonb not null default '[]'::jsonb;
+alter table program_days add column if not exists flow_meta jsonb not null default '{}'::jsonb;
+alter table diary_entries add column if not exists responded_at timestamptz;
+alter table daily_reflections add column if not exists responded_at timestamptz;
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_name = 'programs' and column_name = 'status'
+  ) then
+    alter table programs add column status text not null default 'published';
+  end if;
+
+  alter table programs alter column status set default 'draft';
+end $$;
+
+update diary_entries
+set responded_at = coalesce(updated_at, created_at, now())
+where responded_at is null
+  and (
+    (state_id is not null and state_id <> 'balance')
+    or nullif(btrim(comment), '') is not null
+    or confidence <> 'high'
+  );
+
+update daily_reflections
+set responded_at = coalesce(updated_at, created_at, now())
+where responded_at is null
+  and (
+    nullif(btrim(free_text), '') is not null
+    or exists (
+      select 1
+      from jsonb_each_text(answers) as answer(key, value)
+      where nullif(btrim(answer.value), '') is not null
+    )
+  );
 
 create index if not exists idx_groups_session on groups(session_id);
 create index if not exists idx_session_users_session on session_users(session_id);
 create index if not exists idx_session_users_user on session_users(user_id);
 create index if not exists idx_sessions_registration_status on sessions(registration_status);
 create index if not exists idx_programs_session on programs(session_id);
+create index if not exists idx_programs_session_status on programs(session_id, status);
 create index if not exists idx_program_days_program on program_days(program_id);
 create index if not exists idx_program_events_session on program_events(session_id);
 create index if not exists idx_program_events_program_day on program_events(program_id, day_id);
@@ -340,6 +381,8 @@ create index if not exists idx_program_events_speaker on program_events(speaker_
 create index if not exists idx_diary_entries_user_session on diary_entries(user_id, session_id);
 create index if not exists idx_diary_entries_event on diary_entries(event_id);
 create index if not exists idx_daily_reflections_user_session on daily_reflections(user_id, session_id);
+create index if not exists idx_diary_entries_responded on diary_entries(session_id, event_id, responded_at);
+create index if not exists idx_daily_reflections_responded on daily_reflections(session_id, day_id, responded_at);
 create index if not exists idx_surveys_session on surveys(session_id);
 create index if not exists idx_survey_questions_survey on survey_questions(survey_id);
 create index if not exists idx_survey_publications_survey on survey_publications(survey_id);

@@ -114,6 +114,7 @@ export function AssignmentPicker({
 }) {
   const form = value || {};
   const sessionGroups = groups.filter((group) => group.sessionId === form.sessionId);
+  const canUseGroup = ["participant", "curator"].includes(form.role || "participant");
 
   function update(key, nextValue) {
     onChange({ ...form, [key]: nextValue });
@@ -151,13 +152,19 @@ export function AssignmentPicker({
         </select>
       </Field>
       <Field label="Группа">
-        <select value={form.groupId || ""} disabled={disabled} onChange={(event) => update("groupId", event.target.value)}>
+        <select value={form.groupId || ""} disabled={disabled || !canUseGroup} onChange={(event) => update("groupId", event.target.value)}>
           <option value="">Без группы</option>
           {sessionGroups.map((group) => (
             <option key={group.id} value={group.id}>
               {group.name}
             </option>
           ))}
+        </select>
+      </Field>
+      <Field label="Статус">
+        <select value={form.status || "active"} disabled={disabled} onChange={(event) => update("status", event.target.value)}>
+          <option value="active">Активен</option>
+          <option value="disabled">Доступ снят</option>
         </select>
       </Field>
     </div>

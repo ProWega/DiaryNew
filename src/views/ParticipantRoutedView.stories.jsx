@@ -1,0 +1,138 @@
+import FeedbackState from "../components/FeedbackState";
+import { reflectionPrompts, stateScale } from "../data/mockData";
+import { buildPortrait, calculateMetrics, formatAverage } from "../lib/metrics";
+import ParticipantRoutedView from "./ParticipantRoutedView";
+
+export default {
+  title: "Participant/Diary",
+  component: ParticipantRoutedView,
+  argTypes: {
+    mode: { control: "radio", options: ["today", "dynamics"] },
+    answeredEvents: { control: { type: "number", min: 0, max: 4, step: 1 } },
+    reflectionAnswered: { control: "boolean" },
+  },
+};
+
+const baseEvents = [
+  { id: "event-1", time: "09:00 - 09:45", title: "Утренний сбор", type: "Общий поток", tags: ["старт"], stateId: "balance" },
+  { id: "event-2", time: "10:00 - 11:30", title: "Проектная сессия", type: "Практикум", tags: ["команда"], stateId: "engaged" },
+  { id: "event-3", time: "12:00 - 13:00", title: "Рефлексия", type: "Группа", tags: ["дневник"], stateId: "relaxed" },
+  { id: "event-4", time: "15:00 - 16:30", title: "Интенсив", type: "Лекция", tags: ["спикер"], stateId: "overstimulated" },
+];
+
+function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, reflectionAnswered = true } = {}) {
+  const events = baseEvents.map((event, index) => ({
+    ...event,
+    answered: index < answeredEvents,
+    stateId: index < answeredEvents ? event.stateId : null,
+    comment: index < answeredEvents ? "Короткая заметка участника." : "",
+    confidence: "high",
+    respondedAt: index < answeredEvents ? "2026-07-13T12:00:00.000Z" : null,
+  }));
+  const progressTotal = events.length + 1;
+  const progressAnswered = answeredEvents + (reflectionAnswered ? 1 : 0);
+
+  return {
+    id,
+    label,
+    dateLabel: "13 июля",
+    insight: "Сводка меняется по мере заполнения дневника.",
+    aiHighlights: ["Пока видна частичная динамика.", "После дневной рефлексии картина станет точнее."],
+    reflection: {
+      q1: reflectionAnswered ? "День был насыщенным." : "",
+      q2: reflectionAnswered ? "Запомнилась работа в группе." : "",
+      q3: reflectionAnswered ? "Нужны паузы." : "",
+      freeText: "",
+      answered: reflectionAnswered,
+      respondedAt: reflectionAnswered ? "2026-07-13T12:30:00.000Z" : null,
+    },
+    progress: {
+      completion: Math.round((progressAnswered / progressTotal) * 100),
+      answeredEvents,
+      totalEvents: events.length,
+      answeredReflections: reflectionAnswered ? 1 : 0,
+      totalReflections: 1,
+    },
+    events,
+  };
+}
+
+function renderParticipant(args) {
+  const currentDay = makeDay(args);
+  const history = [
+    currentDay,
+    makeDay({ id: "day-2", label: "День 2", answeredEvents: Math.max(args.answeredEvents - 1, 0), reflectionAnswered: false }),
+  ];
+  const metrics = calculateMetrics(currentDay.events, currentDay.progress);
+
+  return (
+    <ParticipantRoutedView
+      mode={args.mode}
+      navigateToMode={() => {}}
+      sessionInfo={{ editWindow: "До конца дня" }}
+      stateScale={stateScale}
+      reflectionPrompts={reflectionPrompts}
+      todayEvents={currentDay.events}
+      todayMetrics={metrics}
+      todayPortrait={buildPortrait(currentDay.events, metrics)}
+      reflection={currentDay.reflection}
+      setReflection={() => {}}
+      updateEventState={() => {}}
+      updateEventComment={() => {}}
+      updateEventConfidence={() => {}}
+      liveHistory={history}
+      selectedDay={currentDay}
+      setSelectedHistoryDay={() => {}}
+      overallTrajectory={history.flatMap((day) =>
+        day.events
+          .filter((event) => event.answered && event.stateId)
+          .map((event) => ({ label: `${day.label}: ${event.title}`, stateId: event.stateId })),
+      )}
+      overallAverages={history.map((day) => ({ day: day.label, value: calculateMetrics(day.events, day.progress).average }))}
+      formatAverage={formatAverage}
+    />
+  );
+}
+
+export const PartialDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 2,
+    reflectionAnswered: true,
+  },
+  render: renderParticipant,
+};
+
+export const CompletedDay = {
+  args: {
+    ...PartialDay.args,
+    answeredEvents: 4,
+  },
+  render: renderParticipant,
+};
+
+export const DynamicsPartial = {
+  args: {
+    ...PartialDay.args,
+    mode: "dynamics",
+  },
+  render: renderParticipant,
+};
+
+export const UnpublishedProgram = {
+  render: () => (
+    <FeedbackState
+      title="Программа ещё не опубликована"
+      description="Организатор готовит расписание. Дневник появится здесь после публикации программы заезда."
+    />
+  ),
+};
+
+export const PublishedEmptyProgram = {
+  render: () => (
+    <FeedbackState
+      title="В опубликованной программе пока нет мероприятий"
+      description="Как только организатор добавит мероприятия, они появятся в дневнике участника."
+    />
+  ),
+};

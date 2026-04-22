@@ -1,5 +1,6 @@
 const { query } = require("../postgres.cjs");
 const { getRawUser } = require("./userStore.cjs");
+const { getPublishedParticipationData } = require("./programProgress.cjs");
 
 function average(values) {
   const finite = values.map(Number).filter(Number.isFinite);
@@ -78,36 +79,19 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
       join users u on u.id = su.user_id
       join groups g on g.id = su.group_id
       left join typology_assignments ta on ta.user_id = u.id and ta.session_id = su.session_id
-      where su.session_id = $1 and su.group_id = $2 and su.role = 'participant'
+      where su.session_id = $1 and su.group_id = $2 and su.role = 'participant' and su.status = 'active'
       order by u.full_name
     `,
     [sessionId, groupId],
   );
 
-  const eventResult = await query(
-    `
-      select e.id, e.title
-      from program_events e
-      join program_days d on d.id = e.day_id
-      where e.session_id = $1
-      order by d.day_number, e.sort_order, e.start_time
-    `,
-    [sessionId],
-  );
-
-  const entriesResult = await query(
-    `
-      select de.user_id, de.event_id, de.state_level, de.comment
-      from diary_entries de
-      join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
-      where de.session_id = $1 and su.group_id = $2
-    `,
-    [sessionId, groupId],
-  );
+  const participation = await getPublishedParticipationData(sessionId, { groupId });
+  const eventRows = participation.events;
+  const entryRows = participation.entries;
   const entriesByUser = new Map();
   const entriesByEvent = new Map();
 
-  for (const row of entriesResult.rows) {
+  for (const row of entryRows) {
     if (!entriesByUser.has(row.user_id)) {
       entriesByUser.set(row.user_id, []);
     }
@@ -128,7 +112,7 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
       id: member.id,
       name: member.full_name,
       status: getMemberStatus(levels),
-      trajectory: eventResult.rows.map((event) => {
+      trajectory: eventRows.map((event) => {
         const entry = entries.find((item) => item.event_id === event.id);
         return Number.isFinite(Number(entry?.state_level)) ? Number(entry.state_level) : 3;
       }),
@@ -143,14 +127,12 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
     };
   });
 
-  const allLevels = entriesResult.rows.map((entry) => Number(entry.state_level)).filter(Number.isFinite);
-  const completion = eventResult.rows.length && members.length
-    ? Math.round((entriesResult.rows.length / (eventResult.rows.length * members.length)) * 100)
-    : 0;
+  const allLevels = entryRows.map((entry) => Number(entry.state_level)).filter(Number.isFinite);
+  const completion = participation.progress.completion;
 
   const heatmap = {
     columns: members.map((member) => member.name.split(" ")[0]),
-    rows: eventResult.rows.slice(0, 8).map((event) => ({
+    rows: eventRows.slice(0, 8).map((event) => ({
       label: event.title,
       values: members.map((member) => {
         const entries = entriesByUser.get(member.id) || [];
@@ -213,7 +195,7 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
     })),
     topThemes: clustersResult.rows.length
       ? clustersResult.rows
-      : [{ label: "перегруз / нет пауз", count: entriesResult.rows.filter((entry) => entry.comment).length }],
+      : [{ label: "перегруз / нет пауз", count: entryRows.filter((entry) => entry.comment).length }],
     aiSummary: {
       confidence: report?.confidence || "medium",
       bullets: report?.content?.bullets || [

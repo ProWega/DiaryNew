@@ -53,6 +53,24 @@ function getViewerId(req) {
   return req.header("x-viewer-id") || req.query.viewerId;
 }
 
+function hasActiveAssignmentRole(viewer, role) {
+  return Array.isArray(viewer?.assignments)
+    ? viewer.assignments.some((assignment) => assignment.role === role && assignment.status !== "disabled")
+    : false;
+}
+
+function isAdminViewer(viewer) {
+  return viewer?.role === "admin" || viewer?.baseRole === "admin";
+}
+
+function isOrganizerViewer(viewer) {
+  return (
+    viewer?.role === "organizer" ||
+    viewer?.baseRole === "organizer" ||
+    hasActiveAssignmentRole(viewer, "organizer")
+  );
+}
+
 function requireOrganizer(req, _res, next) {
   const viewerId = req.header("x-viewer-id") || req.query.viewerId;
   Promise.resolve()
@@ -74,7 +92,7 @@ function requireAdmin(req, _res, next) {
     .then(async () => {
       const viewer = await getUser(getViewerId(req));
 
-      if (!viewer || viewer.role !== "admin" || viewer.status === "disabled") {
+      if (!viewer || !isAdminViewer(viewer) || viewer.status === "disabled") {
         throw createHttpError(403, "Недостаточно прав для панели администратора");
       }
 
@@ -99,6 +117,231 @@ function normalizeList(value) {
   return [];
 }
 
+function normalizeFlowOrder(value) {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from(
+    new Set(
+      source
+        .map((item) => (typeof item === "string" ? item : item?.id || item?.value || item?.parallelGroup || ""))
+        .map((item) => String(item).trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeFlowId(value, fallback = "A") {
+  const id = String(value || "").trim();
+  return id || fallback;
+}
+
+function normalizeFlowMeta(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([rawId, rawMeta]) => {
+        const id = normalizeFlowId(rawId, "");
+        if (!id) {
+          return null;
+        }
+
+        const meta = rawMeta && typeof rawMeta === "object" && !Array.isArray(rawMeta) ? rawMeta : { label: rawMeta };
+        return [
+          id,
+          {
+            label: String(meta.label || meta.title || id).trim() || id,
+            track: String(meta.track || "").trim(),
+          },
+        ];
+      })
+      .filter(Boolean),
+  );
+}
+
+function getFlowEventIds(day) {
+  return normalizeFlowOrder((day?.events || []).map((event) => event?.parallelGroup || "A"));
+}
+
+function normalizeFlowDefinitions(day, nextFlows = null) {
+  const flowMeta = normalizeFlowMeta(day?.flowMeta || day?.flow_meta);
+  const flowMap = new Map();
+  const pushFlow = (rawFlow, fallbackIndex = 0) => {
+    const id = normalizeFlowId(
+      typeof rawFlow === "string" ? rawFlow : rawFlow?.id || rawFlow?.value || rawFlow?.parallelGroup,
+      "",
+    );
+
+    if (!id || flowMap.has(id)) {
+      return;
+    }
+
+    const firstEvent = (day?.events || []).find((event) => normalizeFlowId(event?.parallelGroup) === id);
+    const meta = flowMeta[id] || {};
+    const label =
+      typeof rawFlow === "string"
+        ? meta.label || rawFlow
+        : rawFlow?.label || rawFlow?.title || meta.label || id;
+    const track =
+      typeof rawFlow === "string"
+        ? meta.track || firstEvent?.track || ""
+        : rawFlow?.track || meta.track || firstEvent?.track || "";
+
+    flowMap.set(id, {
+      id,
+      label: String(label || id).trim() || id,
+      track: String(track || "").trim(),
+      _index: fallbackIndex,
+    });
+  };
+
+  if (Array.isArray(nextFlows)) {
+    nextFlows.forEach(pushFlow);
+  } else {
+    (day?.flows || []).forEach(pushFlow);
+    normalizeFlowOrder(day?.flowOrder).forEach(pushFlow);
+  }
+
+  getFlowEventIds(day).forEach(pushFlow);
+
+  if (!flowMap.size) {
+    pushFlow("A");
+  }
+
+  return Array.from(flowMap.values()).map(({ _index, ...flow }) => flow);
+}
+
+function validateFlowDefinitions(flows) {
+  const seenLabels = new Set();
+  for (const flow of flows) {
+    const label = String(flow?.label || "").trim();
+    if (!flow?.id || !label) {
+      throw createHttpError(400, "Flow name is required.");
+    }
+
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) {
+      throw createHttpError(400, "Flow names must be unique within the day.");
+    }
+    seenLabels.add(labelKey);
+  }
+}
+
+function syncDayFlows(day, nextFlows = null) {
+  const flows = normalizeFlowDefinitions(day, nextFlows);
+  const flowMeta = normalizeFlowMeta(day?.flowMeta || day?.flow_meta);
+  const nextMeta = {};
+
+  for (const flow of flows) {
+    nextMeta[flow.id] = {
+      label: flow.label || flowMeta[flow.id]?.label || flow.id,
+      track: flow.track || flowMeta[flow.id]?.track || "",
+    };
+  }
+
+  day.flows = flows.map((flow) => ({
+    id: flow.id,
+    label: nextMeta[flow.id].label,
+    track: nextMeta[flow.id].track,
+  }));
+  day.flowOrder = day.flows.map((flow) => flow.id);
+  day.flowMeta = nextMeta;
+  return day.flows;
+}
+
+function parseTimeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function getEventStartMinutes(event) {
+  return parseTimeToMinutes(event?.start) ?? 9 * 60;
+}
+
+function getEventEndMinutes(event) {
+  const start = getEventStartMinutes(event);
+  const end = parseTimeToMinutes(event?.end);
+  return end !== null && end > start ? end : start + 60;
+}
+
+function rangesOverlap(firstStart, firstEnd, secondStart, secondEnd) {
+  return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function mergeDayFlowOrder(day, nextOrder = day?.flowOrder) {
+  const ordered = normalizeFlowOrder(nextOrder);
+  for (const event of day?.events || []) {
+    const parallelGroup = String(event?.parallelGroup || "A").trim() || "A";
+    if (!ordered.includes(parallelGroup)) {
+      ordered.push(parallelGroup);
+    }
+  }
+
+  return ordered.length ? ordered : ["A"];
+}
+
+function ensureFlowInDay(day, parallelGroup, flowPatch = {}) {
+  const nextGroup = String(parallelGroup || "A").trim() || "A";
+  const flows = normalizeFlowDefinitions(day);
+  const existingFlow = flows.find((flow) => flow.id === nextGroup);
+  if (existingFlow) {
+    existingFlow.label = flowPatch.label || existingFlow.label || nextGroup;
+    existingFlow.track = flowPatch.track || existingFlow.track || "";
+  } else {
+    flows.push({
+      id: nextGroup,
+      label: flowPatch.label || nextGroup,
+      track: flowPatch.track || "",
+    });
+  }
+  syncDayFlows(day, flows);
+}
+
+function compactDayFlowOrder(day) {
+  const existingFlows = normalizeFlowDefinitions(day);
+  syncDayFlows(day, existingFlows.length ? existingFlows : [{ id: "A", label: "A", track: "" }]);
+}
+
+function validateEventSchedule(day, candidate, excludedEventId = null) {
+  const start = parseTimeToMinutes(candidate?.start);
+  const end = parseTimeToMinutes(candidate?.end);
+
+  if (start === null || end === null) {
+    throw createHttpError(400, "Укажите время в формате ЧЧ:ММ.");
+  }
+
+  if (end <= start) {
+    throw createHttpError(400, "Окончание должно быть позже начала.");
+  }
+
+  const candidateGroup = candidate.parallelGroup || "A";
+  const conflict = (day?.events || []).find((event) => {
+    if (event.id === excludedEventId || (event.parallelGroup || "A") !== candidateGroup) {
+      return false;
+    }
+
+    return rangesOverlap(start, end, getEventStartMinutes(event), getEventEndMinutes(event));
+  });
+
+  if (conflict) {
+    throw createHttpError(
+      409,
+      `Конфликт с мероприятием "${conflict.title || "Без названия"}" в этом потоке.`,
+    );
+  }
+}
+
 function toSlugFragment(value) {
   return String(value || "")
     .toLowerCase()
@@ -110,6 +353,10 @@ function toSlugFragment(value) {
 function createSpeakerId(name) {
   const slug = toSlugFragment(name);
   return `speaker-${slug || randomUUID().slice(0, 8)}`;
+}
+
+function normalizeProgramStatus(status) {
+  return ["draft", "published", "archived"].includes(status) ? status : "draft";
 }
 
 function getDefaultEventTypes() {
@@ -142,10 +389,11 @@ function normalizeEventPatch(body = {}) {
   };
 }
 
-function normalizeProgramPatch(body = {}) {
+function normalizeProgramPatch(body = {}, { defaultStatus = "draft" } = {}) {
   return {
     title: body.title || "Новая программа",
     description: body.description || "",
+    status: body.status === undefined ? defaultStatus : normalizeProgramStatus(body.status),
     eventContext: {
       title: body.eventContext?.title || body.title || "Новое событие",
       eventType: body.eventContext?.eventType || "Форумное событие",
@@ -233,6 +481,7 @@ function flattenEvents(workspace) {
         ...event,
         programId: program.id,
         programTitle: program.title,
+        programStatus: program.status || "draft",
         dayId: day.id,
         dayLabel: day.label,
       })),
@@ -240,8 +489,27 @@ function flattenEvents(workspace) {
   );
 }
 
+function getCanonicalProgram(programs = [], currentProgramId = null) {
+  const normalizedPrograms = Array.isArray(programs) ? programs.filter(Boolean) : [];
+  if (!normalizedPrograms.length) {
+    return null;
+  }
+
+  return (
+    normalizedPrograms.find((program) => program.id === currentProgramId) ||
+    normalizedPrograms.find((program) => program.isCurrent || program.is_current) ||
+    normalizedPrograms[0]
+  );
+}
+
 function ensureProgramWorkspaceDefaults(workspace) {
   workspace.programWorkspace = workspace.programWorkspace || {};
+  const canonicalProgram = getCanonicalProgram(
+    workspace.programWorkspace.programs,
+    workspace.programWorkspace.currentProgramId,
+  );
+  workspace.programWorkspace.programs = canonicalProgram ? [canonicalProgram] : [];
+  workspace.programWorkspace.currentProgramId = canonicalProgram?.id || null;
   workspace.programWorkspace.reference = {
     ...(workspace.programWorkspace.reference || {}),
     eventTypes:
@@ -286,14 +554,13 @@ function ensureProgramWorkspaceDefaults(workspace) {
       description: program.eventContext?.description || program.description || "",
     };
 
-    const days = (program.days || []).map((day) => ({
-      ...day,
-      events: (day.events || []).map((event) => {
+    const days = (program.days || []).map((day) => {
+      const events = (day.events || []).map((event) => {
         const normalizedSpeakerName = event.speakerName?.trim().toLowerCase();
         const speakerId =
           event.speakerId ||
           (normalizedSpeakerName ? catalogNameMap.get(normalizedSpeakerName) : "") ||
-          (event.speakerName ? createSpeakerId(event.speakerName) : "");
+          "";
         if (speakerId && event.speakerName) {
           registerSpeaker({
             id: speakerId,
@@ -305,8 +572,15 @@ function ensureProgramWorkspaceDefaults(workspace) {
           ...event,
           speakerId,
         };
-      }),
-    }));
+      });
+
+      const nextDay = {
+        ...day,
+        events,
+      };
+      syncDayFlows(nextDay);
+      return nextDay;
+    });
 
     return {
       ...program,
@@ -325,16 +599,16 @@ function ensureProgramWorkspaceDefaults(workspace) {
         const speaker = event.speakerId ? getSpeakerCatalogItem(workspace, event.speakerId) : null;
         if (speaker) {
           event.speakerName = speaker.name;
-        } else if (event.speakerName && !event.speakerId) {
-          const speakerId = createSpeakerId(event.speakerName);
-          registerSpeaker({
-            id: speakerId,
-            name: event.speakerName,
-          });
-          event.speakerId = speakerId;
         }
       }
     }
+  }
+
+  const hasActiveEvent = flattenEvents(workspace).some(
+    (event) => event.id === workspace.programWorkspace.activeEventId,
+  );
+  if (!hasActiveEvent) {
+    workspace.programWorkspace.activeEventId = flattenEvents(workspace)[0]?.id || null;
   }
 }
 
@@ -343,7 +617,7 @@ function makeLectureKey(item) {
 }
 
 function syncSpeakerAndLectureSummary(workspace) {
-  const flattenedEvents = flattenEvents(workspace);
+  const flattenedEvents = flattenEvents(workspace).filter((event) => event.programStatus === "published");
   const existingLectures = workspace.speakerLectureSummary.lectures || [];
   const existingLectureMap = new Map(existingLectures.map((item) => [makeLectureKey(item), item]));
   const nextLectures = flattenedEvents.map((event) => {
@@ -724,11 +998,11 @@ app.get(
   asyncHandler(async (req, res) => {
     const viewer = await getUser(getViewerId(req));
 
-    if (!viewer || !["organizer", "admin"].includes(viewer.role) || viewer.status === "disabled") {
+    if (!viewer || (!isOrganizerViewer(viewer) && !isAdminViewer(viewer)) || viewer.status === "disabled") {
       throw createHttpError(403, "Недостаточно прав для кабинета организатора");
     }
 
-    const sessions = await listSessions(viewer.role === "admin" ? {} : { organizerId: viewer.id });
+    const sessions = await listSessions(isAdminViewer(viewer) ? {} : { organizerId: viewer.id });
     res.json({
       title: "Рабочее пространство организатора",
       meta: {
@@ -745,14 +1019,14 @@ app.post(
   asyncHandler(async (req, res) => {
     const viewer = await getUser(getViewerId(req));
 
-    if (!viewer || !["organizer", "admin"].includes(viewer.role) || viewer.status === "disabled") {
+    if (!viewer || (!isOrganizerViewer(viewer) && !isAdminViewer(viewer)) || viewer.status === "disabled") {
       throw createHttpError(403, "Недостаточно прав для создания заезда");
     }
 
     const session = await createSession({
       actorId: viewer.id,
       payload: req.body || {},
-      assignOrganizerId: viewer.role === "organizer" ? viewer.id : req.body?.organizerId || null,
+      assignOrganizerId: isOrganizerViewer(viewer) && !isAdminViewer(viewer) ? viewer.id : req.body?.organizerId || null,
     });
     res.status(201).json(session);
   }),
@@ -783,6 +1057,25 @@ app.get(
   }),
 );
 
+app.get(
+  "/api/organizer/sessions/:sessionId/analytics",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = syncWorkspace(await getWorkspace(req.params.sessionId));
+    res.json({
+      sessionId: workspace.sessionId,
+      meta: {
+        ...(workspace.meta || {}),
+        analyticsUpdatedAt: new Date().toISOString(),
+      },
+      summary: workspace.summary || {},
+      groupsSummary: workspace.groupsSummary || { groups: [], alerts: [] },
+      sessionSummary: workspace.sessionSummary || {},
+      speakerLectureSummary: workspace.speakerLectureSummary || { speakers: [], lectures: [] },
+    });
+  }),
+);
+
 app.post(
   "/api/organizer/sessions/:sessionId/programs",
   requireOrganizer,
@@ -791,12 +1084,16 @@ app.post(
 
     const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
       syncWorkspace(draft);
+      if (draft.programWorkspace.programs.length) {
+        return syncWorkspace(draft);
+      }
 
       const nextProgramId = `program-${randomUUID().slice(0, 8)}`;
       draft.programWorkspace.programs.unshift({
         id: nextProgramId,
         title: payload.title,
         description: payload.description,
+        status: payload.status,
         eventContext: {
           id: `event-context-${randomUUID().slice(0, 8)}`,
           ...payload.eventContext,
@@ -806,6 +1103,9 @@ app.post(
             id: `day-${randomUUID().slice(0, 8)}`,
             label: "День 1",
             dateLabel: "Новая дата",
+            flowOrder: ["A"],
+            flowMeta: { A: { label: "A", track: "" } },
+            flows: [{ id: "A", label: "A", track: "" }],
             events: [],
           },
         ],
@@ -823,13 +1123,16 @@ app.patch(
   "/api/organizer/sessions/:sessionId/programs/:programId",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    const payload = normalizeProgramPatch(req.body);
+    const payload = normalizeProgramPatch(req.body, { defaultStatus: undefined });
 
     const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
       syncWorkspace(draft);
       const program = findProgram(draft, req.params.programId);
       program.title = payload.title;
       program.description = payload.description;
+      if (payload.status !== undefined) {
+        program.status = payload.status;
+      }
       program.eventContext = {
         ...program.eventContext,
         ...payload.eventContext,
@@ -879,6 +1182,9 @@ app.post(
         label: payload.label,
         dateLabel: payload.dateLabel,
         dateValue: payload.dateValue,
+        flowOrder: ["A"],
+        flowMeta: { A: { label: "A", track: "" } },
+        flows: [{ id: "A", label: "A", track: "" }],
         events: [],
       });
       return syncWorkspace(draft);
@@ -908,23 +1214,131 @@ app.patch(
   }),
 );
 
+app.delete(
+  "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const day = findDay(program, req.params.dayId);
+      program.days = program.days.filter((item) => item.id !== day.id);
+
+      if ((day.events || []).some((event) => event.id === draft.programWorkspace.activeEventId)) {
+        draft.programWorkspace.activeEventId = flattenEvents(draft)[0]?.id || null;
+      }
+
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
+app.patch(
+  "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/flows",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const rawFlows = Array.isArray(req.body?.flows) ? req.body.flows : [];
+
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const day = findDay(program, req.params.dayId);
+      const existingFlows = normalizeFlowDefinitions(day);
+      const existingById = new Map(existingFlows.map((flow) => [flow.id, flow]));
+      const nextFlows = [];
+      const seenIds = new Set();
+
+      for (const [index, rawFlow] of rawFlows.entries()) {
+        const id = normalizeFlowId(
+          typeof rawFlow === "string" ? rawFlow : rawFlow?.id || rawFlow?.value || rawFlow?.parallelGroup,
+          `flow-${index + 1}`,
+        );
+
+        if (seenIds.has(id)) {
+          continue;
+        }
+        seenIds.add(id);
+
+        const existingFlow = existingById.get(id);
+        const label =
+          typeof rawFlow === "string"
+            ? existingFlow?.label || rawFlow
+            : rawFlow?.label || rawFlow?.title || existingFlow?.label || id;
+        const track =
+          typeof rawFlow === "string"
+            ? existingFlow?.track || ""
+            : rawFlow?.track || existingFlow?.track || "";
+
+        nextFlows.push({
+          id,
+          label: String(label || id).trim() || id,
+          track: String(track || "").trim(),
+        });
+      }
+
+      for (const flowId of getFlowEventIds(day)) {
+        if (!seenIds.has(flowId)) {
+          nextFlows.push(existingById.get(flowId) || { id: flowId, label: flowId, track: "" });
+          seenIds.add(flowId);
+        }
+      }
+
+      validateFlowDefinitions(nextFlows.length ? nextFlows : [{ id: "A", label: "A", track: "" }]);
+      syncDayFlows(day, nextFlows.length ? nextFlows : [{ id: "A", label: "A", track: "" }]);
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
+app.patch(
+  "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/flow-order",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const flowOrder = normalizeFlowOrder(req.body?.flowOrder || req.body?.order || req.body?.columns);
+
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const day = findDay(program, req.params.dayId);
+      const flowMap = new Map(normalizeFlowDefinitions(day).map((flow) => [flow.id, flow]));
+      const nextOrder = mergeDayFlowOrder(day, flowOrder);
+      syncDayFlows(
+        day,
+        nextOrder.map((flowId) => flowMap.get(flowId) || { id: flowId, label: flowId, track: "" }),
+      );
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
 app.patch(
   "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/events/:eventId",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    const patch = normalizeEventPatch(req.body);
+    const patch = req.body || {};
 
     const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
       syncWorkspace(draft);
       const program = findProgram(draft, req.params.programId);
       const day = findDay(program, req.params.dayId);
       const event = findEvent(day, req.params.eventId);
+      const normalizedPatch = normalizeEventPatch({ ...event, ...patch });
       const speaker = patch.speakerId ? getSpeakerCatalogItem(draft, patch.speakerId) : null;
+      const candidate = {
+        ...event,
+        ...normalizedPatch,
+        speakerName: speaker?.name || normalizedPatch.speakerName || event.speakerName,
+      };
 
-      Object.assign(event, {
-        ...patch,
-        speakerName: speaker?.name || patch.speakerName || event.speakerName,
-      });
+      validateEventSchedule(day, candidate, event.id);
+      ensureFlowInDay(day, candidate.parallelGroup, { track: candidate.track });
+      Object.assign(event, candidate);
       day.events = sortEvents(day.events);
       return syncWorkspace(draft);
     });
@@ -944,12 +1358,40 @@ app.post(
       const program = findProgram(draft, req.params.programId);
       const day = findDay(program, req.params.dayId);
       const speaker = payload.speakerId ? getSpeakerCatalogItem(draft, payload.speakerId) : null;
-      day.events.push({
+      const nextEvent = {
         id: `event-${randomUUID().slice(0, 8)}`,
         ...payload,
         speakerName: speaker?.name || payload.speakerName || "",
-      });
+      };
+
+      validateEventSchedule(day, nextEvent);
+      ensureFlowInDay(day, nextEvent.parallelGroup, { track: nextEvent.track });
+      day.events.push(nextEvent);
       day.events = sortEvents(day.events);
+      return syncWorkspace(draft);
+    });
+
+    res.json(workspace);
+  }),
+);
+
+app.delete(
+  "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/events/:eventId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      syncWorkspace(draft);
+      const program = findProgram(draft, req.params.programId);
+      const day = findDay(program, req.params.dayId);
+      findEvent(day, req.params.eventId);
+
+      day.events = day.events.filter((event) => event.id !== req.params.eventId);
+      compactDayFlowOrder(day);
+
+      if (draft.programWorkspace.activeEventId === req.params.eventId) {
+        draft.programWorkspace.activeEventId = day.events[0]?.id || flattenEvents(draft)[0]?.id || null;
+      }
+
       return syncWorkspace(draft);
     });
 

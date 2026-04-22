@@ -153,6 +153,7 @@ export const organizerWorkspaceFixture = {
         id: "program-core",
         title: "Основная программа",
         description: "Ключевая канва заезда: общие события, практикумы и синхронизация.",
+        status: "published",
         eventContext: {
           title: "Истоки. Школа",
           eventType: "Образовательный заезд",
@@ -228,6 +229,7 @@ export const organizerWorkspaceFixture = {
         id: "program-evening",
         title: "Вечерняя программа",
         description: "Рефлексивные и неформальные форматы с тихой альтернативой.",
+        status: "draft",
         eventContext: {
           title: "Вечерняя программа Истоков",
           eventType: "Рефлексивный контур",

@@ -7,6 +7,8 @@ function RegistrationPage() {
   const navigate = useNavigate();
   const {
     currentUser,
+    users,
+    switchUser,
     registrationOptions,
     registrationLoading,
     registrationError,
@@ -15,6 +17,7 @@ function RegistrationPage() {
   } = useAuth();
   const [fullName, setFullName] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
+  const adminUser = users.find((user) => user.role === "admin" || user.id === "user-admin-1");
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -26,6 +29,15 @@ function RegistrationPage() {
     if (nextUser) {
       navigate(getDefaultRoute(nextUser), { replace: true });
     }
+  }
+
+  function handleAdminLogin() {
+    if (!adminUser) {
+      return;
+    }
+
+    switchUser(adminUser.id);
+    navigate(getDefaultRoute(adminUser), { replace: true });
   }
 
   return (
@@ -97,6 +109,15 @@ function RegistrationPage() {
             disabled={registrationSubmitting || registrationLoading || !fullName.trim() || !selectedSessionId}
           >
             {registrationSubmitting ? "Создаём профиль..." : "Зарегистрироваться"}
+          </button>
+
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={!adminUser}
+            onClick={handleAdminLogin}
+          >
+            Войти как системный администратор
           </button>
         </form>
 

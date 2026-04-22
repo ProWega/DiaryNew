@@ -110,6 +110,7 @@ const PROGRAMS = [
     participant_count: 56,
     event_description: "Трёхдневная программа для участников форума.",
     is_current: true,
+    status: "published",
   },
   {
     id: "program-evening",
@@ -124,6 +125,7 @@ const PROGRAMS = [
     participant_count: 56,
     event_description: "Вечерние точки сборки дня.",
     is_current: false,
+    status: "published",
   },
   {
     id: "program-vypusknoy",
@@ -138,6 +140,7 @@ const PROGRAMS = [
     participant_count: 120,
     event_description: "Однодневное событие для участников и выпускников.",
     is_current: true,
+    status: "published",
   },
 ];
 
@@ -474,6 +477,13 @@ async function seedProgram() {
       label,
       date_label: dateLabel,
       date_value: dateValue,
+      flow_order: JSON.stringify(["A", "P1", "P2", "B"]),
+      flow_meta: JSON.stringify({
+        A: { label: "A", track: "" },
+        P1: { label: "P1", track: "" },
+        P2: { label: "P2", track: "" },
+        B: { label: "B", track: "" },
+      }),
     });
   }
 
@@ -517,6 +527,7 @@ async function seedDiary() {
               : "Формат помог включиться и удержать внимание.",
         confidence: level <= 1 ? "low" : "high",
         source: "web",
+        responded_at: "2026-07-13T12:00:00.000Z",
         meta: JSON.stringify({}),
       });
     }
@@ -535,6 +546,7 @@ async function seedDiary() {
             q3: "Завтра пригодятся паузы и понятная рамка.",
           }),
           free_text: "Хочу сохранить баланс между активностью и восстановлением.",
+          responded_at: "2026-07-13T12:30:00.000Z",
         },
         ["user_id", "session_id", "day_id"],
       );

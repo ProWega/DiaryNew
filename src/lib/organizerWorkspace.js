@@ -88,6 +88,28 @@ export function getEventStatusTone(status) {
   }
 }
 
+export function getProgramStatusLabel(status) {
+  switch (status) {
+    case "published":
+      return "Опубликована";
+    case "archived":
+      return "Архив";
+    default:
+      return "Черновик";
+  }
+}
+
+export function getProgramStatusTone(status) {
+  switch (status) {
+    case "published":
+      return "tone-ok";
+    case "archived":
+      return "tone-watch";
+    default:
+      return "";
+  }
+}
+
 export function getSeverityTone(severity) {
   switch (severity) {
     case "high":

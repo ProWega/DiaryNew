@@ -1,5 +1,5 @@
 const { query } = require("../postgres.cjs");
-const { createId, getSessionInfo } = require("./common.cjs");
+const { createId, getSessionInfo, normalizeDateInput, toIsoDate } = require("./common.cjs");
 
 const REGISTRATION_STATUSES = new Set(["draft", "open", "closed", "archived"]);
 
@@ -8,7 +8,7 @@ function normalizeRegistrationStatus(status) {
 }
 
 function normalizeDate(value) {
-  return value === "" || value === undefined || value === null ? null : value;
+  return normalizeDateInput(value);
 }
 
 function normalizeCapacity(value) {
@@ -36,8 +36,8 @@ function mapSession(row) {
     cycle: row.cycle || "",
     dateLabel: row.date_label || "",
     location: row.location || "",
-    startDate: row.start_date ? String(row.start_date).slice(0, 10) : "",
-    endDate: row.end_date ? String(row.end_date).slice(0, 10) : "",
+    startDate: toIsoDate(row.start_date),
+    endDate: toIsoDate(row.end_date),
     description: row.description || "",
     editWindow: row.edit_window || "",
     registrationStatus: row.registration_status || "draft",
@@ -240,9 +240,9 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
     `
       insert into programs (
         id, session_id, title, description, event_title, event_type, venue,
-        start_date, end_date, participant_count, event_description, is_current, updated_at
+        start_date, end_date, participant_count, event_description, is_current, status, updated_at
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,now())
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'draft',now())
       on conflict (id)
       do update set
         title = excluded.title,
@@ -255,6 +255,7 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
         participant_count = excluded.participant_count,
         event_description = excluded.event_description,
         is_current = true,
+        status = 'draft',
         updated_at = now()
     `,
     [
@@ -275,10 +276,19 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
   const dayId = payload.defaultDayId || `day-${programId}-1`;
   await query(
     `
-      insert into program_days (id, program_id, session_id, day_number, label, date_label, date_value, updated_at)
-      values ($1,$2,$3,1,'День 1',$4,$5,now())
+      insert into program_days (
+        id, program_id, session_id, day_number, label, date_label, date_value,
+        flow_order, flow_meta, updated_at
+      )
+      values ($1,$2,$3,1,'День 1',$4,$5,'["A"]'::jsonb,'{"A":{"label":"A","track":""}}'::jsonb,now())
       on conflict (id)
-      do update set label = excluded.label, date_label = excluded.date_label, date_value = excluded.date_value, updated_at = now()
+      do update set
+        label = excluded.label,
+        date_label = excluded.date_label,
+        date_value = excluded.date_value,
+        flow_order = excluded.flow_order,
+        flow_meta = excluded.flow_meta,
+        updated_at = now()
     `,
     [dayId, programId, sessionId, payload.dateLabel || "", normalizeDate(payload.startDate)],
   );
@@ -303,7 +313,8 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
     [createId("audit"), actorId || null, sessionId, "create session", JSON.stringify({ registrationStatus })],
   );
 
-  return (await listSessions()).find((session) => session.id === sessionId);
+  const visibleSessions = await listSessions(assignOrganizerId ? { organizerId: assignOrganizerId } : {});
+  return visibleSessions.find((session) => session.id === sessionId);
 }
 
 async function updateSession({ actorId, sessionId, payload = {} }) {

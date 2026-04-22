@@ -1,6 +1,6 @@
 import { DistributionBars, EmotionLineChart } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
-import { stateById } from "../lib/metrics";
+import { getStateInfo, getStateLevel } from "../lib/metrics";
 
 function ParticipantRoutedView({
   mode,
@@ -23,6 +23,9 @@ function ParticipantRoutedView({
   overallAverages,
   formatAverage,
 }) {
+  const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
+  const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
+
   return (
     <section className="role-view">
       <div className="hero-card">
@@ -189,8 +192,8 @@ function ParticipantRoutedView({
             <article className="panel-card">
               <EmotionLineChart
                 title="Карта эмоций дня"
-                values={todayEvents.map((event) => stateById[event.stateId].level)}
-                labels={todayEvents.map((event) => event.title)}
+                values={todayChartEvents.map((event) => getStateLevel(event.stateId))}
+                labels={todayChartEvents.map((event) => event.title)}
               />
             </article>
 
@@ -220,7 +223,7 @@ function ParticipantRoutedView({
 
               <DistributionBars
                 items={todayMetrics.distribution}
-                total={todayEvents.length}
+                total={todayChartEvents.length}
               />
             </article>
           </div>
@@ -251,8 +254,8 @@ function ParticipantRoutedView({
 
             <EmotionLineChart
               title={selectedDay.dateLabel}
-              values={selectedDay.events.map((event) => stateById[event.stateId].level)}
-              labels={selectedDay.events.map((event) => event.title)}
+              values={selectedChartEvents.map((event) => getStateLevel(event.stateId))}
+              labels={selectedChartEvents.map((event) => event.title)}
             />
           </div>
 
@@ -300,7 +303,7 @@ function ParticipantRoutedView({
 
             <div className="trajectory-grid">
               {overallTrajectory.map((step) => {
-                const state = stateById[step.stateId];
+                const state = getStateInfo(step.stateId);
 
                 return (
                   <div key={step.label} className="trajectory-step">

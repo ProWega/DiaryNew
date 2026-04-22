@@ -8,9 +8,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    users,
     currentUser,
-    switchUser,
     logout,
     bootstrap,
     loading,
@@ -23,17 +21,6 @@ function AppLayout() {
       navigate(getDefaultRoute(currentUser), { replace: true });
     }
   }, [currentUser, location.pathname, navigate]);
-
-  function handleUserSwitch(userId) {
-    const nextUser = users.find((user) => user.id === userId);
-
-    if (!nextUser) {
-      return;
-    }
-
-    switchUser(userId);
-    navigate(getDefaultRoute(nextUser), { replace: true });
-  }
 
   function handleLogout() {
     logout();
@@ -86,16 +73,9 @@ function AppLayout() {
           </div>
 
           <div className="user-switcher">
-            {users.map((user) => (
-              <button
-                key={user.id}
-                type="button"
-                className={currentUser.id === user.id ? "role-pill is-active" : "role-pill"}
-                onClick={() => handleUserSwitch(user.id)}
-              >
-                {user.roleLabel}: {user.fullName}
-              </button>
-            ))}
+            <span className="role-pill is-active">
+              {currentUser.roleLabel}: {currentUser.fullName}
+            </span>
             <button type="button" className="ghost-button" onClick={handleLogout}>
               Новая регистрация
             </button>

@@ -6,7 +6,7 @@ import {
   sessionInfo,
   stateScale,
 } from "../data/mockData";
-import { stateById } from "../lib/metrics";
+import { getStateInfo, getStateLevel } from "../lib/metrics";
 
 function ParticipantView({
   participantTab,
@@ -26,6 +26,9 @@ function ParticipantView({
   overallAverages,
   formatAverage,
 }) {
+  const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
+  const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
+
   return (
     <section className="role-view">
       <div className="hero-card">
@@ -188,8 +191,8 @@ function ParticipantView({
             <article className="panel-card">
               <EmotionLineChart
                 title="Карта эмоций дня"
-                values={todayEvents.map((event) => stateById[event.stateId].level)}
-                labels={todayEvents.map((event) => event.title)}
+                values={todayChartEvents.map((event) => getStateLevel(event.stateId))}
+                labels={todayChartEvents.map((event) => event.title)}
               />
             </article>
 
@@ -219,7 +222,7 @@ function ParticipantView({
 
               <DistributionBars
                 items={todayMetrics.distribution}
-                total={todayEvents.length}
+                total={todayChartEvents.length}
               />
             </article>
           </div>
@@ -250,8 +253,8 @@ function ParticipantView({
 
             <EmotionLineChart
               title={selectedDay.dateLabel}
-              values={selectedDay.events.map((event) => stateById[event.stateId].level)}
-              labels={selectedDay.events.map((event) => event.title)}
+              values={selectedChartEvents.map((event) => getStateLevel(event.stateId))}
+              labels={selectedChartEvents.map((event) => event.title)}
             />
           </div>
 
@@ -299,7 +302,7 @@ function ParticipantView({
 
             <div className="trajectory-grid">
               {overallTrajectory.map((step) => {
-                const state = stateById[step.stateId];
+                const state = getStateInfo(step.stateId);
 
                 return (
                   <div key={step.label} className="trajectory-step">

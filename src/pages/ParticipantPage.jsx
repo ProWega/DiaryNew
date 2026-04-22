@@ -32,7 +32,10 @@ function ParticipantPage({ mode }) {
     freeText: "",
   };
 
-  const todayMetrics = useMemo(() => calculateMetrics(todayEvents), [todayEvents]);
+  const todayMetrics = useMemo(
+    () => calculateMetrics(todayEvents, currentDay?.progress ?? data?.progress),
+    [currentDay?.progress, data?.progress, todayEvents],
+  );
   const todayPortrait = useMemo(
     () => buildPortrait(todayEvents, todayMetrics),
     [todayEvents, todayMetrics],
@@ -40,10 +43,12 @@ function ParticipantPage({ mode }) {
   const overallTrajectory = useMemo(
     () =>
       liveHistory.flatMap((day) =>
-        day.events.map((event) => ({
-          label: `${day.label}: ${event.title}`,
-          stateId: event.stateId,
-        })),
+        day.events
+          .filter((event) => event.answered !== false && event.stateId)
+          .map((event) => ({
+            label: `${day.label}: ${event.title}`,
+            stateId: event.stateId,
+          })),
       ),
     [liveHistory],
   );
@@ -51,7 +56,7 @@ function ParticipantPage({ mode }) {
     () =>
       liveHistory.map((day) => ({
         day: day.label,
-        value: calculateMetrics(day.events).average,
+        value: calculateMetrics(day.events, day.progress).average,
       })),
     [liveHistory],
   );
@@ -71,6 +76,28 @@ function ParticipantPage({ mode }) {
         title="Не удалось загрузить дневник"
         description="Похоже, API-слой вернул ошибку или текущему пользователю недоступен этот контур."
         actionLabel="Повторить"
+        onAction={refresh}
+      />
+    );
+  }
+
+  if (data?.availability === "unpublished") {
+    return (
+      <FeedbackState
+        title="Программа ещё не опубликована"
+        description="Организатор готовит расписание. Дневник появится здесь после публикации программы заезда."
+        actionLabel="Проверить снова"
+        onAction={refresh}
+      />
+    );
+  }
+
+  if (data?.availability === "published-empty") {
+    return (
+      <FeedbackState
+        title="В опубликованной программе пока нет мероприятий"
+        description="Как только организатор добавит мероприятия, они появятся в дневнике участника."
+        actionLabel="Проверить снова"
         onAction={refresh}
       />
     );

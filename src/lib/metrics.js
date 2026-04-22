@@ -8,8 +8,21 @@ export function formatAverage(value) {
   return value.toFixed(1).replace(".", ",");
 }
 
-export function calculateMetrics(events) {
-  const marked = events.filter((event) => event.stateId);
+export function getStateInfo(stateId, fallbackId = "balance") {
+  return stateById[stateId] || stateById[fallbackId] || stateScale[0];
+}
+
+export function getStateLevel(stateId, fallbackLevel = 3) {
+  const state = stateById[stateId];
+  return Number.isFinite(Number(state?.level)) ? state.level : fallbackLevel;
+}
+
+export function calculateMetrics(events = [], progress) {
+  const marked = events.filter((event) => {
+    const hasExplicitAnswer =
+      event?.answered === true || Boolean(event?.respondedAt) || event?.answered === undefined;
+    return hasExplicitAnswer && event?.stateId && stateById[event.stateId];
+  });
   const levels = marked.map((event) => stateById[event.stateId].level);
 
   if (!levels.length) {
@@ -19,8 +32,13 @@ export function calculateMetrics(events) {
       peaks: 0,
       drops: 0,
       sharpTransitions: 0,
-      completion: 0,
-      distribution: [],
+      completion: progress?.completion ?? 0,
+      distribution: stateScale.map((state) => ({
+        id: state.id,
+        label: state.label,
+        color: state.color,
+        count: 0,
+      })),
     };
   }
 
@@ -49,7 +67,7 @@ export function calculateMetrics(events) {
     peaks,
     drops,
     sharpTransitions,
-    completion: Math.round((marked.length / events.length) * 100),
+    completion: progress?.completion ?? Math.round((marked.length / Math.max(events.length, 1)) * 100),
     distribution,
   };
 }
@@ -64,7 +82,7 @@ export function buildPortrait(events, metrics) {
       return event;
     }
 
-    return stateById[event.stateId].level > stateById[best.stateId].level
+    return getStateLevel(event.stateId) > getStateLevel(best.stateId)
       ? event
       : best;
   }, null);
@@ -78,7 +96,7 @@ export function buildPortrait(events, metrics) {
       return event;
     }
 
-    return stateById[event.stateId].level < stateById[worst.stateId].level
+    return getStateLevel(event.stateId) < getStateLevel(worst.stateId)
       ? event
       : worst;
   }, null);
@@ -86,10 +104,10 @@ export function buildPortrait(events, metrics) {
   const bullets = [
     `Средний ритм дня: ${metrics.average >= 3.5 ? "между Балансом и Вовлечённостью" : "ближе к спокойному восстановлению"}.`,
     bestEvent
-      ? `Пик включённости: «${bestEvent.title}» (${stateById[bestEvent.stateId].label}).`
+      ? `Пик включённости: «${bestEvent.title}» (${getStateInfo(bestEvent.stateId).label}).`
       : "Пик включённости пока не определён.",
     lowestEvent
-      ? `Самая уязвимая точка: «${lowestEvent.title}» (${stateById[lowestEvent.stateId].label}).`
+      ? `Самая уязвимая точка: «${lowestEvent.title}» (${getStateInfo(lowestEvent.stateId).label}).`
       : "Просадок пока нет.",
   ];
 

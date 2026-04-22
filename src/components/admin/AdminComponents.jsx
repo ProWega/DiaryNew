@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MetricBadge from "../MetricBadge";
 import {
   AssignmentPicker,
@@ -313,12 +313,120 @@ const ASSIGNMENT_STATUS_FILTERS = [
   { id: "pending", label: "Ожидают" },
 ];
 
+const ASSIGNMENT_STATUS_OPTIONS = [
+  { id: "active", label: "Активен" },
+  { id: "disabled", label: "Доступ снят" },
+];
+
 const DEFAULT_ASSIGNMENT_FILTERS = {
   query: "",
   role: "staff",
   sessionId: "all",
   status: "active",
 };
+
+function roleUsesGroup(role) {
+  return role === "participant" || role === "curator";
+}
+
+function normalizeAssignmentValue(value = {}, groups = []) {
+  const role = value.role || "participant";
+  const sessionId = value.sessionId || "";
+  const groupId = roleUsesGroup(role) ? value.groupId || "" : "";
+  const groupBelongsToSession = !groupId || groups.some((group) => group.id === groupId && group.sessionId === sessionId);
+
+  return {
+    ...value,
+    role,
+    sessionId,
+    groupId: groupBelongsToSession ? groupId : "",
+    status: value.status || "active",
+  };
+}
+
+function AssignmentEditableRow({
+  assignment,
+  users = [],
+  sessions = [],
+  groups = [],
+  roleOptions = [],
+  saving = false,
+  disabled = false,
+  onSubmit,
+}) {
+  const [draft, setDraft] = useState(() => normalizeAssignmentValue(assignment, groups));
+  const sessionGroups = groups.filter((group) => group.sessionId === draft.sessionId);
+  const canUseGroup = roleUsesGroup(draft.role);
+
+  useEffect(() => {
+    setDraft(normalizeAssignmentValue(assignment, groups));
+  }, [assignment, groups]);
+
+  function update(key, nextValue) {
+    setDraft((previous) => normalizeAssignmentValue({ ...previous, [key]: nextValue }, groups));
+  }
+
+  return (
+    <tr>
+      <td>
+        <select value={draft.userId || ""} disabled={disabled || saving} onChange={(event) => update("userId", event.target.value)}>
+          {users.map((user) => (
+            <option key={user.id} value={user.id}>
+              {user.fullName}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select value={draft.sessionId || ""} disabled={disabled || saving} onChange={(event) => update("sessionId", event.target.value)}>
+          {sessions.map((session) => (
+            <option key={session.id} value={session.id}>
+              {session.name}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select value={draft.role || "participant"} disabled={disabled || saving} onChange={(event) => update("role", event.target.value)}>
+          {roleOptions.map((role) => (
+            <option key={role.id} value={role.id}>
+              {role.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select value={draft.groupId || ""} disabled={disabled || saving || !canUseGroup} onChange={(event) => update("groupId", event.target.value)}>
+          <option value="">Без группы</option>
+          {sessionGroups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select value={draft.status || "active"} disabled={disabled || saving} onChange={(event) => update("status", event.target.value)}>
+          {ASSIGNMENT_STATUS_OPTIONS.map((status) => (
+            <option key={status.id} value={status.id}>
+              {status.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <button
+          type="button"
+          className="ghost-button"
+          disabled={disabled || saving || !draft.userId || !draft.sessionId}
+          onClick={() => onSubmit?.(normalizeAssignmentValue(draft, groups))}
+        >
+          Сохранить
+        </button>
+      </td>
+    </tr>
+  );
+}
 
 export function RoleAssignmentMatrix({
   users = [],
@@ -372,15 +480,7 @@ export function RoleAssignmentMatrix({
     const matchesStatus = activeFilters.status === "all" || assignment.status === activeFilters.status;
     return matchesQuery && matchesRole && matchesSession && matchesStatus;
   });
-  const pickerUsers = users.filter((user) => {
-    if (activeFilters.role === "all") {
-      return true;
-    }
-    if (activeFilters.role === "staff") {
-      return STAFF_ROLES.has(user.role);
-    }
-    return user.role === activeFilters.role;
-  });
+  const createDraft = normalizeAssignmentValue(value, groups);
 
   return (
     <article className="panel-card">
@@ -413,17 +513,22 @@ export function RoleAssignmentMatrix({
         ]}
       />
       <AssignmentPicker
-        users={pickerUsers}
+        users={users}
         sessions={sessions}
         groups={groups}
-        value={value}
+        value={createDraft}
         roleOptions={roleOptions}
         disabled={disabled || saving}
-        onChange={onChange}
+        onChange={(nextValue) => onChange?.(normalizeAssignmentValue(nextValue, groups))}
       />
       <div className="card-actions">
-        <button type="button" className="primary-button" disabled={disabled || saving || !value?.userId || !value?.sessionId} onClick={() => onSubmit?.(value)}>
-          {saving ? "Сохраняем..." : "Сохранить назначение"}
+        <button
+          type="button"
+          className="primary-button"
+          disabled={disabled || saving || !createDraft?.userId || !createDraft?.sessionId}
+          onClick={() => onSubmit?.(normalizeAssignmentValue(createDraft, groups))}
+        >
+          {saving ? "Сохраняем..." : "Создать / обновить назначение"}
         </button>
       </div>
       {filteredAssignments.length ? (
@@ -436,21 +541,22 @@ export function RoleAssignmentMatrix({
                 <th>Роль</th>
                 <th>Группа</th>
                 <th>Статус</th>
+                <th>Действие</th>
               </tr>
             </thead>
             <tbody>
               {filteredAssignments.map((assignment) => (
-                <tr key={assignment.id}>
-                  <td>{assignment.userName}</td>
-                  <td>{assignment.sessionName}</td>
-                  <td>{assignment.roleLabel}</td>
-                  <td>{assignment.groupName || "Без группы"}</td>
-                  <td>
-                    <StatusPill tone={assignment.status === "active" ? "tone-ok" : "tone-risk"}>
-                      {assignment.status === "active" ? "Активен" : assignment.status}
-                    </StatusPill>
-                  </td>
-                </tr>
+                <AssignmentEditableRow
+                  key={assignment.id}
+                  assignment={assignment}
+                  users={users}
+                  sessions={sessions}
+                  groups={groups}
+                  roleOptions={roleOptions}
+                  saving={saving}
+                  disabled={disabled}
+                  onSubmit={onSubmit}
+                />
               ))}
             </tbody>
           </table>

@@ -1,5 +1,6 @@
 const { query } = require("../postgres.cjs");
-const { createId, normalizeList } = require("./common.cjs");
+const { createId, normalizeDateInput, normalizeList, toIsoDate } = require("./common.cjs");
+const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
 
 const DEFAULT_EVENT_TYPES = [
   "Лекция",
@@ -11,6 +12,111 @@ const DEFAULT_EVENT_TYPES = [
   "Поддержка",
   "Логистика",
 ];
+
+function normalizeFlowOrder(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item : item?.id || item?.value || item?.parallelGroup || ""))
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeFlowId(value, fallback = "A") {
+  const id = String(value || "").trim();
+  return id || fallback;
+}
+
+function normalizeFlowMeta(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([rawId, rawMeta]) => {
+        const id = normalizeFlowId(rawId, "");
+        if (!id) {
+          return null;
+        }
+
+        const meta = rawMeta && typeof rawMeta === "object" && !Array.isArray(rawMeta) ? rawMeta : { label: rawMeta };
+        return [
+          id,
+          {
+            label: String(meta.label || meta.title || id).trim() || id,
+            track: String(meta.track || "").trim(),
+          },
+        ];
+      })
+      .filter(Boolean),
+  );
+}
+
+function buildDayFlows(flowOrder = [], flowMeta = {}, events = []) {
+  const ids = normalizeFlowOrder(flowOrder);
+  for (const event of events || []) {
+    const id = normalizeFlowId(event.parallelGroup || event.parallel_group);
+    if (!ids.includes(id)) {
+      ids.push(id);
+    }
+  }
+
+  const safeMeta = normalizeFlowMeta(flowMeta);
+  const flows = ids.map((id) => {
+    const firstEvent = (events || []).find(
+      (event) => normalizeFlowId(event.parallelGroup || event.parallel_group) === id,
+    );
+    const meta = safeMeta[id] || {};
+    return {
+      id,
+      label: String(meta.label || id).trim() || id,
+      track: String(meta.track || firstEvent?.track || "").trim(),
+    };
+  });
+
+  return flows.length ? flows : [{ id: "A", label: "A", track: "" }];
+}
+
+function normalizeDayFlowOrder(day) {
+  const flowSource = Array.isArray(day?.flows) && day.flows.length ? day.flows : day?.flowOrder;
+  const order = normalizeFlowOrder(flowSource);
+  for (const event of day?.events || []) {
+    const id = normalizeFlowId(event.parallelGroup);
+    if (!order.includes(id)) {
+      order.push(id);
+    }
+  }
+
+  return order.length ? order : ["A"];
+}
+
+function normalizeDayFlowMeta(day) {
+  const meta = normalizeFlowMeta(day?.flowMeta || day?.flow_meta);
+  for (const flow of day?.flows || []) {
+    const id = normalizeFlowId(flow?.id || flow?.value || flow?.parallelGroup, "");
+    if (!id) {
+      continue;
+    }
+    meta[id] = {
+      label: String(flow?.label || meta[id]?.label || id).trim() || id,
+      track: String(flow?.track || meta[id]?.track || "").trim(),
+    };
+  }
+
+  return meta;
+}
+
+function average(values) {
+  const finite = values.map(Number).filter(Number.isFinite);
+  if (!finite.length) {
+    return 0;
+  }
+
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
 
 async function getSessionRow(sessionId) {
   const result = await query("select * from sessions where id = $1 limit 1", [sessionId]);
@@ -27,17 +133,31 @@ async function getGroupsSummary(sessionId) {
         coalesce(avg(de.state_level), 0)::float as avg_activation,
         count(distinct de.user_id) filter (where de.state_level >= 5 or de.state_level <= 1)::int as risk_cases,
         case
-          when count(distinct pe.id) * greatest(count(distinct su.user_id) filter (where su.role = 'participant'), 1) = 0 then 0
+          when (count(distinct pe.id) + count(distinct pe.day_id)) * greatest(count(distinct su.user_id) filter (where su.role = 'participant'), 1) = 0 then 0
           else round(
-            count(de.id)::numeric /
-            (count(distinct pe.id) * greatest(count(distinct su.user_id) filter (where su.role = 'participant'), 1))::numeric * 100
+            (count(distinct de.id) + count(distinct dr.id))::numeric /
+            ((count(distinct pe.id) + count(distinct pe.day_id)) * greatest(count(distinct su.user_id) filter (where su.role = 'participant'), 1))::numeric * 100
           )::int
         end as completion
       from groups g
       left join users u on u.id = g.curator_id
-      left join session_users su on su.group_id = g.id and su.session_id = g.session_id
+      left join session_users su on su.group_id = g.id and su.session_id = g.session_id and su.status = 'active'
       left join program_events pe on pe.session_id = g.session_id
-      left join diary_entries de on de.session_id = g.session_id and de.user_id = su.user_id and de.event_id = pe.id
+        and exists (
+          select 1
+          from programs p
+          where p.id = pe.program_id
+            and p.status = 'published'
+            and p.id = (
+              select cp.id
+              from programs cp
+              where cp.session_id = g.session_id
+              order by cp.is_current desc, cp.created_at, cp.title
+              limit 1
+            )
+        )
+      left join diary_entries de on de.session_id = g.session_id and de.user_id = su.user_id and de.event_id = pe.id and de.responded_at is not null
+      left join daily_reflections dr on dr.session_id = g.session_id and dr.user_id = su.user_id and dr.day_id = pe.day_id and dr.responded_at is not null
       where g.session_id = $1
       group by g.id, u.full_name
       order by g.name
@@ -65,6 +185,7 @@ async function getGroupsSummary(sessionId) {
       avgActivation: Number(row.avg_activation || 0).toFixed(1),
       riskCases: row.risk_cases,
       completion: row.completion,
+      progress: { completion: row.completion },
       focus: row.description || "Описание группы не задано.",
     })),
     alerts: alertsResult.rows.map((row) => ({
@@ -84,13 +205,37 @@ async function getAudiencePool(sessionId) {
       join users u on u.id = su.user_id
       left join groups g on g.id = su.group_id
       left join typology_assignments ta on ta.user_id = u.id and ta.session_id = su.session_id
-      where su.session_id = $1 and su.role = 'participant'
+      where su.session_id = $1 and su.role = 'participant' and su.status = 'active'
       order by g.name, u.full_name
     `,
     [sessionId],
   );
+  const participation = await getPublishedParticipationData(sessionId);
+  const entriesByUser = new Map();
+  const reflectionsByUser = new Map();
+
+  for (const entry of participation.entries) {
+    if (!entriesByUser.has(entry.user_id)) {
+      entriesByUser.set(entry.user_id, []);
+    }
+    entriesByUser.get(entry.user_id).push(entry);
+  }
+
+  for (const reflection of participation.reflections) {
+    if (!reflectionsByUser.has(reflection.user_id)) {
+      reflectionsByUser.set(reflection.user_id, []);
+    }
+    reflectionsByUser.get(reflection.user_id).push(reflection);
+  }
 
   return result.rows.map((row) => ({
+    progress: calculateProgress({
+      events: participation.events,
+      participants: [{ id: row.id }],
+      entries: entriesByUser.get(row.id) || [],
+      reflections: reflectionsByUser.get(row.id) || [],
+    }),
+    avgActivation: average((entriesByUser.get(row.id) || []).map((entry) => entry.state_level)).toFixed(1),
     id: row.id,
     fullName: row.full_name,
     groupId: row.group_id,
@@ -105,10 +250,17 @@ async function getAudiencePool(sessionId) {
 async function getProgramWorkspace(sessionId) {
   const programsResult = await query(
     `
-      select *
-      from programs
-      where session_id = $1
-      order by is_current desc, created_at, title
+      with canonical_program as (
+        select id
+        from programs
+        where session_id = $1
+        order by is_current desc, created_at, title
+        limit 1
+      )
+      select p.*
+      from programs p
+      join canonical_program c on c.id = p.id
+      order by p.is_current desc, p.created_at, p.title
     `,
     [sessionId],
   );
@@ -167,22 +319,19 @@ async function getProgramWorkspace(sessionId) {
     id: program.id,
     title: program.title,
     description: program.description || "",
+    status: program.status || "draft",
     eventContext: {
       id: `event-context-${program.id}`,
       title: program.event_title || program.title,
       eventType: program.event_type || "Форумное событие",
       venue: program.venue || "",
-      startDate: program.start_date ? String(program.start_date).slice(0, 10) : "",
-      endDate: program.end_date ? String(program.end_date).slice(0, 10) : "",
+      startDate: toIsoDate(program.start_date),
+      endDate: toIsoDate(program.end_date),
       participantCount: program.participant_count || 0,
       description: program.event_description || program.description || "",
     },
-    days: (daysByProgram.get(program.id) || []).map((day) => ({
-          id: day.id,
-          label: day.label,
-          dateLabel: day.date_label || "",
-          dateValue: day.date_value ? String(day.date_value).slice(0, 10) : "",
-          events: (eventsByDay.get(day.id) || []).map((event) => ({
+    days: (daysByProgram.get(program.id) || []).map((day) => {
+      const events = (eventsByDay.get(day.id) || []).map((event) => ({
         id: event.id,
         title: event.title,
         start: event.start_time || "",
@@ -196,8 +345,21 @@ async function getProgramWorkspace(sessionId) {
         status: event.status || "planned",
         tags: event.tags || [],
         description: event.description || "",
-      })),
-    })),
+      }));
+      const flowMeta = normalizeFlowMeta(day.flow_meta);
+      const flows = buildDayFlows(day.flow_order, flowMeta, events);
+
+      return {
+        id: day.id,
+        label: day.label,
+        dateLabel: day.date_label || "",
+        dateValue: toIsoDate(day.date_value),
+        flowOrder: flows.map((flow) => flow.id),
+        flowMeta,
+        flows,
+        events,
+      };
+    }),
   }));
 
   const currentProgram = programsResult.rows.find((program) => program.is_current) || programsResult.rows[0];
@@ -303,12 +465,28 @@ async function getSpeakerLectureSummary(sessionId) {
       left join speakers s on s.id = e.speaker_id
       left join event_tags t on t.event_id = e.id
       join program_days d on d.id = e.day_id
+      join programs p on p.id = e.program_id
       where e.session_id = $1
+        and p.status = 'published'
+        and p.id = (
+          select cp.id
+          from programs cp
+          where cp.session_id = $1
+          order by cp.is_current desc, cp.created_at, cp.title
+          limit 1
+        )
       group by e.id, s.id, d.id
       order by d.day_number, e.sort_order
     `,
     [sessionId],
   );
+
+  const participation = await getPublishedParticipationData(sessionId);
+  const participantCount = participation.participants.length;
+  const answeredByEvent = new Map();
+  for (const entry of participation.entries) {
+    answeredByEvent.set(entry.event_id, (answeredByEvent.get(entry.event_id) || 0) + 1);
+  }
 
   const speakerMap = new Map();
   for (const event of eventsResult.rows) {
@@ -339,7 +517,7 @@ async function getSpeakerLectureSummary(sessionId) {
       start: event.start_time,
       end: event.end_time,
       avgActivationDelta: "н/д",
-      completion: 0,
+      completion: participantCount ? Math.round(((answeredByEvent.get(event.id) || 0) / participantCount) * 100) : 0,
       topThemes: event.tags || [],
       note: "Аналитика по этому блоку появится после накопления ответов участников.",
     })),
@@ -351,15 +529,31 @@ async function getSessionSummary(sessionId) {
     `
       select
         count(distinct su.user_id) filter (where su.role = 'participant')::int as participants,
-        count(de.id)::int as comments,
+        count(de.id) filter (where nullif(btrim(de.comment), '') is not null)::int as comments,
         coalesce(avg(de.state_level), 0)::float as avg_activation
       from session_users su
       left join diary_entries de on de.user_id = su.user_id and de.session_id = su.session_id
-      where su.session_id = $1
+        and de.responded_at is not null
+        and exists (
+          select 1
+          from program_events pe
+          join programs p on p.id = pe.program_id
+          where pe.id = de.event_id
+            and p.status = 'published'
+            and p.id = (
+              select cp.id
+              from programs cp
+              where cp.session_id = su.session_id
+              order by cp.is_current desc, cp.created_at, cp.title
+              limit 1
+            )
+        )
+      where su.session_id = $1 and su.status = 'active'
     `,
     [sessionId],
   );
   const stats = statsResult.rows[0] || {};
+  const participation = await getPublishedParticipationData(sessionId);
 
   const reportsResult = await query(
     `
@@ -373,10 +567,12 @@ async function getSessionSummary(sessionId) {
   );
 
   return {
+    progress: participation.progress,
     keyStats: [
       { id: "stat-1", label: "Участников", value: String(stats.participants || 0) },
       { id: "stat-2", label: "Средняя активация", value: Number(stats.avg_activation || 0).toFixed(1) },
       { id: "stat-3", label: "Комментариев", value: String(stats.comments || 0) },
+      { id: "stat-4", label: "Заполнено", value: `${participation.progress.completion}%` },
     ],
     eventHealth: [],
     aiReports: reportsResult.rows.map((report) => ({
@@ -462,9 +658,9 @@ async function persistWorkspace(sessionId, workspace) {
       `
         insert into programs (
           id, session_id, title, description, event_title, event_type, venue,
-          start_date, end_date, participant_count, event_description, is_current, updated_at
+          start_date, end_date, participant_count, event_description, is_current, status, updated_at
         )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
         on conflict (id)
         do update set
           title = excluded.title,
@@ -477,6 +673,7 @@ async function persistWorkspace(sessionId, workspace) {
           participant_count = excluded.participant_count,
           event_description = excluded.event_description,
           is_current = excluded.is_current,
+          status = excluded.status,
           updated_at = now()
       `,
       [
@@ -487,27 +684,40 @@ async function persistWorkspace(sessionId, workspace) {
         program.eventContext?.title || program.title,
         program.eventContext?.eventType || "",
         program.eventContext?.venue || "",
-        program.eventContext?.startDate || null,
-        program.eventContext?.endDate || null,
+        normalizeDateInput(program.eventContext?.startDate),
+        normalizeDateInput(program.eventContext?.endDate),
         Number(program.eventContext?.participantCount || 0),
         program.eventContext?.description || "",
         workspace.programWorkspace.currentProgramId === program.id,
+        program.status || "draft",
       ],
     );
 
     for (const [dayIndex, day] of (program.days || []).entries()) {
       await query(
         `
-          insert into program_days (id, program_id, session_id, day_number, label, date_label, date_value, updated_at)
-          values ($1,$2,$3,$4,$5,$6,$7,now())
+          insert into program_days (id, program_id, session_id, day_number, label, date_label, date_value, flow_order, flow_meta, updated_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,now())
           on conflict (id)
           do update set
             label = excluded.label,
             date_label = excluded.date_label,
             date_value = excluded.date_value,
+            flow_order = excluded.flow_order,
+            flow_meta = excluded.flow_meta,
             updated_at = now()
         `,
-        [day.id, program.id, sessionId, dayIndex + 1, day.label, day.dateLabel || "", day.dateValue || null],
+        [
+          day.id,
+          program.id,
+          sessionId,
+          dayIndex + 1,
+          day.label,
+          day.dateLabel || "",
+          normalizeDateInput(day.dateValue),
+          JSON.stringify(normalizeDayFlowOrder(day)),
+          JSON.stringify(normalizeDayFlowMeta(day)),
+        ],
       );
 
       for (const [eventIndex, event] of (day.events || []).entries()) {
@@ -577,7 +787,19 @@ async function persistWorkspace(sessionId, workspace) {
           );
         }
       }
+
+      const eventIds = (day.events || []).map((event) => event.id).filter(Boolean);
+      await query("delete from program_events where day_id = $1 and not (id = any($2::text[]))", [
+        day.id,
+        eventIds,
+      ]);
     }
+
+    const dayIds = (program.days || []).map((day) => day.id).filter(Boolean);
+    await query("delete from program_days where program_id = $1 and not (id = any($2::text[]))", [
+      program.id,
+      dayIds,
+    ]);
   }
 
   for (const survey of workspace.surveyWorkspace?.surveys || []) {

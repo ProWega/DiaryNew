@@ -269,6 +269,7 @@ function createOrganizerWorkspaceSeed(sessionId) {
         {
           id: "program-core",
           title: "Основная программа",
+          status: "published",
           description:
             "Ключевая канва заезда: общие события, практикумы и обязательные точки синхронизации.",
           days: [
@@ -389,6 +390,7 @@ function createOrganizerWorkspaceSeed(sessionId) {
         {
           id: "program-evening",
           title: "Вечерняя программа",
+          status: "published",
           description:
             "Рефлексивные и неформальные форматы с возможностью тихих альтернатив.",
           days: [

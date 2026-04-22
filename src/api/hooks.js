@@ -67,6 +67,24 @@ function useMutation(setData) {
   };
 }
 
+function mergeOrganizerAnalyticsSnapshot(previous, analytics) {
+  if (!previous || !analytics) {
+    return previous;
+  }
+
+  return {
+    ...previous,
+    meta: {
+      ...(previous.meta || {}),
+      ...(analytics.meta || {}),
+    },
+    summary: analytics.summary || previous.summary,
+    groupsSummary: analytics.groupsSummary || previous.groupsSummary,
+    sessionSummary: analytics.sessionSummary || previous.sessionSummary,
+    speakerLectureSummary: analytics.speakerLectureSummary || previous.speakerLectureSummary,
+  };
+}
+
 export function useParticipantDiary(sessionId) {
   const { currentUser } = useAuth();
   const enabled = Boolean(currentUser?.id && sessionId);
@@ -97,6 +115,8 @@ export function useParticipantDiary(sessionId) {
                           ? {
                               ...entry,
                               ...patch,
+                              answered: true,
+                              respondedAt: new Date().toISOString(),
                             }
                           : entry,
                       ),
@@ -132,13 +152,23 @@ export function useParticipantDiary(sessionId) {
               ...previous,
               history: previous.history.map((day) =>
                 day.id === dayId
-                  ? {
-                      ...day,
-                      reflection: {
+                  ? (() => {
+                      const reflection = {
                         ...day.reflection,
                         ...patch,
-                      },
-                    }
+                      };
+                      const answered = ["q1", "q2", "q3", "freeText"].some((field) =>
+                        String(reflection[field] || "").trim(),
+                      );
+                      return {
+                        ...day,
+                        reflection: {
+                          ...reflection,
+                          answered,
+                          respondedAt: answered ? new Date().toISOString() : null,
+                        },
+                      };
+                    })()
                   : day,
               ),
             }
@@ -177,7 +207,7 @@ export function useCuratorDashboard(sessionId, groupId) {
 }
 
 export function useOrganizerWorkspace(sessionId) {
-  const { currentUser } = useAuth();
+  const { currentUser, refreshBootstrap, refreshUsers } = useAuth();
   const resource = useAsyncResource(
     useCallback(async () => {
       const [workspace, overview] = await Promise.all([
@@ -193,9 +223,37 @@ export function useOrganizerWorkspace(sessionId) {
   );
   const mutation = useMutation(resource.setData);
 
+  const refreshAnalytics = useCallback(async () => {
+    if (!currentUser?.id || !sessionId) {
+      return null;
+    }
+
+    const analytics = await jsonApi.getOrganizerAnalytics(currentUser.id, sessionId);
+    resource.setData((previous) => mergeOrganizerAnalyticsSnapshot(previous, analytics));
+    return analytics;
+  }, [currentUser?.id, resource.setData, sessionId]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !sessionId || mutation.saving) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      refreshAnalytics().catch(() => {});
+    }, 30000);
+
+    return () => window.clearInterval(timerId);
+  }, [currentUser?.id, mutation.saving, refreshAnalytics, sessionId]);
+
   const createSession = useCallback(
-    (payload) => jsonApi.createOrganizerSession(currentUser.id, payload),
-    [currentUser?.id],
+    async (payload) => {
+      const session = await jsonApi.createOrganizerSession(currentUser.id, payload);
+      await refreshUsers?.();
+      await refreshBootstrap?.();
+      await resource.refresh();
+      return session;
+    },
+    [currentUser?.id, refreshBootstrap, refreshUsers, resource.refresh],
   );
 
   const updateSession = useCallback(
@@ -254,6 +312,36 @@ export function useOrganizerWorkspace(sessionId) {
     [currentUser?.id, mutation, sessionId],
   );
 
+  const deleteProgramDay = useCallback(
+    (programId, dayId) =>
+      mutation.runMutation(() =>
+        jsonApi.deleteOrganizerProgramDay(currentUser.id, sessionId, programId, dayId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateProgramDayFlowOrder = useCallback(
+    (programId, dayId, flowOrder) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerProgramDayFlowOrder(
+          currentUser.id,
+          sessionId,
+          programId,
+          dayId,
+          flowOrder,
+        ),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateProgramDayFlows = useCallback(
+    (programId, dayId, flows) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerProgramDayFlows(currentUser.id, sessionId, programId, dayId, flows),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
   const updateEvent = useCallback(
     (programId, dayId, eventId, patch) =>
       mutation.runMutation(() =>
@@ -266,6 +354,14 @@ export function useOrganizerWorkspace(sessionId) {
     (programId, dayId, payload) =>
       mutation.runMutation(() =>
         jsonApi.addOrganizerParallelEvent(currentUser.id, sessionId, programId, dayId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const deleteEvent = useCallback(
+    (programId, dayId, eventId) =>
+      mutation.runMutation(() =>
+        jsonApi.deleteOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId),
       ),
     [currentUser?.id, mutation, sessionId],
   );
@@ -334,8 +430,12 @@ export function useOrganizerWorkspace(sessionId) {
     selectProgram,
     createProgramDay,
     updateProgramDay,
+    deleteProgramDay,
+    updateProgramDayFlowOrder,
+    updateProgramDayFlows,
     updateEvent,
     addParallelEvent,
+    deleteEvent,
     activateEvent,
     createSurvey,
     updateSurvey,

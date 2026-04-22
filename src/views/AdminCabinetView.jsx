@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import {
   AdminSummary,
   AdminUserDirectory,
@@ -11,6 +13,7 @@ import {
 } from "../components/admin/AdminComponents";
 import { RegistrationAccessPanel } from "../components/access/AccessComponents";
 import { AlertCard, SoftPill } from "../components/ui/Pills";
+import { getDefaultRoute } from "../rbac/permissions";
 
 const ADMIN_SECTIONS = [
   { id: "users", label: "Пользователи", description: "Профили, роли и статусы" },
@@ -42,6 +45,34 @@ const EMPTY_SESSION = {
   registrationPolicy: { mode: "public", note: "" },
 };
 
+function AccountSwitchPanel({ users = [], currentUserId, saving = false, onSwitch }) {
+  return (
+    <div className="panel-card">
+      <div className="admin-sidebar-head">
+        <p className="eyebrow">Тестовый режим</p>
+        <strong>Переключение аккаунта</strong>
+      </div>
+      <div className="field-grid">
+        <label className="field-block is-wide">
+          <span>Аккаунт</span>
+          <select
+            value={currentUserId || ""}
+            disabled={saving}
+            onChange={(event) => onSwitch(event.target.value)}
+          >
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.roleLabel}: {user.fullName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="subtle">Переход выполняется сразу в кабинет выбранной роли.</p>
+    </div>
+  );
+}
+
 function AdminCabinetView({
   workspace,
   initialTab = "users",
@@ -55,6 +86,8 @@ function AdminCabinetView({
   onUpdateSession,
   onUpdateRegistration,
 }) {
+  const navigate = useNavigate();
+  const { users: authUsers, currentUser, switchUser } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [userQuery, setUserQuery] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
@@ -137,6 +170,17 @@ function AdminCabinetView({
     }
   }
 
+  function handleAccountSwitch(userId) {
+    const nextUser = authUsers.find((user) => user.id === userId);
+
+    if (!nextUser) {
+      return;
+    }
+
+    switchUser(nextUser.id);
+    navigate(getDefaultRoute(nextUser), { replace: true });
+  }
+
   return (
     <section className="role-view">
       <div className="hero-card">
@@ -173,6 +217,12 @@ function AdminCabinetView({
               </button>
             ))}
           </nav>
+          <AccountSwitchPanel
+            users={authUsers}
+            currentUserId={currentUser?.id}
+            saving={saving}
+            onSwitch={handleAccountSwitch}
+          />
           <div className="admin-sidebar-meta">
             <SoftPill>Storage: {workspace.meta?.storageMode || "postgres"}</SoftPill>
             <SoftPill outline>Обновлено: {new Date(workspace.meta?.updatedAt || Date.now()).toLocaleString("ru-RU")}</SoftPill>

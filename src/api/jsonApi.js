@@ -91,6 +91,12 @@ export const jsonApi = {
     });
   },
 
+  getOrganizerAnalytics(viewerId, sessionId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/analytics`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
   getOrganizerSessionOverview(viewerId) {
     return requestJson("/api/organizer/workspace", {
       headers: viewerHeaders(viewerId),
@@ -160,6 +166,35 @@ export const jsonApi = {
     });
   },
 
+  deleteOrganizerProgramDay(viewerId, sessionId, programId, dayId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/programs/${programId}/days/${dayId}`, {
+      method: "DELETE",
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  updateOrganizerProgramDayFlowOrder(viewerId, sessionId, programId, dayId, flowOrder) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/programs/${programId}/days/${dayId}/flow-order`,
+      {
+        method: "PATCH",
+        headers: viewerHeaders(viewerId),
+        body: { flowOrder },
+      },
+    );
+  },
+
+  updateOrganizerProgramDayFlows(viewerId, sessionId, programId, dayId, flows) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/programs/${programId}/days/${dayId}/flows`,
+      {
+        method: "PATCH",
+        headers: viewerHeaders(viewerId),
+        body: { flows },
+      },
+    );
+  },
+
   updateOrganizerEvent(viewerId, sessionId, programId, dayId, eventId, patch) {
     return requestJson(
       `/api/organizer/sessions/${sessionId}/programs/${programId}/days/${dayId}/events/${eventId}`,
@@ -178,6 +213,16 @@ export const jsonApi = {
         method: "POST",
         headers: viewerHeaders(viewerId),
         body: payload,
+      },
+    );
+  },
+
+  deleteOrganizerEvent(viewerId, sessionId, programId, dayId, eventId) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/programs/${programId}/days/${dayId}/events/${eventId}`,
+      {
+        method: "DELETE",
+        headers: viewerHeaders(viewerId),
       },
     );
   },
