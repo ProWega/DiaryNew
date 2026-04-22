@@ -74,7 +74,9 @@ function ParticipantRoutedView({
   }, [allEventsAnswered, reflectionAnswered]);
 
   function toggleEvent(eventId) {
-    setOpenEventId((previous) => (previous === eventId ? "" : eventId));
+    const nextEventId = openEventId === eventId ? "" : eventId;
+
+    setOpenEventId(nextEventId);
   }
 
   function moveOpenEvent(direction) {
@@ -160,13 +162,15 @@ function ParticipantRoutedView({
                       </span>
                     </button>
 
-                    {isOpen ? (
-                      <div
-                        id={panelId}
-                        role="region"
-                        aria-labelledby={buttonId}
-                        className="event-card participant-event-card participant-event-reveal"
-                      >
+                    <div
+                      id={panelId}
+                      role="region"
+                      aria-labelledby={buttonId}
+                      aria-hidden={!isOpen}
+                      className="participant-event-panel"
+                      {...(!isOpen ? { inert: "" } : {})}
+                    >
+                      <div className="event-card participant-event-card participant-event-panel-inner">
                         <div className="event-head participant-active-head">
                           <div>
                             <p className="participant-event-microcopy">
@@ -184,15 +188,36 @@ function ParticipantRoutedView({
                           </div>
                         </div>
 
-                        <StateScalePicker
-                          value={event.stateId}
-                          onChange={(stateId) => updateEventState(event.id, stateId)}
-                          states={stateScale}
-                          variant="arc"
-                          animated
-                          showDescriptions
-                          label="Как вы сейчас после события?"
-                        />
+                        <div className="participant-event-workspace">
+                          <StateScalePicker
+                            value={event.stateId}
+                            onChange={(stateId) => updateEventState(event.id, stateId)}
+                            states={stateScale}
+                            variant="arc"
+                            animated
+                            showDescriptions
+                            label="Как вы сейчас после события?"
+                          />
+
+                          <div className="participant-step-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={index === 0}
+                              onClick={() => moveOpenEvent(-1)}
+                            >
+                              Назад
+                            </button>
+                            <button
+                              type="button"
+                              className="primary-button"
+                              disabled={index >= todayEvents.length - 1}
+                              onClick={() => moveOpenEvent(1)}
+                            >
+                              Далее
+                            </button>
+                          </div>
+                        </div>
 
                         {event.stateId ? (
                           <>
@@ -222,27 +247,8 @@ function ParticipantRoutedView({
                             </div>
                           </>
                         ) : null}
-
-                        <div className="participant-step-actions">
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            disabled={index === 0}
-                            onClick={() => moveOpenEvent(-1)}
-                          >
-                            Назад
-                          </button>
-                          <button
-                            type="button"
-                            className="primary-button"
-                            disabled={index >= todayEvents.length - 1}
-                            onClick={() => moveOpenEvent(1)}
-                          >
-                            Далее
-                          </button>
-                        </div>
                       </div>
-                    ) : null}
+                    </div>
                   </article>
                 );
               })}

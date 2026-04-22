@@ -292,7 +292,7 @@ function StateScalePicker({
             "--state-surface": arcPreviewState?.surface || STATE_SCALE_NEUTRAL_PREVIEW.surface,
           }}
         >
-          <svg className="state-scale-arc-svg" viewBox="0 0 360 310" aria-hidden="true">
+          <svg className="state-scale-arc-svg" viewBox="0 0 360 340" aria-hidden="true">
             {zones.map((zone) => {
               const firstStateIndex = normalizedStates.findIndex((state) => state.zone === zone.id);
               const lastStateIndex = findLastZoneStateIndex(normalizedStates, zone.id);
@@ -335,13 +335,13 @@ function StateScalePicker({
               </g>
             ) : null}
 
-            <text x="56" y="286" className="state-scale-zone-label">
+            <text x="56" y="318" className="state-scale-zone-label">
               {STATE_SCALE_ZONES[0]?.shortLabel.toLowerCase()}
             </text>
-            <text x="180" y="32" className="state-scale-zone-label is-center">
+            <text x="180" y="18" className="state-scale-zone-label is-center">
               {STATE_SCALE_ZONES[1]?.shortLabel.toLowerCase()}
             </text>
-            <text x="304" y="286" className="state-scale-zone-label is-end">
+            <text x="304" y="318" className="state-scale-zone-label is-end">
               {STATE_SCALE_ZONES[2]?.shortLabel.toLowerCase()}
             </text>
           </svg>
