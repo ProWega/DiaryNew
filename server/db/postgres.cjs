@@ -76,6 +76,8 @@ async function resetSchema() {
 
   await query(`
     drop table if exists
+      auth_magic_links,
+      auth_sessions,
       audit_log,
       ai_reports,
       curator_notes,

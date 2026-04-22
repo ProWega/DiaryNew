@@ -7,6 +7,7 @@ function RegistrationPage() {
   const navigate = useNavigate();
   const {
     currentUser,
+    features,
     users,
     switchUser,
     registrationOptions,
@@ -17,7 +18,9 @@ function RegistrationPage() {
   } = useAuth();
   const [fullName, setFullName] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
-  const adminUser = users.find((user) => user.role === "admin" || user.id === "user-admin-1");
+  const adminUser = features.devAuth
+    ? users.find((user) => user.role === "admin" || user.id === "user-admin-1")
+    : null;
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -111,14 +114,16 @@ function RegistrationPage() {
             {registrationSubmitting ? "Создаём профиль..." : "Зарегистрироваться"}
           </button>
 
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={!adminUser}
-            onClick={handleAdminLogin}
-          >
-            Войти как системный администратор
-          </button>
+          {features.devAuth ? (
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={!adminUser}
+              onClick={handleAdminLogin}
+            >
+              Войти как системный администратор
+            </button>
+          ) : null}
         </form>
 
         {currentUser ? (

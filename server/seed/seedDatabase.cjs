@@ -1,5 +1,10 @@
 const { randomUUID } = require("node:crypto");
+const { isProductionMode } = require("../config.cjs");
 const { ensureSchema, hasPostgresConfig, query } = require("../db/postgres.cjs");
+
+if (isProductionMode() && process.env.ALLOW_DEMO_SEED !== "true") {
+  throw new Error("Demo seed is blocked in production. Set ALLOW_DEMO_SEED=true only for an intentional demo reset.");
+}
 
 const SESSIONS = [
   {

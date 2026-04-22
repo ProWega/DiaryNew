@@ -486,5 +486,6 @@ export function useAdminWorkspace() {
     createSession: (payload) => refreshAfter(() => jsonApi.createAdminSession(currentUser.id, payload)),
     updateSession: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminSession(currentUser.id, sessionId, payload)),
     updateRegistration: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminRegistration(currentUser.id, sessionId, payload)),
+    createMagicLink: (payload) => jsonApi.createMagicLink(currentUser.id, payload),
   };
 }

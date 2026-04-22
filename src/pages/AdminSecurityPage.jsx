@@ -17,6 +17,7 @@ function AdminSecurityPage() {
     createSession,
     updateSession,
     updateRegistration,
+    createMagicLink,
   } = useAdminWorkspace();
 
   if (loading && !data) {
@@ -51,6 +52,7 @@ function AdminSecurityPage() {
       onCreateSession={createSession}
       onUpdateSession={updateSession}
       onUpdateRegistration={updateRegistration}
+      onCreateMagicLink={createMagicLink}
     />
   );
 }

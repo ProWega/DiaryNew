@@ -19,6 +19,10 @@ const actions = {
   onCreateSession: async (payload) => console.log("create session", payload),
   onUpdateSession: async (id, payload) => console.log("update session", id, payload),
   onUpdateRegistration: async (id, payload) => console.log("registration", id, payload),
+  onCreateMagicLink: async (payload) => {
+    console.log("magic link", payload);
+    return { url: "https://example.test/magic?token=story-token", expiresAt: "2026-04-22T12:00:00.000Z" };
+  },
 };
 
 const longTextWorkspace = {

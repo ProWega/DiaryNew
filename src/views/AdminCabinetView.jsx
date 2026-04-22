@@ -73,6 +73,144 @@ function AccountSwitchPanel({ users = [], currentUserId, saving = false, onSwitc
   );
 }
 
+function MagicLinkPanel({
+  users = [],
+  sessions = [],
+  groups = [],
+  selectedUserId,
+  selectedSessionId,
+  saving = false,
+  onCreate,
+}) {
+  const [mode, setMode] = useState("login");
+  const [targetUserId, setTargetUserId] = useState(selectedUserId || users[0]?.id || "");
+  const [sessionId, setSessionId] = useState(selectedSessionId || sessions[0]?.id || "");
+  const [role, setRole] = useState("participant");
+  const [groupId, setGroupId] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [link, setLink] = useState(null);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setTargetUserId((current) => current || selectedUserId || users[0]?.id || "");
+  }, [selectedUserId, users]);
+
+  useEffect(() => {
+    setSessionId((current) => current || selectedSessionId || sessions[0]?.id || "");
+  }, [selectedSessionId, sessions]);
+
+  const sessionGroups = groups.filter((group) => group.sessionId === sessionId);
+
+  async function handleCreateLink() {
+    setSubmitting(true);
+    setError(null);
+    setLink(null);
+
+    try {
+      const payload =
+        mode === "login"
+          ? { purpose: "login", targetUserId }
+          : { purpose: "invite", sessionId, role, groupId, fullName };
+      const nextLink = await onCreate?.(payload);
+      setLink(nextLink);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <article className="panel-card">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Magic links</p>
+          <h3>Ссылки входа и приглашения</h3>
+          <p className="subtle">Ссылка одноразовая: после открытия создаётся безопасная сессия.</p>
+        </div>
+      </div>
+
+      <div className="field-grid">
+        <label className="field-block">
+          <span>Тип ссылки</span>
+          <select value={mode} disabled={saving || submitting} onChange={(event) => setMode(event.target.value)}>
+            <option value="login">Вход пользователя</option>
+            <option value="invite">Приглашение участника</option>
+          </select>
+        </label>
+
+        {mode === "login" ? (
+          <label className="field-block">
+            <span>Пользователь</span>
+            <select value={targetUserId} disabled={saving || submitting} onChange={(event) => setTargetUserId(event.target.value)}>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.roleLabel}: {user.fullName}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <>
+            <label className="field-block">
+              <span>Заезд</span>
+              <select value={sessionId} disabled={saving || submitting} onChange={(event) => setSessionId(event.target.value)}>
+                {sessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-block">
+              <span>Роль</span>
+              <select value={role} disabled={saving || submitting} onChange={(event) => setRole(event.target.value)}>
+                <option value="participant">Участник</option>
+                <option value="curator">Куратор</option>
+                <option value="organizer">Организатор</option>
+              </select>
+            </label>
+            <label className="field-block">
+              <span>Группа</span>
+              <select value={groupId} disabled={saving || submitting || role === "organizer"} onChange={(event) => setGroupId(event.target.value)}>
+                <option value="">Автоматически</option>
+                {sessionGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-block">
+              <span>Имя для нового пользователя</span>
+              <input value={fullName} disabled={saving || submitting} onChange={(event) => setFullName(event.target.value)} />
+            </label>
+          </>
+        )}
+      </div>
+
+      {error ? (
+        <div className="alert-card severity-high">
+          <strong>Не удалось создать ссылку</strong>
+          <p>{error.message || error}</p>
+        </div>
+      ) : null}
+
+      {link?.url ? (
+        <label className="field-block is-wide">
+          <span>Готовая ссылка</span>
+          <input readOnly value={link.url} onFocus={(event) => event.target.select()} />
+        </label>
+      ) : null}
+
+      <button type="button" className="ghost-button" disabled={saving || submitting} onClick={handleCreateLink}>
+        {submitting ? "Создаём..." : "Создать magic link"}
+      </button>
+    </article>
+  );
+}
+
 function AdminCabinetView({
   workspace,
   initialTab = "users",
@@ -85,9 +223,10 @@ function AdminCabinetView({
   onCreateSession,
   onUpdateSession,
   onUpdateRegistration,
+  onCreateMagicLink = async () => null,
 }) {
   const navigate = useNavigate();
-  const { users: authUsers, currentUser, switchUser } = useAuth();
+  const { users: authUsers, currentUser, features, switchUser } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [userQuery, setUserQuery] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
@@ -217,12 +356,14 @@ function AdminCabinetView({
               </button>
             ))}
           </nav>
-          <AccountSwitchPanel
-            users={authUsers}
-            currentUserId={currentUser?.id}
-            saving={saving}
-            onSwitch={handleAccountSwitch}
-          />
+          {features.devAuth ? (
+            <AccountSwitchPanel
+              users={authUsers}
+              currentUserId={currentUser?.id}
+              saving={saving}
+              onSwitch={handleAccountSwitch}
+            />
+          ) : null}
           <div className="admin-sidebar-meta">
             <SoftPill>Storage: {workspace.meta?.storageMode || "postgres"}</SoftPill>
             <SoftPill outline>Обновлено: {new Date(workspace.meta?.updatedAt || Date.now()).toLocaleString("ru-RU")}</SoftPill>
@@ -267,6 +408,15 @@ function AdminCabinetView({
                   onSubmit={handleUserSubmit}
                   onCancel={() => setIsCreatingUser(false)}
                   onStatusChange={(status) => userDraft.id && onUpdateUserStatus(userDraft.id, status)}
+                />
+                <MagicLinkPanel
+                  users={workspace.users}
+                  sessions={workspace.sessions}
+                  groups={workspace.groups}
+                  selectedUserId={selectedUserId}
+                  selectedSessionId={selectedSessionId}
+                  saving={saving}
+                  onCreate={onCreateMagicLink}
                 />
               </div>
             </div>

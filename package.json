@@ -12,6 +12,7 @@
     "db:seed": "node server/seed/seedDatabase.cjs",
     "db:reset": "node server/scripts/resetDatabase.cjs",
     "db:check": "node server/scripts/checkDatabase.cjs",
+    "prod:init": "npm run db:schema",
     "build": "vite build",
     "storybook": "storybook dev -p 6006 --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry",

@@ -55,6 +55,35 @@ create table if not exists session_users (
   primary key (session_id, user_id)
 );
 
+create table if not exists auth_sessions (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  user_agent text,
+  ip_address text,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists auth_magic_links (
+  id text primary key,
+  token_hash text not null unique,
+  purpose text not null check (purpose in ('login', 'invite')),
+  target_user_id text references users(id) on delete cascade,
+  session_id text references sessions(id) on delete cascade,
+  role text,
+  group_id text references groups(id) on delete set null,
+  full_name text,
+  created_by text references users(id) on delete set null,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  consumed_by text references users(id) on delete set null,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists state_scale_levels (
   id text primary key,
   session_id text references sessions(id) on delete cascade,
@@ -330,6 +359,33 @@ alter table sessions add column if not exists registration_policy jsonb not null
 alter table sessions add column if not exists created_by text;
 alter table sessions add column if not exists updated_by text;
 alter table users add column if not exists status text not null default 'active';
+create table if not exists auth_sessions (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  user_agent text,
+  ip_address text,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create table if not exists auth_magic_links (
+  id text primary key,
+  token_hash text not null unique,
+  purpose text not null check (purpose in ('login', 'invite')),
+  target_user_id text references users(id) on delete cascade,
+  session_id text references sessions(id) on delete cascade,
+  role text,
+  group_id text references groups(id) on delete set null,
+  full_name text,
+  created_by text references users(id) on delete set null,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  consumed_by text references users(id) on delete set null,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
 alter table program_days add column if not exists flow_order jsonb not null default '[]'::jsonb;
 alter table program_days add column if not exists flow_meta jsonb not null default '{}'::jsonb;
 alter table diary_entries add column if not exists responded_at timestamptz;
@@ -372,6 +428,10 @@ create index if not exists idx_groups_session on groups(session_id);
 create index if not exists idx_session_users_session on session_users(session_id);
 create index if not exists idx_session_users_user on session_users(user_id);
 create index if not exists idx_sessions_registration_status on sessions(registration_status);
+create index if not exists idx_auth_sessions_token on auth_sessions(token_hash);
+create index if not exists idx_auth_sessions_user on auth_sessions(user_id);
+create index if not exists idx_auth_magic_links_token on auth_magic_links(token_hash);
+create index if not exists idx_auth_magic_links_session on auth_magic_links(session_id);
 create index if not exists idx_programs_session on programs(session_id);
 create index if not exists idx_programs_session_status on programs(session_id, status);
 create index if not exists idx_program_days_program on program_days(program_id);

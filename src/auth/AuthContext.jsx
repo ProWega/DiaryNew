@@ -4,6 +4,13 @@ import { jsonApi } from "../api/jsonApi";
 const AUTH_STORAGE_KEY = "newdiary-auth-user";
 const AuthContext = createContext(null);
 
+const DEFAULT_FEATURES = {
+  appMode: "production",
+  devAuth: false,
+  magicLinks: true,
+  setup: false,
+};
+
 function getStoredUserId() {
   if (typeof window === "undefined" || !window.localStorage) {
     return null;
@@ -25,6 +32,7 @@ function setStoredUserId(userId) {
 export function AuthProvider({ children }) {
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(getStoredUserId);
+  const [features, setFeatures] = useState(DEFAULT_FEATURES);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState(null);
   const [bootstrap, setBootstrap] = useState(null);
@@ -35,31 +43,46 @@ export function AuthProvider({ children }) {
   const [registrationError, setRegistrationError] = useState(null);
   const [registrationSubmitting, setRegistrationSubmitting] = useState(false);
 
-  const loadUsers = useCallback(async () => {
+  const loadAuthState = useCallback(async () => {
     setUsersLoading(true);
     setUsersError(null);
 
     try {
-      const nextUsers = await jsonApi.listUsers();
-      setUsers(nextUsers);
+      const authState = await jsonApi.getAuthMe();
+      const nextFeatures = { ...DEFAULT_FEATURES, ...(authState.features || {}) };
+      setFeatures(nextFeatures);
 
-      if (selectedUserId && !nextUsers.some((user) => user.id === selectedUserId)) {
-        setSelectedUserId(null);
-        setStoredUserId(null);
+      if (nextFeatures.devAuth) {
+        const nextUsers = await jsonApi.listUsers();
+        const storedUserId = getStoredUserId();
+        const nextSelectedUserId =
+          (storedUserId && nextUsers.some((user) => user.id === storedUserId) && storedUserId) ||
+          authState.user?.id ||
+          null;
+        setUsers(nextUsers);
+        setSelectedUserId(nextSelectedUserId);
+        setStoredUserId(nextSelectedUserId);
+        return { users: nextUsers, user: nextUsers.find((user) => user.id === nextSelectedUserId) || null };
       }
 
-      return nextUsers;
+      const nextUsers = authState.user ? [authState.user] : [];
+      setUsers(nextUsers);
+      setSelectedUserId(authState.user?.id || null);
+      setStoredUserId(null);
+      return { users: nextUsers, user: authState.user || null };
     } catch (error) {
+      setUsers([]);
+      setSelectedUserId(null);
       setUsersError(error);
-      return [];
+      return { users: [], user: null };
     } finally {
       setUsersLoading(false);
     }
-  }, [selectedUserId]);
+  }, []);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    loadAuthState();
+  }, [loadAuthState]);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,17 +144,30 @@ export function AuthProvider({ children }) {
     refreshBootstrap();
   }, [refreshBootstrap]);
 
-  const switchUser = useCallback((userId) => {
-    setSelectedUserId(userId);
-    setStoredUserId(userId);
-  }, []);
+  const switchUser = useCallback(
+    (userId) => {
+      if (!features.devAuth) {
+        return;
+      }
 
-  const logout = useCallback(() => {
+      setSelectedUserId(userId);
+      setStoredUserId(userId);
+    },
+    [features.devAuth],
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await jsonApi.logout();
+    } catch {
+      // Local logout should still clear client state if the network request fails.
+    }
     setSelectedUserId(null);
+    setUsers(features.devAuth ? users : []);
     setBootstrap(null);
     setBootstrapError(null);
     setStoredUserId(null);
-  }, []);
+  }, [features.devAuth, users]);
 
   const registerParticipant = useCallback(
     async (payload) => {
@@ -140,9 +176,11 @@ export function AuthProvider({ children }) {
 
       try {
         const result = await jsonApi.registerParticipant(payload);
-        await loadUsers();
-        setSelectedUserId(result.user.id);
-        setStoredUserId(result.user.id);
+        await loadAuthState();
+        if (features.devAuth && result.user?.id) {
+          setSelectedUserId(result.user.id);
+          setStoredUserId(result.user.id);
+        }
         return result.user;
       } catch (error) {
         setRegistrationError(error);
@@ -151,7 +189,7 @@ export function AuthProvider({ children }) {
         setRegistrationSubmitting(false);
       }
     },
-    [loadUsers],
+    [features.devAuth, loadAuthState],
   );
 
   const value = useMemo(
@@ -160,8 +198,10 @@ export function AuthProvider({ children }) {
       currentUser,
       switchUser,
       logout,
+      features,
       bootstrap,
-      refreshUsers: loadUsers,
+      refreshUsers: loadAuthState,
+      refreshAuth: loadAuthState,
       refreshBootstrap,
       registrationOptions,
       registerParticipant,
@@ -179,8 +219,9 @@ export function AuthProvider({ children }) {
       bootstrapError,
       bootstrapLoading,
       currentUser,
+      features,
+      loadAuthState,
       logout,
-      loadUsers,
       refreshBootstrap,
       registerParticipant,
       registrationError,

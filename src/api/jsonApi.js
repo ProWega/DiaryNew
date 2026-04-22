@@ -1,6 +1,7 @@
 async function requestJson(path, options = {}) {
   const response = await fetch(path, {
     method: options.method || "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -33,6 +34,38 @@ function viewerHeaders(viewerId) {
 }
 
 export const jsonApi = {
+  getAuthMe() {
+    return requestJson("/api/auth/me");
+  },
+
+  logout() {
+    return requestJson("/api/auth/logout", {
+      method: "POST",
+    });
+  },
+
+  createMagicLink(viewerId, payload) {
+    return requestJson("/api/auth/magic-links", {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  consumeMagicLink(token) {
+    return requestJson("/api/auth/magic-links/consume", {
+      method: "POST",
+      body: { token },
+    });
+  },
+
+  setupAdmin(payload) {
+    return requestJson("/api/setup/admin", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
   listUsers() {
     return requestJson("/api/users");
   },

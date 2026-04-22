@@ -1,6 +1,22 @@
 const cors = require("cors");
 const express = require("express");
 const { randomUUID } = require("node:crypto");
+const {
+  getClientFeatures,
+  getCookieName,
+  getCookieSameSite,
+  getSetupToken,
+  isDevAuthEnabled,
+  shouldUseSecureCookies,
+} = require("./config.cjs");
+const {
+  createAuthSession,
+  createFirstAdmin,
+  createMagicLink,
+  consumeMagicLink,
+  getUserBySessionToken,
+  revokeAuthSession,
+} = require("./db/repositories/authStore.cjs");
 const { getWorkspace, updateWorkspace } = require("./db/organizerWorkspaceStore.cjs");
 const { hasPostgresConfig } = require("./db/postgres.cjs");
 const { getAdminWorkspace } = require("./db/repositories/adminStore.cjs");
@@ -34,7 +50,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
 function createHttpError(status, message) {
@@ -50,7 +66,75 @@ function asyncHandler(handler) {
 }
 
 function getViewerId(req) {
+  if (req.authUser?.id) {
+    return req.authUser.id;
+  }
+
+  if (!isDevAuthEnabled()) {
+    return null;
+  }
+
   return req.header("x-viewer-id") || req.query.viewerId;
+}
+
+function parseCookies(header = "") {
+  return String(header || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf("=");
+      if (separatorIndex === -1) {
+        return cookies;
+      }
+      const key = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      if (key) {
+        cookies[key] = decodeURIComponent(value);
+      }
+      return cookies;
+    }, {});
+}
+
+function getAuthCookie(req) {
+  return parseCookies(req.headers.cookie)[getCookieName()] || "";
+}
+
+function serializeAuthCookie(value, { maxAge } = {}) {
+  const parts = [
+    `${getCookieName()}=${encodeURIComponent(value || "")}`,
+    "Path=/",
+    "HttpOnly",
+    `SameSite=${getCookieSameSite()}`,
+  ];
+
+  if (maxAge !== undefined) {
+    parts.push(`Max-Age=${maxAge}`);
+  }
+
+  if (shouldUseSecureCookies()) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+}
+
+function setAuthCookie(res, token, expiresAt) {
+  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  res.setHeader("Set-Cookie", serializeAuthCookie(token, { maxAge }));
+}
+
+function clearAuthCookie(res) {
+  res.setHeader("Set-Cookie", serializeAuthCookie("", { maxAge: 0 }));
+}
+
+async function resolveViewer(req) {
+  if (req.authUser) {
+    return req.authUser;
+  }
+
+  const viewerId = getViewerId(req);
+  return viewerId ? getUser(viewerId) : null;
 }
 
 function hasActiveAssignmentRole(viewer, role) {
@@ -89,10 +173,10 @@ function pickOrganizerSessionPayload(body = {}) {
 }
 
 function requireOrganizer(req, _res, next) {
-  const viewerId = req.header("x-viewer-id") || req.query.viewerId;
   Promise.resolve()
     .then(async () => {
-      const viewer = await canAccessOrganizerSession(viewerId, req.params.sessionId);
+      const viewerId = getViewerId(req);
+      const viewer = viewerId ? await canAccessOrganizerSession(viewerId, req.params.sessionId) : null;
 
       if (!viewer) {
         throw createHttpError(403, "Недостаточно прав для управления этим заездом");
@@ -107,7 +191,7 @@ function requireOrganizer(req, _res, next) {
 function requireAdmin(req, _res, next) {
   Promise.resolve()
     .then(async () => {
-      const viewer = await getUser(getViewerId(req));
+      const viewer = await resolveViewer(req);
 
       if (!viewer || !isAdminViewer(viewer) || viewer.status === "disabled") {
         throw createHttpError(403, "Недостаточно прав для панели администратора");
@@ -118,6 +202,16 @@ function requireAdmin(req, _res, next) {
     })
     .catch(next);
 }
+
+app.use(
+  asyncHandler(async (req, _res, next) => {
+    const token = getAuthCookie(req);
+    if (token) {
+      req.authUser = await getUserBySessionToken(token);
+    }
+    next();
+  }),
+);
 
 function normalizeList(value) {
   if (Array.isArray(value)) {
@@ -819,6 +913,101 @@ function syncWorkspace(workspace) {
 }
 
 app.get(
+  "/api/auth/me",
+  asyncHandler(async (req, res) => {
+    res.json({
+      user: req.authUser || null,
+      features: getClientFeatures(),
+    });
+  }),
+);
+
+app.post(
+  "/api/auth/logout",
+  asyncHandler(async (req, res) => {
+    await revokeAuthSession(getAuthCookie(req));
+    clearAuthCookie(res);
+    res.json({ ok: true, features: getClientFeatures() });
+  }),
+);
+
+app.post(
+  "/api/auth/magic-links",
+  asyncHandler(async (req, res) => {
+    const viewer = await resolveViewer(req);
+    if (!viewer || viewer.status === "disabled") {
+      throw createHttpError(401, "Необходимо войти в систему");
+    }
+
+    const body = req.body || {};
+    const purpose = body.purpose || "login";
+    if (purpose === "login" && !isAdminViewer(viewer)) {
+      throw createHttpError(403, "Magic links для входа может создавать только администратор");
+    }
+
+    if (purpose === "invite" && !isAdminViewer(viewer)) {
+      const access = body.sessionId ? await canAccessOrganizerSession(viewer.id, body.sessionId) : null;
+      if (!access || !isOrganizerViewer(access)) {
+        throw createHttpError(403, "Недостаточно прав для создания приглашения на этот заезд");
+      }
+    }
+
+    const link = await createMagicLink({
+      creatorId: viewer.id,
+      purpose,
+      targetUserId: body.targetUserId || null,
+      sessionId: body.sessionId || null,
+      role: body.role || "participant",
+      groupId: body.groupId || null,
+      fullName: body.fullName || "",
+      ttlMinutes: body.ttlMinutes,
+    });
+    res.status(201).json(link);
+  }),
+);
+
+app.post(
+  "/api/auth/magic-links/consume",
+  asyncHandler(async (req, res) => {
+    const result = await consumeMagicLink({
+      token: req.body?.token,
+      userAgent: req.header("user-agent") || "",
+      ipAddress: req.ip || "",
+    });
+    setAuthCookie(res, result.session.token, result.session.expiresAt);
+    res.json({
+      user: result.user,
+      link: result.link,
+      features: getClientFeatures(),
+    });
+  }),
+);
+
+app.post(
+  "/api/setup/admin",
+  asyncHandler(async (req, res) => {
+    const setupToken = getSetupToken();
+    if (!setupToken || req.body?.setupToken !== setupToken) {
+      throw createHttpError(403, "Некорректный setup token");
+    }
+
+    const user = await createFirstAdmin({
+      fullName: req.body?.fullName,
+      email: req.body?.email,
+      phone: req.body?.phone,
+    });
+    const session = await createAuthSession({
+      userId: user.id,
+      userAgent: req.header("user-agent") || "",
+      ipAddress: req.ip || "",
+      meta: { source: "setup" },
+    });
+    setAuthCookie(res, session.token, session.expiresAt);
+    res.status(201).json({ user, features: getClientFeatures() });
+  }),
+);
+
+app.get(
   "/api/health",
   asyncHandler(async (_req, res) => {
     const workspace = await getWorkspace("session-istoki-school-2026");
@@ -834,7 +1023,13 @@ app.get(
 
 app.get(
   "/api/users",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (!isDevAuthEnabled()) {
+      const viewer = await resolveViewer(req);
+      if (!viewer || !isAdminViewer(viewer) || viewer.status === "disabled") {
+        throw createHttpError(403, "Список пользователей доступен только администратору");
+      }
+    }
     res.json(await listUsers());
   }),
 );
@@ -849,7 +1044,15 @@ app.get(
 app.post(
   "/api/participants/register",
   asyncHandler(async (req, res) => {
-    res.status(201).json(await registerParticipant(req.body || {}));
+    const result = await registerParticipant(req.body || {});
+    const session = await createAuthSession({
+      userId: result.user.id,
+      userAgent: req.header("user-agent") || "",
+      ipAddress: req.ip || "",
+      meta: { source: "public-registration" },
+    });
+    setAuthCookie(res, session.token, session.expiresAt);
+    res.status(201).json(result);
   }),
 );
 

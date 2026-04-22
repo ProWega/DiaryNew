@@ -4,12 +4,14 @@ import RouteGuard from "./components/RouteGuard";
 import { useAuth } from "./auth/AuthContext";
 import AdminSecurityPage from "./pages/AdminSecurityPage";
 import CuratorDashboardPage from "./pages/CuratorDashboardPage";
+import MagicLinkPage from "./pages/MagicLinkPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import {
   ParticipantDynamicsPage,
   ParticipantTodayPage,
 } from "./pages/ParticipantPage";
 import RegistrationPage from "./pages/RegistrationPage";
+import SetupAdminPage from "./pages/SetupAdminPage";
 import { getDefaultRoute } from "./rbac/permissions";
 
 function AppRouter() {
@@ -23,6 +25,8 @@ function AppRouter() {
           currentUser ? <Navigate to={getDefaultRoute(currentUser)} replace /> : <RegistrationPage />
         }
       />
+      <Route path="/magic" element={<MagicLinkPage />} />
+      <Route path="/setup/admin" element={<SetupAdminPage />} />
 
       <Route
         path="/"
