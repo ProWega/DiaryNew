@@ -35,40 +35,60 @@ function ParticipantRoutedView({
   overallAverages,
   formatAverage,
 }) {
-  const [activeEventId, setActiveEventId] = useState("");
+  const [openEventId, setOpenEventId] = useState("");
+  const [isReflectionStarted, setIsReflectionStarted] = useState(false);
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
   const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
-  const defaultActiveEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
-  const activeEvent =
-    todayEvents.find((event) => event.id === activeEventId) ||
-    todayEvents.find((event) => event.id === defaultActiveEventId) ||
-    todayEvents[0];
-  const activeEventIndex = Math.max(
-    todayEvents.findIndex((event) => event.id === activeEvent?.id),
-    0,
-  );
+  const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
+  const openEvent = todayEvents.find((event) => event.id === openEventId) || null;
+  const openEventIndex = todayEvents.findIndex((event) => event.id === openEvent?.id);
   const answeredEventCount = todayEvents.filter((event) => Boolean(event.stateId)).length;
   const reflectionAnswered = isReflectionAnswered(reflection);
+  const allEventsAnswered = todayEvents.length > 0 && answeredEventCount === todayEvents.length;
+  const showReflectionForm = reflectionAnswered || (allEventsAnswered && isReflectionStarted);
   const checklistTotal = todayEvents.length + 1;
   const checklistAnswered = answeredEventCount + (reflectionAnswered ? 1 : 0);
   const completionValue = Math.max(0, Math.min(todayMetrics.completion || 0, 100));
-  const activeEventPosition = todayEvents.length ? activeEventIndex + 1 : 0;
+  const openEventPosition = openEventIndex >= 0 ? openEventIndex + 1 : 0;
 
   useEffect(() => {
-    setActiveEventId((previous) => {
+    setOpenEventId((previous) => {
       if (todayEvents.some((event) => event.id === previous)) {
         return previous;
       }
 
-      return defaultActiveEventId;
+      return defaultOpenEventId;
     });
-  }, [defaultActiveEventId, todayEvents]);
+  }, [defaultOpenEventId, todayEvents]);
 
-  function moveActiveEvent(direction) {
-    const nextEvent = todayEvents[activeEventIndex + direction];
+  useEffect(() => {
+    if (reflectionAnswered) {
+      setIsReflectionStarted(true);
+    }
+  }, [reflectionAnswered]);
+
+  useEffect(() => {
+    if (!allEventsAnswered && !reflectionAnswered) {
+      setIsReflectionStarted(false);
+    }
+  }, [allEventsAnswered, reflectionAnswered]);
+
+  function toggleEvent(eventId) {
+    setOpenEventId((previous) => (previous === eventId ? "" : eventId));
+  }
+
+  function moveOpenEvent(direction) {
+    const currentIndex =
+      openEventIndex >= 0
+        ? openEventIndex
+        : Math.max(
+            todayEvents.findIndex((event) => event.id === defaultOpenEventId),
+            0,
+          );
+    const nextEvent = todayEvents[currentIndex + direction];
 
     if (nextEvent) {
-      setActiveEventId(nextEvent.id);
+      setOpenEventId(nextEvent.id);
     }
   }
 
@@ -80,9 +100,9 @@ function ParticipantRoutedView({
             <div className="participant-flow-head">
               <div>
                 <p className="eyebrow">Состояние</p>
-                <h3>Событие {activeEventPosition} из {todayEvents.length}</h3>
+                <h3>{openEventPosition ? `Событие ${openEventPosition} из ${todayEvents.length}` : "Выберите событие"}</h3>
                 <p className="participant-flow-copy">
-                  Отметьте, как вы сейчас после события. Можно добавить пару слов, если хочется.
+                  Откройте карточку и выберите точку на шкале.
                 </p>
               </div>
               <div className="participant-progress-meter" aria-label={`Заполнено ${completionValue}%`}>
@@ -96,16 +116,28 @@ function ParticipantRoutedView({
 
             <div className="participant-event-list">
               {todayEvents.map((event, index) => {
-                const isActive = event.id === activeEvent?.id;
+                const isOpen = event.id === openEventId;
                 const state = event.stateId ? getStateInfo(event.stateId) : null;
+                const panelId = `participant-event-panel-${event.id}`;
+                const buttonId = `participant-event-button-${event.id}`;
 
-                if (!isActive) {
-                  return (
+                return (
+                  <article
+                    key={event.id}
+                    className={`participant-event-shell ${isOpen ? "is-open" : "is-collapsed"} ${
+                      state ? "is-complete" : "is-pending"
+                    }`}
+                  >
                     <button
-                      key={event.id}
+                      id={buttonId}
                       type="button"
-                      className={`participant-event-row ${state ? "is-complete" : "is-pending"}`}
-                      onClick={() => setActiveEventId(event.id)}
+                      className={`participant-event-row participant-event-toggle ${state ? "is-complete" : "is-pending"} ${
+                        isOpen ? "is-open" : ""
+                      }`}
+                      aria-expanded={isOpen}
+                      aria-controls={panelId}
+                      aria-label={`${isOpen ? "Свернуть" : "Открыть"} событие: ${event.title}`}
+                      onClick={() => toggleEvent(event.id)}
                     >
                       <span className="participant-event-index">{index + 1}</span>
                       <span className="participant-event-row-main">
@@ -123,84 +155,94 @@ function ParticipantRoutedView({
                           "Без отметки"
                         )}
                       </span>
+                      <span className="participant-event-row-action" aria-hidden="true">
+                        {isOpen ? "Свернуть" : "Открыть"}
+                      </span>
                     </button>
-                  );
-                }
 
-                return (
-                  <article key={event.id} className="event-card participant-event-card is-active">
-                    <div className="event-head participant-active-head">
-                      <div>
-                        <span className="event-time">{event.time}</span>
-                        <h3>{event.title}</h3>
-                        <p>{event.type}</p>
-                      </div>
-                      <div className="tag-row">
-                        {(event.tags || []).map((tag) => (
-                          <span key={tag} className="tag-chip">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <StateScalePicker
-                      value={event.stateId}
-                      onChange={(stateId) => updateEventState(event.id, stateId)}
-                      states={stateScale}
-                      variant="arc"
-                      animated
-                      showDescriptions
-                      label="Как вы сейчас после события?"
-                    />
-
-                    {event.stateId ? (
-                      <>
-                        <div className="input-row participant-comment-row">
-                          <textarea
-                            rows="3"
-                            value={event.comment}
-                            placeholder="Можно добавить пару слов, если хочется"
-                            onChange={(eventInput) =>
-                              updateEventComment(event.id, eventInput.target.value)
-                            }
-                          />
+                    {isOpen ? (
+                      <div
+                        id={panelId}
+                        role="region"
+                        aria-labelledby={buttonId}
+                        className="event-card participant-event-card participant-event-reveal"
+                      >
+                        <div className="event-head participant-active-head">
+                          <div>
+                            <p className="participant-event-microcopy">
+                              {event.stateId ? "Можно уточнить отметку или добавить заметку." : "Выберите точку на шкале."}
+                            </p>
+                            <h3>{event.title}</h3>
+                            <p>{event.type}</p>
+                          </div>
+                          <div className="tag-row">
+                            {(event.tags || []).map((tag) => (
+                              <span key={tag} className="tag-chip">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="event-foot">
+                        <StateScalePicker
+                          value={event.stateId}
+                          onChange={(stateId) => updateEventState(event.id, stateId)}
+                          states={stateScale}
+                          variant="arc"
+                          animated
+                          showDescriptions
+                          label="Как вы сейчас после события?"
+                        />
+
+                        {event.stateId ? (
+                          <>
+                            <div className="input-row participant-comment-row">
+                              <textarea
+                                rows="3"
+                                value={event.comment}
+                                placeholder="Можно добавить пару слов, если хочется"
+                                onChange={(eventInput) =>
+                                  updateEventComment(event.id, eventInput.target.value)
+                                }
+                              />
+                            </div>
+
+                            <div className="event-foot">
+                              <button
+                                type="button"
+                                aria-pressed={event.confidence === "low"}
+                                className={event.confidence === "low" ? "ghost-button is-active" : "ghost-button"}
+                                onClick={() => updateEventConfidence(event.id)}
+                              >
+                                Сложно оценить
+                              </button>
+                              <span className="confidence-note">
+                                {event.confidence === "low" ? "Отметка сохранена как примерная" : "Отметка сохранена"}
+                              </span>
+                            </div>
+                          </>
+                        ) : null}
+
+                        <div className="participant-step-actions">
                           <button
                             type="button"
-                            aria-pressed={event.confidence === "low"}
-                            className={event.confidence === "low" ? "ghost-button is-active" : "ghost-button"}
-                            onClick={() => updateEventConfidence(event.id)}
+                            className="ghost-button"
+                            disabled={index === 0}
+                            onClick={() => moveOpenEvent(-1)}
                           >
-                            Сложно оценить
+                            Назад
                           </button>
-                          <span className="confidence-note">
-                            {event.confidence === "low" ? "Отметка сохранена как примерная" : "Отметка сохранена"}
-                          </span>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={index >= todayEvents.length - 1}
+                            onClick={() => moveOpenEvent(1)}
+                          >
+                            Далее
+                          </button>
                         </div>
-                      </>
+                      </div>
                     ) : null}
-
-                    <div className="participant-step-actions">
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        disabled={activeEventIndex === 0}
-                        onClick={() => moveActiveEvent(-1)}
-                      >
-                        Назад
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        disabled={activeEventIndex >= todayEvents.length - 1}
-                        onClick={() => moveActiveEvent(1)}
-                      >
-                        Далее
-                      </button>
-                    </div>
                   </article>
                 );
               })}
@@ -225,52 +267,88 @@ function ParticipantRoutedView({
               </div>
             </article>
 
-            <article className="panel-card participant-reflection-card">
-              <div className="panel-head">
-                <div>
-                  <p className="eyebrow">Рефлексия</p>
-                  <h3>Короткое завершение дня</h3>
+            <article
+              className={`panel-card participant-reflection-card ${
+                showReflectionForm ? "is-open" : allEventsAnswered ? "is-ready" : "is-locked"
+              }`}
+            >
+              {!showReflectionForm && !allEventsAnswered ? (
+                <div className="participant-reflection-gate">
+                  <div>
+                    <p className="eyebrow">Итог дня</p>
+                    <h3>Итог дня откроется после отметок</h3>
+                    <p>Сначала завершите события, потом спокойно подведите итог.</p>
+                  </div>
+                  <span className="confidence-tag">{answeredEventCount} из {todayEvents.length}</span>
                 </div>
-                <span className="confidence-tag">{reflectionAnswered ? "учтена" : "черновик"}</span>
-              </div>
+              ) : null}
 
-              <div className="reflection-list participant-reflection-list">
-                {reflectionPrompts.map((prompt, index) => {
-                  const field = reflectionFields[index] || `q${index + 1}`;
+              {!showReflectionForm && allEventsAnswered ? (
+                <div className="participant-reflection-ritual">
+                  <div>
+                    <p className="eyebrow">Итог дня</p>
+                    <h3>Сделайте паузу на минуту</h3>
+                    <p>Когда будете готовы, откройте короткую рефлексию и завершите день.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setIsReflectionStarted(true)}
+                  >
+                    Открыть итог дня
+                  </button>
+                </div>
+              ) : null}
 
-                  return (
-                    <label key={prompt} className="reflection-item">
-                      <span>{prompt}</span>
+              {showReflectionForm ? (
+                <>
+                  <div className="panel-head">
+                    <div>
+                      <p className="eyebrow">Итог дня</p>
+                      <h3>Короткое завершение</h3>
+                    </div>
+                    <span className="confidence-tag">{reflectionAnswered ? "учтена" : "черновик"}</span>
+                  </div>
+
+                  <div className="reflection-list participant-reflection-list">
+                    {reflectionPrompts.map((prompt, index) => {
+                      const field = reflectionFields[index] || `q${index + 1}`;
+
+                      return (
+                        <label key={prompt} className="reflection-item">
+                          <span>{prompt}</span>
+                          <textarea
+                            rows="2"
+                            value={reflection[field]}
+                            placeholder="Напишите 1–2 предложения"
+                            onChange={(event) =>
+                              setReflection((previous) => ({
+                                ...previous,
+                                [field]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      );
+                    })}
+
+                    <label className="reflection-item">
+                      <span>Дополнить, если важно</span>
                       <textarea
-                        rows="2"
-                        value={reflection[field]}
-                        placeholder="Напишите 1–2 предложения"
+                        rows="4"
+                        value={reflection.freeText}
+                        placeholder="Что ещё важно зафиксировать?"
                         onChange={(event) =>
                           setReflection((previous) => ({
                             ...previous,
-                            [field]: event.target.value,
+                            freeText: event.target.value,
                           }))
                         }
                       />
                     </label>
-                  );
-                })}
-
-                <label className="reflection-item">
-                  <span>Дополнить, если важно</span>
-                  <textarea
-                    rows="4"
-                    value={reflection.freeText}
-                    placeholder="Что ещё важно зафиксировать?"
-                    onChange={(event) =>
-                      setReflection((previous) => ({
-                        ...previous,
-                        freeText: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
+                  </div>
+                </>
+              ) : null}
             </article>
 
             <details className="panel-card participant-analytics-drawer">

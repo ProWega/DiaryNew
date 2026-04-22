@@ -221,7 +221,19 @@ export const CompletedMobileDay = {
   args: {
     mode: "today",
     answeredEvents: 4,
-    reflectionAnswered: true,
+    reflectionAnswered: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const ReflectionLocked = {
+  args: {
+    mode: "today",
+    answeredEvents: 2,
+    reflectionAnswered: false,
   },
   parameters: {
     viewport: { defaultViewport: "mobile" },

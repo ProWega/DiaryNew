@@ -1,134 +1,534 @@
-import { HeatmapGrid, Sparkline } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
-import { formatAverage, getStatusTone } from "../lib/metrics";
+import { stateScale } from "../data/mockData";
+
+const stateByLevel = Object.fromEntries(stateScale.map((state) => [state.level, state]));
+const PULSE_DOMAIN = [0, 6];
+
+const DATA_STATE_COPY = {
+  unpublished: {
+    title: "Программа еще не опубликована",
+    description: "Пульс группы появится после публикации программы организатором.",
+  },
+  published_empty: {
+    title: "В опубликованной программе нет событий",
+    description: "Кураторский бриф начнет собираться после появления событий в программе.",
+  },
+  no_members: {
+    title: "В группе пока нет активных участников",
+    description: "Данные для кураторской аналитики появятся после назначения участников в группу.",
+  },
+  no_responses: {
+    title: "Ответов пока нет",
+    description: "События уже есть, но участники еще не заполнили дневник или дневную рефлексию.",
+  },
+};
+
+const STATUS_COPY = {
+  risk: { label: "Нужно внимание", className: "tone-risk" },
+  watch: { label: "Под наблюдением", className: "tone-watch" },
+  silent: { label: "Нет ответов", className: "tone-silent" },
+  ok: { label: "Стабильно", className: "tone-ok" },
+};
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function formatNumber(value, digits = 1) {
+  if (!Number.isFinite(Number(value))) {
+    return "—";
+  }
+
+  return Number(value).toFixed(digits).replace(".", ",");
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "0%";
+  }
+
+  return `${Math.round(Number(value))}%`;
+}
+
+function formatDelta(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "—";
+  }
+
+  return `${Number(value) > 0 ? "+" : ""}${formatNumber(value)}`;
+}
+
+function clamp(value, min, max) {
+  if (!Number.isFinite(Number(value))) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(Number(value), max));
+}
+
+function getStateByLevel(value) {
+  if (!Number.isFinite(Number(value))) {
+    return null;
+  }
+
+  return stateByLevel[Math.round(clamp(Number(value), PULSE_DOMAIN[0], PULSE_DOMAIN[1]))] || null;
+}
+
+function getStatusCopy(status) {
+  return STATUS_COPY[status] || STATUS_COPY.ok;
+}
+
+function getSeverityClass(severity) {
+  if (severity === "high") {
+    return "is-high";
+  }
+
+  if (severity === "low") {
+    return "is-low";
+  }
+
+  return "is-medium";
+}
+
+function DataStateBanner({ state }) {
+  const copy = DATA_STATE_COPY[state];
+
+  if (!copy) {
+    return null;
+  }
+
+  return (
+    <article className="curator-state-banner">
+      <div>
+        <p className="eyebrow">Состояние данных</p>
+        <h3>{copy.title}</h3>
+      </div>
+      <p>{copy.description}</p>
+    </article>
+  );
+}
+
+function buildPulseSegments(points) {
+  const segments = [];
+  let current = [];
+
+  for (const point of points) {
+    if (point.value === null) {
+      if (current.length) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+
+    current.push(point);
+  }
+
+  if (current.length) {
+    segments.push(current);
+  }
+
+  return segments;
+}
+
+function buildPulsePath(points) {
+  if (!points.length) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    return `M ${points[0].x} ${points[0].y}`;
+  }
+
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+}
+
+function PulseOfDayChart({ events = [] }) {
+  const width = 980;
+  const height = 360;
+  const margin = { top: 38, right: 34, bottom: 108, left: 56 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const safeEvents = asArray(events);
+  const maxIndex = Math.max(safeEvents.length - 1, 1);
+  const points = safeEvents.map((event, index) => {
+    const value = Number.isFinite(Number(event.averageStateLevel))
+      ? Number(event.averageStateLevel)
+      : null;
+    const x = margin.left + (plotWidth / maxIndex) * index;
+    const y =
+      value === null
+        ? margin.top + plotHeight
+        : margin.top + ((PULSE_DOMAIN[1] - value) / (PULSE_DOMAIN[1] - PULSE_DOMAIN[0])) * plotHeight;
+
+    return { ...event, value, x, y };
+  });
+  const segments = buildPulseSegments(points);
+  const empty = !points.some((point) => point.value !== null);
+
+  if (!safeEvents.length) {
+    return (
+      <div className="curator-chart-empty">
+        Нет событий для построения пульса дня.
+      </div>
+    );
+  }
+
+  return (
+    <div className="curator-pulse-shell">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="curator-pulse-chart"
+        role="img"
+        aria-label="Пульс дня по событиям группы"
+      >
+        <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-distress" />
+        <rect x={margin.left} y={margin.top + plotHeight / 3} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-integration" />
+        <rect x={margin.left} y={margin.top + (plotHeight / 3) * 2} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-burnout" />
+
+        {[0, 1, 2, 3, 4, 5, 6].map((level) => {
+          const y = margin.top + ((PULSE_DOMAIN[1] - level) / (PULSE_DOMAIN[1] - PULSE_DOMAIN[0])) * plotHeight;
+          const state = getStateByLevel(level);
+
+          return (
+            <g key={level}>
+              <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} className="pulse-grid-line" />
+              <text x={18} y={y + 4} className="pulse-axis-label">
+                {state?.shortLabel || level}
+              </text>
+            </g>
+          );
+        })}
+
+        {points.map((point) => (
+          <line
+            key={`rail-${point.id}`}
+            x1={point.x}
+            x2={point.x}
+            y1={margin.top}
+            y2={margin.top + plotHeight}
+            className={point.value === null ? "pulse-event-rail is-empty" : "pulse-event-rail"}
+          />
+        ))}
+
+        {segments.map((segment, index) => (
+          <path key={`segment-${index}`} d={buildPulsePath(segment)} className="pulse-line" />
+        ))}
+
+        {points.map((point) => {
+          const state = getStateByLevel(point.value);
+          const radius = 9 + (Number(point.completion || 0) / 100) * 13;
+          const hasRisk = Number(point.riskAnswersCount || 0) > 0;
+          const hasSharpDelta = Number.isFinite(Number(point.deltaFromPrevious)) && Math.abs(Number(point.deltaFromPrevious)) >= 1.5;
+
+          return (
+            <g key={point.id} className="pulse-point-group">
+              {point.value === null ? (
+                <circle cx={point.x} cy={point.y} r="10" className="pulse-point is-empty" />
+              ) : (
+                <>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={radius}
+                    fill={state?.surface || "#f7f8f3"}
+                    stroke={state?.color || "#8eab55"}
+                    className={hasRisk ? "pulse-point has-risk" : "pulse-point"}
+                  />
+                  {hasSharpDelta ? (
+                    <path
+                      d={`M ${point.x - 8} ${point.y - radius - 12} L ${point.x + 8} ${point.y - radius - 12} L ${point.x} ${point.y - radius - 24} Z`}
+                      className={Number(point.deltaFromPrevious) > 0 ? "pulse-delta is-up" : "pulse-delta is-down"}
+                    />
+                  ) : null}
+                </>
+              )}
+              <title>
+                {point.title}: {point.value === null ? "нет ответов" : `среднее ${formatNumber(point.value)}, заполнение ${formatPercent(point.completion)}`}
+              </title>
+            </g>
+          );
+        })}
+
+        {points.map((point, index) => (
+          <g key={`label-${point.id}`} transform={`translate(${point.x}, ${height - 82})`}>
+            <text className="pulse-event-index" textAnchor="middle">
+              {index + 1}
+            </text>
+            <text className="pulse-event-label" textAnchor="middle" y="20">
+              {point.title.length > 18 ? `${point.title.slice(0, 18)}…` : point.title}
+            </text>
+            <text className="pulse-event-meta" textAnchor="middle" y="38">
+              {point.completion ? formatPercent(point.completion) : "нет ответов"}
+            </text>
+          </g>
+        ))}
+      </svg>
+
+      {empty ? (
+        <div className="curator-chart-empty">
+          Пульс построен по опубликованной программе, но участники пока не оставили отметок состояния.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GroupScore({ participants = [], events = [] }) {
+  const safeParticipants = asArray(participants);
+  const safeEvents = asArray(events);
+
+  if (!safeEvents.length) {
+    return <div className="curator-chart-empty">Нет событий для партитуры группы.</div>;
+  }
+
+  if (!safeParticipants.length) {
+    return <div className="curator-chart-empty">Нет участников для партитуры группы.</div>;
+  }
+
+  return (
+    <div className="curator-score-wrap">
+      <div
+        className="curator-score-grid"
+        style={{
+          gridTemplateColumns: `minmax(190px, 1.2fr) repeat(${safeEvents.length}, minmax(72px, 1fr)) minmax(116px, 0.7fr)`,
+        }}
+      >
+        <div className="curator-score-head">Участник</div>
+        {safeEvents.map((event, index) => (
+          <div key={event.id} className="curator-score-head" title={event.title}>
+            {index + 1}
+          </div>
+        ))}
+        <div className="curator-score-head">Заполнено</div>
+
+        {safeParticipants.map((participant) => {
+          const status = getStatusCopy(participant.status);
+
+          return (
+            <div key={participant.id} className="curator-score-row">
+              <div className="curator-score-person">
+                <strong>{participant.name}</strong>
+                <span className={`status-pill ${status.className}`}>{status.label}</span>
+              </div>
+
+              {safeEvents.map((event) => {
+                const point = participant.trajectory?.find((item) => item.eventId === event.id);
+                const state = getStateByLevel(point?.stateLevel);
+
+                if (!state) {
+                  return (
+                    <div key={event.id} className="curator-score-cell is-empty" title={`${event.title}: нет ответа`}>
+                      <span>—</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={event.id}
+                    className="curator-score-cell"
+                    style={{
+                      background: state.surface,
+                      borderColor: state.color,
+                      color: state.textColor,
+                    }}
+                    title={`${event.title}: ${state.label}${point?.comment ? ` — ${point.comment}` : ""}`}
+                  >
+                    <strong>{state.level}</strong>
+                  </div>
+                );
+              })}
+
+              <div className="curator-score-progress">
+                <strong>{formatPercent(participant.completion)}</strong>
+                <span>{participant.answeredEvents}/{participant.totalEvents}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FactList({ title, eyebrow, items = [], emptyLabel, renderItem }) {
+  return (
+    <article className="panel-card curator-fact-card">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h3>{title}</h3>
+        </div>
+      </div>
+
+      {items.length ? (
+        <div className="curator-fact-list">
+          {items.map(renderItem)}
+        </div>
+      ) : (
+        <p className="curator-empty-copy">{emptyLabel}</p>
+      )}
+    </article>
+  );
+}
 
 function CuratorDashboardView({ dashboard }) {
+  const eventPulse = asArray(dashboard.eventPulse);
+  const participantRows = asArray(dashboard.participantRows || dashboard.members);
+  const events = asArray(dashboard.events);
+  const reflectionPrep = dashboard.reflectionPrep || {};
+  const focusEvents = asArray(reflectionPrep.focusEvents);
+  const dayReflections = asArray(reflectionPrep.dayReflections);
+  const commentClusters = asArray(reflectionPrep.commentClusters);
+  const organizerBrief = asArray(dashboard.organizerBrief);
+  const openRisks = asArray(reflectionPrep.openRisks);
+
   return (
-    <section className="role-view">
-      <div className="hero-card">
+    <section className="role-view curator-workspace">
+      <div className="hero-card curator-hero-card">
         <div>
           <p className="eyebrow">Роль: куратор группы</p>
-          <h2>{dashboard.groupName}: риски, траектории и темы</h2>
+          <h2>{dashboard.groupName}: пульс дня</h2>
           <p className="subtle">
-            Видимость ограничена своей группой. Здесь собраны агрегаты, сигналы риска, индивидуальные траектории и заметки.
+            Реальные отметки дневников превращены в рабочую карту для вечерней рефлексии, управления динамикой группы и живого разговора с организаторами.
           </p>
         </div>
 
         <div className="hero-stats">
-          <MetricBadge label="Участников" value={`${dashboard.participantsCount}`} />
-          <MetricBadge label="Заполнение" value={`${dashboard.completion}%`} />
-          <MetricBadge
-            label="Средняя активация"
-            value={formatAverage(dashboard.averageActivation)}
-          />
-          <MetricBadge label="Риски" value={`${dashboard.riskCases}`} />
+          <MetricBadge label="Участников" value={`${dashboard.participantsCount || 0}`} />
+          <MetricBadge label="Заполнение" value={formatPercent(dashboard.completion)} />
+          <MetricBadge label="Средний пульс" value={formatNumber(dashboard.averageActivation)} />
+          <MetricBadge label="Открытых рисков" value={`${openRisks.length}`} />
         </div>
       </div>
 
-      <div className="curator-layout">
-        <article className="panel-card wide-card">
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Карта группы</p>
-              <h3>Heatmap событий и участников</h3>
+      <DataStateBanner state={dashboard.dataState} />
+
+      <article className="panel-card curator-pulse-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Пульс дня</p>
+            <h3>Ритм событий, перегруз и восстановление</h3>
+          </div>
+          <span className="soft-pill">Куратор: {dashboard.curator}</span>
+        </div>
+        <PulseOfDayChart events={eventPulse} />
+        <div className="curator-pulse-legend">
+          <span><i className="legend-line" /> среднее состояние</span>
+          <span><i className="legend-dot" /> размер точки = заполнение</span>
+          <span><i className="legend-risk" /> обводка = ответы в зоне риска</span>
+          <span><i className="legend-gap" /> разрыв = нет ответов</span>
+        </div>
+      </article>
+
+      <div className="curator-brief-grid">
+        <FactList
+          eyebrow="К рефлексии"
+          title="На чём сфокусировать разговор"
+          items={focusEvents}
+          emptyLabel="Пока нет событий с риском, резкими переходами, низкой видимостью данных или комментариями."
+          renderItem={(event) => (
+            <div key={event.id} className="curator-fact-item">
+              <strong>{event.title}</strong>
+              <span>{[event.dayLabel, event.timeLabel, event.type].filter(Boolean).join(" · ")}</span>
+              <p>{event.evidence.join("; ")}</p>
             </div>
-            <span className="soft-pill">Куратор: {dashboard.curator}</span>
-          </div>
+          )}
+        />
 
-          <HeatmapGrid columns={dashboard.heatmap.columns} rows={dashboard.heatmap.rows} />
-        </article>
-
-        <article className="panel-card side-card">
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Сигналы риска</p>
-              <h3>Кому нужно внимание сегодня</h3>
+        <FactList
+          eyebrow="Организаторам"
+          title="Сигналы для живого разговора"
+          items={organizerBrief}
+          emptyLabel="Нет подтверждённых сигналов для передачи организаторам."
+          renderItem={(item) => (
+            <div key={item.id} className={`curator-signal-card ${getSeverityClass(item.severity)}`}>
+              <strong>{item.title}</strong>
+              <p>{item.evidence}</p>
             </div>
-          </div>
+          )}
+        />
+      </div>
 
-          <div className="alert-list">
-            {dashboard.alerts.map((alert) => (
-              <div key={alert.id} className={`alert-card severity-${alert.severity}`}>
-                <strong>{alert.title}</strong>
-                <p>{alert.detail}</p>
-              </div>
-            ))}
+      <article className="panel-card curator-score-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Партитура группы</p>
+            <h3>Кто и как прошёл события дня</h3>
           </div>
-        </article>
+          <span className="soft-pill is-outline">Пропуски остаются пустыми</span>
+        </div>
+        <GroupScore participants={participantRows} events={events} />
+      </article>
 
-        <article className="panel-card">
-          <div className="panel-head">
-            <div>
-              <p className="eyebrow">Топ-темы комментариев</p>
-              <h3>Кластеры по группе</h3>
+      <div className="curator-brief-grid">
+        <FactList
+          eyebrow="Дневная рефлексия"
+          title="Факты по завершению дня"
+          items={dayReflections}
+          emptyLabel="Дневные рефлексии ещё не заполнены."
+          renderItem={(day) => (
+            <div key={day.id} className="curator-fact-item">
+              <strong>{day.label}</strong>
+              <span>{day.dateLabel || "Дата не задана"}</span>
+              <p>
+                Ответов: {day.responsesCount}; свободных комментариев: {day.freeTextCount}; заполненных полей: {day.answeredPromptsCount}
+              </p>
+              {day.excerpts?.length ? (
+                <div className="curator-quote-stack">
+                  {day.excerpts.map((excerpt) => (
+                    <q key={excerpt}>{excerpt}</q>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          </div>
+          )}
+        />
 
-          <div className="theme-wrap">
-            {dashboard.topThemes.map((theme) => (
-              <div key={theme.label} className="theme-chip-card">
-                <strong>{theme.label}</strong>
-                <span>{theme.count} комментариев</span>
-              </div>
-            ))}
-          </div>
-        </article>
+        <FactList
+          eyebrow="Кластеры и отчёты"
+          title="Что уже посчитано аналитикой"
+          items={commentClusters}
+          emptyLabel="Кластеры комментариев пока не рассчитаны."
+          renderItem={(cluster) => (
+            <div key={cluster.id || cluster.label} className="curator-fact-item">
+              <strong>{cluster.label}</strong>
+              <span>{cluster.count} связанных записей{cluster.score !== null ? ` · score ${formatNumber(cluster.score, 2)}` : ""}</span>
+              {cluster.summary ? <p>{cluster.summary}</p> : null}
+            </div>
+          )}
+        />
+      </div>
 
-        <article className="panel-card">
+      {reflectionPrep.aiReport ? (
+        <article className="panel-card curator-ai-card">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">ИИ-сводка</p>
-              <h3>Что происходит с группой</h3>
+              <p className="eyebrow">AI-отчёт</p>
+              <h3>{reflectionPrep.aiReport.title}</h3>
             </div>
             <span className="confidence-tag">
-              confidence: {dashboard.aiSummary.confidence}
+              confidence: {reflectionPrep.aiReport.confidence}
             </span>
           </div>
-
-          <ul className="bullet-list">
-            {dashboard.aiSummary.bullets.map((item) => (
-              <li key={item}>{item}</li>
+          <div className="curator-fact-list">
+            {asArray(reflectionPrep.aiReport.content?.bullets).map((item) => (
+              <div key={item} className="curator-fact-item">
+                <p>{item}</p>
+              </div>
             ))}
-          </ul>
-          <p className="lead-text">{dashboard.aiSummary.recommendation}</p>
+            {reflectionPrep.aiReport.content?.recommendation ? (
+              <div className="curator-fact-item is-accent">
+                <strong>Рекомендация отчёта</strong>
+                <p>{reflectionPrep.aiReport.content.recommendation}</p>
+              </div>
+            ) : null}
+          </div>
         </article>
-      </div>
-
-      <div className="member-grid">
-        {dashboard.members.map((member) => {
-          const tone = getStatusTone(member.status);
-
-          return (
-            <article key={member.id} className="member-card">
-              <div className="member-head">
-                <div>
-                  <p className="eyebrow">Участник</p>
-                  <h3>{member.name}</h3>
-                </div>
-                <span className={`status-pill ${tone.className}`}>{tone.label}</span>
-              </div>
-
-              <Sparkline values={member.trajectory} />
-
-              <div className="member-metrics">
-                <MetricBadge label="Типология" value={member.typology} compact />
-                <MetricBadge label="Среднее" value={formatAverage(member.average)} compact />
-                <MetricBadge label="Амплитуда" value={`${member.amplitude}`} compact />
-              </div>
-
-              <p className="member-note">{member.note}</p>
-
-              <div className="tag-row">
-                {member.themes.map((theme) => (
-                  <span key={theme} className="tag-chip">
-                    {theme}
-                  </span>
-                ))}
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      ) : null}
     </section>
   );
 }
