@@ -31,6 +31,18 @@ export const STATE_SCALE_ORDER = [
   "panic",
 ];
 
+export const STATE_SCALE_NEUTRAL_PREVIEW = {
+  title: "Найдите точку на шкале",
+  zoneLabel: "Шкала состояния",
+  description:
+    "Слева - истощение и выключенность, в центре - рабочий диапазон, справа - перегрузка и дистресс.",
+  participantHint: "Передвиньте бегунок после события; ответ сохранится, когда вы отпустите его.",
+  ariaValueText: "Предпросмотр: рабочий диапазон, ответ еще не сохранен",
+  color: "#8eab55",
+  surface: "#f7f8f3",
+  textColor: "#26313a",
+};
+
 export const STATE_SCALE_META = {
   apathy: {
     label: "Апатия",

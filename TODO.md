@@ -25,6 +25,7 @@
   - mobile-first экран дневника для быстрого ввода с телефона;
   - отдельный prop-driven компонент `StateScalePicker` для выбора состояния после события;
   - нейтральная шкала состояния с 7 состояниями и 3 зонами: выгорание, интеграция, дистресс;
+  - `arc`-вариант шкалы как спидометр со слайдером и нейтральным предпросмотром до выбора;
   - последовательное заполнение событий дня через активную карточку и компактные строки остальных событий;
   - комментарии и отметка сложности оценки;
   - упрощенная дневная рефлексия;
@@ -133,10 +134,11 @@
 
 - `StateScalePicker` показывает состояния в порядке выгорание -> интеграция -> дистресс.
 - Желтый вариант `engaged` остается в зоне интеграции, оранжевый `overstimulated` и красный `panic` - в зоне дистресса.
-- Вариант отображения выбирается через prop `variant`: `arc`, `zones`, `compact`.
-- Выбор состояния вызывает `onChange(stateId)` и не меняет backend/API-контракт дневника.
-- Компонент работает как keyboard radiogroup: видимый focus, `aria-checked`, понятный label.
-- Storybook `Participant/StateScalePicker` содержит Controls для `variant`, `value`, `animated`, `disabled`, `showDescriptions`.
+- Вариант отображения выбирается через prop `variant`: `arc`, `zones`, `compact`; `arc` работает как спидометр со слайдером.
+- В `arc` до первого выбора показывается нейтральный preview в центре шкалы без сохранения ответа.
+- В `arc` выбор вызывает `onChange(stateId)` после отпускания слайдера или завершения клавиатурного выбора и не меняет backend/API-контракт дневника.
+- `arc` доступен как native slider с `aria-valuetext`; `zones` и `compact` остаются keyboard radiogroup с `aria-checked`.
+- Storybook `Participant/StateScalePicker` содержит Controls для `variant`, `value`, `animated`, `disabled`, `showDescriptions` и story `ArcNeutralPreview`.
 - Проверить Storybook на viewport `Mobile 390` и `Desktop 1280`.
 
 ## Принципы дальнейшей разработки

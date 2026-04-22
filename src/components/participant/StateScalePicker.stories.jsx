@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { stateScale } from "../../data/mockData";
 import StateScalePicker from "./StateScalePicker";
 
-const stateIds = stateScale.map((state) => state.id);
+const stateIds = ["", ...stateScale.map((state) => state.id)];
 
 export default {
   title: "Participant/StateScalePicker",
@@ -50,6 +50,17 @@ export const ArcModel = {
   args: {
     variant: "arc",
     value: "engaged",
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const ArcNeutralPreview = {
+  args: {
+    variant: "arc",
+    value: "",
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
   },
   render: (args) => <StateScalePickerStory {...args} />,
 };
