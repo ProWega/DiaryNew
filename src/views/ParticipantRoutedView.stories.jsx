@@ -117,49 +117,23 @@ function ParticipantDiaryStory(args) {
     );
   }
 
-  function updateEventState(eventId, stateId) {
+  async function saveEventEntry(eventId, patch) {
     setEvents((previous) =>
       previous.map((event) =>
         event.id === eventId
           ? {
               ...event,
+              ...patch,
               answered: true,
-              stateId,
               respondedAt: "2026-07-13T12:00:00.000Z",
             }
           : event,
       ),
     );
-  }
 
-  function updateEventComment(eventId, comment) {
-    setEvents((previous) =>
-      previous.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              answered: true,
-              comment,
-              respondedAt: "2026-07-13T12:00:00.000Z",
-            }
-          : event,
-      ),
-    );
-  }
-
-  function updateEventConfidence(eventId) {
-    setEvents((previous) =>
-      previous.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              answered: true,
-              confidence: event.confidence === "low" ? "high" : "low",
-              respondedAt: "2026-07-13T12:00:00.000Z",
-            }
-          : event,
-      ),
-    );
+    return {
+      ok: true,
+    };
   }
 
   return (
@@ -172,9 +146,7 @@ function ParticipantDiaryStory(args) {
       todayPortrait={buildPortrait(currentDay.events, metrics)}
       reflection={currentDay.reflection}
       setReflection={setReflection}
-      updateEventState={updateEventState}
-      updateEventComment={updateEventComment}
-      updateEventConfidence={updateEventConfidence}
+      saveEventEntry={saveEventEntry}
       liveHistory={history}
       selectedDay={currentDay}
       setSelectedHistoryDay={() => {}}
@@ -233,6 +205,18 @@ export const ReflectionLocked = {
   args: {
     mode: "today",
     answeredEvents: 2,
+    reflectionAnswered: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const DraftCommentFlow = {
+  args: {
+    mode: "today",
+    answeredEvents: 0,
     reflectionAnswered: false,
   },
   parameters: {

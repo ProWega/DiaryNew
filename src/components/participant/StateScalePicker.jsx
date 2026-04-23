@@ -318,6 +318,7 @@ function StateScalePicker({
                   className={index === previewIndex ? "state-scale-segment is-selected" : "state-scale-segment"}
                   d={describeArc(ARC_CENTER.x, ARC_CENTER.y, ARC_RADIUS, start + 2.2, end - 2.2)}
                   style={{ "--state-color": state.color }}
+                  onClick={() => handleSelect(state.id)}
                 />
               );
             })}

@@ -121,20 +121,8 @@ function ParticipantPage({ mode }) {
     updateReflection(currentDay.id, nextValue);
   }
 
-  function updateEventState(eventId, stateId) {
-    updateEntry(currentDay.id, eventId, { stateId });
-  }
-
-  function updateEventComment(eventId, comment) {
-    updateEntry(currentDay.id, eventId, { comment });
-  }
-
-  function updateEventConfidence(eventId) {
-    const target = todayEvents.find((event) => event.id === eventId);
-
-    updateEntry(currentDay.id, eventId, {
-      confidence: target?.confidence === "low" ? "high" : "low",
-    });
+  function saveEventEntry(eventId, patch) {
+    return updateEntry(currentDay.id, eventId, patch);
   }
 
   return (
@@ -147,9 +135,7 @@ function ParticipantPage({ mode }) {
       todayPortrait={todayPortrait}
       reflection={reflection}
       setReflection={setReflection}
-      updateEventState={updateEventState}
-      updateEventComment={updateEventComment}
-      updateEventConfidence={updateEventConfidence}
+      saveEventEntry={saveEventEntry}
       liveHistory={liveHistory}
       selectedDay={selectedDay}
       setSelectedHistoryDay={setSelectedHistoryDay}

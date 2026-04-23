@@ -1043,7 +1043,6 @@ textarea {
   inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
 }
 
 .state-scale-segment,
@@ -1056,6 +1055,8 @@ textarea {
   stroke-width: 22;
   stroke-linecap: round;
   opacity: 0.86;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .state-scale-segment.is-selected {
@@ -1074,6 +1075,7 @@ textarea {
   stroke: rgba(5, 43, 61, 0.72);
   stroke-width: 3;
   stroke-linecap: round;
+  pointer-events: none;
 }
 
 .state-scale-zone-arc.is-integration {
@@ -1087,6 +1089,7 @@ textarea {
   font-weight: 850;
   text-anchor: middle;
   text-transform: uppercase;
+  pointer-events: none;
 }
 
 .state-scale-zone-label.is-center {
@@ -1103,8 +1106,13 @@ textarea {
   stroke-linecap: round;
 }
 
+.state-scale-needle {
+  pointer-events: none;
+}
+
 .state-scale-needle circle {
   fill: #052b3d;
+  pointer-events: none;
 }
 
 .state-scale-needle-tip {
@@ -1501,6 +1509,23 @@ textarea {
 .participant-step-actions button {
   min-width: 120px;
   min-height: 46px;
+}
+
+.participant-step-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+}
+
+.participant-step-primary::after {
+  content: attr(data-step-label);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.participant-draft-note + .confidence-note {
+  display: none;
 }
 
 .participant-summary-card .panel-head {

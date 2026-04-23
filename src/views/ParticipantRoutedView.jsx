@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DistributionBars, EmotionLineChart } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
 import StateScalePicker from "../components/participant/StateScalePicker";
@@ -16,6 +16,17 @@ function isReflectionAnswered(reflection) {
   );
 }
 
+function createEventDraft(event, previousDraft = null) {
+  return {
+    stateId: previousDraft?.stateId || event?.stateId || "",
+    comment: previousDraft?.isCommentDirty ? previousDraft.comment : event?.comment || "",
+    confidence:
+      previousDraft?.isConfidenceDirty ? previousDraft.confidence : event?.confidence || "high",
+    isCommentDirty: Boolean(previousDraft?.isCommentDirty),
+    isConfidenceDirty: Boolean(previousDraft?.isConfidenceDirty),
+  };
+}
+
 function ParticipantRoutedView({
   mode,
   stateScale,
@@ -25,9 +36,7 @@ function ParticipantRoutedView({
   todayPortrait,
   reflection,
   setReflection,
-  updateEventState,
-  updateEventComment,
-  updateEventConfidence,
+  saveEventEntry,
   liveHistory,
   selectedDay,
   setSelectedHistoryDay,
@@ -37,6 +46,9 @@ function ParticipantRoutedView({
 }) {
   const [openEventId, setOpenEventId] = useState("");
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
+  const [eventDrafts, setEventDrafts] = useState({});
+  const [savingEventId, setSavingEventId] = useState("");
+  const pendingStateSaveRef = useRef({});
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
   const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
   const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
@@ -62,6 +74,31 @@ function ParticipantRoutedView({
   }, [defaultOpenEventId, todayEvents]);
 
   useEffect(() => {
+    setEventDrafts((previous) => {
+      let hasChanges = Object.keys(previous).length !== todayEvents.length;
+      const nextDrafts = {};
+
+      for (const event of todayEvents) {
+        const nextDraft = createEventDraft(event, previous[event.id]);
+        nextDrafts[event.id] = nextDraft;
+
+        if (
+          !previous[event.id] ||
+          previous[event.id].stateId !== nextDraft.stateId ||
+          previous[event.id].comment !== nextDraft.comment ||
+          previous[event.id].confidence !== nextDraft.confidence ||
+          previous[event.id].isCommentDirty !== nextDraft.isCommentDirty ||
+          previous[event.id].isConfidenceDirty !== nextDraft.isConfidenceDirty
+        ) {
+          hasChanges = true;
+        }
+      }
+
+      return hasChanges ? nextDrafts : previous;
+    });
+  }, [todayEvents]);
+
+  useEffect(() => {
     if (reflectionAnswered) {
       setIsReflectionStarted(true);
     }
@@ -79,19 +116,145 @@ function ParticipantRoutedView({
     setOpenEventId(nextEventId);
   }
 
-  function moveOpenEvent(direction) {
-    const currentIndex =
-      openEventIndex >= 0
-        ? openEventIndex
-        : Math.max(
-            todayEvents.findIndex((event) => event.id === defaultOpenEventId),
-            0,
-          );
-    const nextEvent = todayEvents[currentIndex + direction];
+  function getEventDraft(event) {
+    return eventDrafts[event.id] || createEventDraft(event);
+  }
 
-    if (nextEvent) {
-      setOpenEventId(nextEvent.id);
+  function hasPendingEventChanges(event, draft) {
+    return (
+      (draft.stateId || "") !== (event.stateId || "") ||
+      draft.comment !== (event.comment || "") ||
+      draft.confidence !== (event.confidence || "high")
+    );
+  }
+
+  function queueStateSave(eventId, stateId) {
+    const previousTask = pendingStateSaveRef.current[eventId] || Promise.resolve();
+    const requestTask = previousTask
+      .catch(() => null)
+      .then(() => saveEventEntry(eventId, { stateId }));
+    const trackedTask = requestTask.finally(() => {
+      if (pendingStateSaveRef.current[eventId] === trackedTask) {
+        delete pendingStateSaveRef.current[eventId];
+      }
+    });
+
+    pendingStateSaveRef.current[eventId] = trackedTask;
+    return trackedTask;
+  }
+
+  function handleEventStateSelect(event, stateId) {
+    setEventDrafts((previous) => ({
+      ...previous,
+      [event.id]: {
+        ...createEventDraft(event, previous[event.id]),
+        stateId,
+      },
+    }));
+
+    void queueStateSave(event.id, stateId).catch(() => null);
+  }
+
+  function handleEventCommentChange(event, comment) {
+    setEventDrafts((previous) => ({
+      ...previous,
+      [event.id]: {
+        ...createEventDraft(event, previous[event.id]),
+        comment,
+        isCommentDirty: comment !== (event.comment || ""),
+      },
+    }));
+  }
+
+  function handleEventConfidenceToggle(event) {
+    setEventDrafts((previous) => {
+      const currentDraft = createEventDraft(event, previous[event.id]);
+      const nextConfidence = currentDraft.confidence === "low" ? "high" : "low";
+
+      return {
+        ...previous,
+        [event.id]: {
+          ...currentDraft,
+          confidence: nextConfidence,
+          isConfidenceDirty: nextConfidence !== (event.confidence || "high"),
+        },
+      };
+    });
+  }
+
+  async function commitEventDraft(event, options = {}) {
+    const { defaultToBalance = false, nextEventId = "" } = options;
+    const draft = getEventDraft(event);
+    const stateId = draft.stateId || event.stateId || (defaultToBalance ? "balance" : "");
+
+    if (!stateId) {
+      if (nextEventId) {
+        setOpenEventId(nextEventId);
+      }
+      return;
     }
+
+    setSavingEventId(event.id);
+
+    try {
+      await (pendingStateSaveRef.current[event.id] || Promise.resolve());
+      await saveEventEntry(event.id, {
+        stateId,
+        comment: draft.comment,
+        confidence: draft.confidence || "high",
+      });
+
+      setEventDrafts((previous) => ({
+        ...previous,
+        [event.id]: {
+          ...createEventDraft(event, previous[event.id]),
+          stateId,
+          comment: draft.comment,
+          confidence: draft.confidence || "high",
+          isCommentDirty: false,
+          isConfidenceDirty: false,
+        },
+      }));
+
+      if (nextEventId) {
+        setOpenEventId(nextEventId);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingEventId((previous) => (previous === event.id ? "" : previous));
+    }
+  }
+
+  function moveOpenEvent(event, index, direction) {
+    const nextEvent = todayEvents[index + direction];
+
+    if (!nextEvent) {
+      return;
+    }
+
+    if (direction > 0) {
+      void commitEventDraft(event, {
+        defaultToBalance: true,
+        nextEventId: nextEvent.id,
+      });
+      return;
+    }
+
+    if (hasPendingEventChanges(event, getEventDraft(event))) {
+      void commitEventDraft(event, {
+        nextEventId: nextEvent.id,
+      });
+      return;
+    }
+
+    setOpenEventId(nextEvent.id);
+  }
+
+  function saveCurrentEvent(event) {
+    void commitEventDraft(event, {
+      defaultToBalance: true,
+    });
   }
 
   return (
@@ -118,8 +281,25 @@ function ParticipantRoutedView({
 
             <div className="participant-event-list">
               {todayEvents.map((event, index) => {
+                const draft = getEventDraft(event);
+                const effectiveStateId = draft.stateId || event.stateId || "";
+                const effectiveState = effectiveStateId ? getStateInfo(effectiveStateId) : null;
+                const effectiveConfidence = draft.confidence || "high";
+                const hasStateSelection = Boolean(effectiveStateId);
+                const hasDeferredDraftChanges =
+                  draft.comment !== (event.comment || "") ||
+                  effectiveConfidence !== (event.confidence || "high");
+                const isEventSaving = savingEventId === event.id;
+                const confidenceNote = isEventSaving
+                  ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f"
+                  : hasDeferredDraftChanges
+                    ? effectiveConfidence === "low"
+                      ? "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0435 \u0434\u0430\u043b\u044c\u0448\u0435. \u041e\u0446\u0435\u043d\u043a\u0430 \u0431\u0443\u0434\u0435\u0442 \u043e\u0442\u043c\u0435\u0447\u0435\u043d\u0430 \u043a\u0430\u043a \u043f\u0440\u0438\u043c\u0435\u0440\u043d\u0430\u044f"
+                      : "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0435 \u0434\u0430\u043b\u044c\u0448\u0435"
+                    : effectiveConfidence === "low"
+                      ? "\u041e\u0442\u043c\u0435\u0442\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0430 \u043a\u0430\u043a \u043f\u0440\u0438\u043c\u0435\u0440\u043d\u0430\u044f"
+                      : "\u041e\u0442\u043c\u0435\u0442\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0430";
                 const isOpen = event.id === openEventId;
-                const state = event.stateId ? getStateInfo(event.stateId) : null;
                 const panelId = `participant-event-panel-${event.id}`;
                 const buttonId = `participant-event-button-${event.id}`;
 
@@ -127,13 +307,13 @@ function ParticipantRoutedView({
                   <article
                     key={event.id}
                     className={`participant-event-shell ${isOpen ? "is-open" : "is-collapsed"} ${
-                      state ? "is-complete" : "is-pending"
+                      effectiveState ? "is-complete" : "is-pending"
                     }`}
                   >
                     <button
                       id={buttonId}
                       type="button"
-                      className={`participant-event-row participant-event-toggle ${state ? "is-complete" : "is-pending"} ${
+                      className={`participant-event-row participant-event-toggle ${effectiveState ? "is-complete" : "is-pending"} ${
                         isOpen ? "is-open" : ""
                       }`}
                       aria-expanded={isOpen}
@@ -148,10 +328,10 @@ function ParticipantRoutedView({
                         <small>{event.type}</small>
                       </span>
                       <span className="participant-event-row-state">
-                        {state ? (
+                        {effectiveState ? (
                           <>
-                            <span>{state.icon}</span>
-                            {state.shortLabel || state.label}
+                            <span>{effectiveState.icon}</span>
+                            {effectiveState.shortLabel || effectiveState.label}
                           </>
                         ) : (
                           "Без отметки"
@@ -190,8 +370,8 @@ function ParticipantRoutedView({
 
                         <div className="participant-event-workspace">
                           <StateScalePicker
-                            value={event.stateId}
-                            onChange={(stateId) => updateEventState(event.id, stateId)}
+                            value={effectiveStateId}
+                            onChange={(stateId) => handleEventStateSelect(event, stateId)}
                             states={stateScale}
                             variant="arc"
                             animated
@@ -203,31 +383,50 @@ function ParticipantRoutedView({
                             <button
                               type="button"
                               className="ghost-button"
-                              disabled={index === 0}
-                              onClick={() => moveOpenEvent(-1)}
+                              disabled={index === 0 || isEventSaving}
+                              onClick={() => moveOpenEvent(event, index, -1)}
                             >
                               Назад
                             </button>
                             <button
                               type="button"
-                              className="primary-button"
-                              disabled={index >= todayEvents.length - 1}
-                              onClick={() => moveOpenEvent(1)}
+                              className="primary-button participant-step-primary"
+                              disabled={isEventSaving}
+                              aria-label={
+                                isEventSaving
+                                  ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c"
+                                  : index >= todayEvents.length - 1
+                                    ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
+                                    : "\u0414\u0430\u043b\u0435\u0435"
+                              }
+                              data-step-label={
+                                isEventSaving
+                                  ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c..."
+                                  : index >= todayEvents.length - 1
+                                    ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
+                                    : "\u0414\u0430\u043b\u0435\u0435"
+                              }
+                              onClick={() =>
+                                index >= todayEvents.length - 1
+                                  ? saveCurrentEvent(event)
+                                  : moveOpenEvent(event, index, 1)
+                              }
                             >
                               Далее
                             </button>
                           </div>
                         </div>
 
-                        {event.stateId ? (
+                        {hasStateSelection ? (
                           <>
                             <div className="input-row participant-comment-row">
                               <textarea
                                 rows="3"
-                                value={event.comment}
+                                value={draft.comment}
+                                disabled={isEventSaving}
                                 placeholder="Можно добавить пару слов, если хочется"
                                 onChange={(eventInput) =>
-                                  updateEventComment(event.id, eventInput.target.value)
+                                  handleEventCommentChange(event, eventInput.target.value)
                                 }
                               />
                             </div>
@@ -235,13 +434,15 @@ function ParticipantRoutedView({
                             <div className="event-foot">
                               <button
                                 type="button"
-                                aria-pressed={event.confidence === "low"}
-                                className={event.confidence === "low" ? "ghost-button is-active" : "ghost-button"}
-                                onClick={() => updateEventConfidence(event.id)}
+                                aria-pressed={effectiveConfidence === "low"}
+                                disabled={isEventSaving}
+                                className={effectiveConfidence === "low" ? "ghost-button is-active" : "ghost-button"}
+                                onClick={() => handleEventConfidenceToggle(event)}
                               >
                                 Сложно оценить
                               </button>
-                              <span className="confidence-note">
+                              <span className="confidence-note participant-draft-note">{confidenceNote}</span>
+                              <span className="confidence-note" aria-hidden="true">
                                 {event.confidence === "low" ? "Отметка сохранена как примерная" : "Отметка сохранена"}
                               </span>
                             </div>
