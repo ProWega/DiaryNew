@@ -2,6 +2,8 @@ const { query } = require("../postgres.cjs");
 const { createId, getSession, normalizeDateInput, normalizeList, toIsoDate } = require("./common.cjs");
 const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
 const { repairProgramDaysForProgram } = require("./programDays.cjs");
+const { upsertUserAssignment } = require("./userStore.cjs");
+const { getOrganizerAnalyticsSnapshot } = require("./organizerAnalytics.cjs");
 
 const DEFAULT_EVENT_TYPES = [
   "Лекция",
@@ -124,6 +126,24 @@ async function getSessionRow(sessionId) {
   return result.rows[0] || null;
 }
 
+async function writeAuditLog({ actorId, sessionId, action, entityType, entityId, payload = {} }) {
+  await query(
+    `
+      insert into audit_log (id, actor_id, session_id, action, entity_type, entity_id, payload)
+      values ($1,$2,$3,$4,$5,$6,$7::jsonb)
+    `,
+    [
+      createId("audit"),
+      actorId || null,
+      sessionId || null,
+      action,
+      entityType,
+      entityId,
+      JSON.stringify(payload || {}),
+    ],
+  );
+}
+
 async function getGroupsSummary(sessionId) {
   const result = await query(
     `
@@ -133,6 +153,14 @@ async function getGroupsSummary(sessionId) {
         count(distinct su.user_id) filter (where su.role = 'participant')::int as participants,
         coalesce(avg(de.state_level), 0)::float as avg_activation,
         count(distinct de.user_id) filter (where de.state_level >= 5 or de.state_level <= 1)::int as risk_cases,
+        (
+          select count(*)
+          from risk_signals rs
+          where rs.session_id = g.session_id
+            and rs.group_id = g.id
+            and rs.status <> 'resolved'
+            and rs.resolved_at is null
+        )::int as open_risk_signals,
         case
           when (count(distinct pe.id) + count(distinct pe.day_id)) * greatest(count(distinct su.user_id) filter (where su.role = 'participant'), 1) = 0 then 0
           else round(
@@ -181,10 +209,13 @@ async function getGroupsSummary(sessionId) {
     groups: result.rows.map((row) => ({
       id: row.id,
       name: row.name,
+      description: row.description || "",
       curator: row.curator_name || "Куратор не назначен",
+      curatorId: row.curator_id || "",
       participants: row.participants,
       avgActivation: Number(row.avg_activation || 0).toFixed(1),
       riskCases: row.risk_cases,
+      openRiskSignalsCount: row.open_risk_signals,
       completion: row.completion,
       progress: { completion: row.completion },
       focus: row.description || "Описание группы не задано.",
@@ -246,6 +277,340 @@ async function getAudiencePool(sessionId) {
     emotionalProfile: row.typology || row.meta?.emotionalProfile || "не рассчитан",
     identityStatus: row.meta?.identityStatus || "не пройден",
   }));
+}
+
+async function getCuratorCandidates(sessionId) {
+  const result = await query(
+    `
+      select
+        u.id,
+        u.full_name,
+        u.email,
+        su.group_id as assigned_group_id,
+        g.name as assigned_group_name
+      from users u
+      left join session_users su
+        on su.user_id = u.id
+        and su.session_id = $1
+        and su.role = 'curator'
+        and su.status = 'active'
+      left join groups g on g.id = su.group_id
+      where u.role = 'curator'
+        and u.status = 'active'
+      order by u.full_name
+    `,
+    [sessionId],
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email || "",
+    assignedGroupId: row.assigned_group_id || "",
+    assignedGroupName: row.assigned_group_name || "",
+  }));
+}
+
+async function getGroupRow(sessionId, groupId) {
+  const result = await query(
+    `
+      select g.*, u.full_name as curator_name
+      from groups g
+      left join users u on u.id = g.curator_id
+      where g.session_id = $1 and g.id = $2
+      limit 1
+    `,
+    [sessionId, groupId],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function assertGroupRow(sessionId, groupId) {
+  const group = await getGroupRow(sessionId, groupId);
+  if (!group) {
+    const error = new Error("Группа не найдена");
+    error.status = 404;
+    throw error;
+  }
+
+  return group;
+}
+
+function normalizeGroupPayload(payload = {}, { requireName = false } = {}) {
+  const name = String(payload.name || "").trim();
+  const description = String(payload.description || "").trim();
+
+  if (requireName && !name) {
+    const error = new Error("Укажите название группы");
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    name,
+    description,
+  };
+}
+
+async function createOrganizerGroup({ actorId, sessionId, payload = {} }) {
+  const session = await getSessionRow(sessionId);
+  if (!session) {
+    const error = new Error("Заезд не найден");
+    error.status = 404;
+    throw error;
+  }
+
+  const normalized = normalizeGroupPayload(payload, { requireName: true });
+  const groupId = createId("group");
+
+  await query(
+    `
+      insert into groups (id, session_id, name, description, updated_at)
+      values ($1,$2,$3,$4,now())
+    `,
+    [groupId, sessionId, normalized.name, normalized.description || ""],
+  );
+
+  await writeAuditLog({
+    actorId,
+    sessionId,
+    action: "create organizer group",
+    entityType: "group",
+    entityId: groupId,
+    payload: normalized,
+  });
+
+  return getOrganizerWorkspace(sessionId);
+}
+
+async function updateOrganizerGroup({ actorId, sessionId, groupId, payload = {} }) {
+  const group = await assertGroupRow(sessionId, groupId);
+  const normalized = normalizeGroupPayload({
+    name: Object.prototype.hasOwnProperty.call(payload, "name") ? payload.name : group.name,
+    description: Object.prototype.hasOwnProperty.call(payload, "description")
+      ? payload.description
+      : group.description,
+  }, { requireName: true });
+
+  await query(
+    `
+      update groups
+      set name = $3, description = $4, updated_at = now()
+      where session_id = $1 and id = $2
+    `,
+    [sessionId, groupId, normalized.name, normalized.description || ""],
+  );
+
+  await writeAuditLog({
+    actorId,
+    sessionId,
+    action: "update organizer group",
+    entityType: "group",
+    entityId: groupId,
+    payload: normalized,
+  });
+
+  return getOrganizerWorkspace(sessionId);
+}
+
+async function deleteOrganizerGroup({ actorId, sessionId, groupId }) {
+  const group = await assertGroupRow(sessionId, groupId);
+  const membersResult = await query(
+    `
+      select count(*)::int as members_count
+      from session_users
+      where session_id = $1
+        and group_id = $2
+        and role = 'participant'
+        and status = 'active'
+    `,
+    [sessionId, groupId],
+  );
+  const membersCount = membersResult.rows[0]?.members_count || 0;
+
+  if (membersCount > 0 || group.curator_id) {
+    const error = new Error("Удалить можно только пустую группу без назначенного куратора");
+    error.status = 409;
+    throw error;
+  }
+
+  await query("delete from groups where session_id = $1 and id = $2", [sessionId, groupId]);
+
+  await writeAuditLog({
+    actorId,
+    sessionId,
+    action: "delete organizer group",
+    entityType: "group",
+    entityId: groupId,
+    payload: { name: group.name },
+  });
+
+  return getOrganizerWorkspace(sessionId);
+}
+
+async function assignOrganizerGroupCurator({ actorId, sessionId, groupId, curatorId }) {
+  const group = await assertGroupRow(sessionId, groupId);
+  const nextCuratorId = String(curatorId || "").trim();
+
+  if (!nextCuratorId) {
+    await query(
+      `
+        update groups
+        set curator_id = null, updated_at = now()
+        where session_id = $1 and id = $2
+      `,
+      [sessionId, groupId],
+    );
+
+    if (group.curator_id) {
+      await query(
+        `
+          update session_users
+          set group_id = null, updated_at = now()
+          where session_id = $1
+            and user_id = $2
+            and role = 'curator'
+        `,
+        [sessionId, group.curator_id],
+      );
+    }
+
+    await writeAuditLog({
+      actorId,
+      sessionId,
+      action: "clear organizer group curator",
+      entityType: "group",
+      entityId: groupId,
+      payload: { previousCuratorId: group.curator_id || null },
+    });
+
+    return getOrganizerWorkspace(sessionId);
+  }
+
+  const curatorResult = await query(
+    `
+      select id, full_name
+      from users
+      where id = $1 and role = 'curator' and status = 'active'
+      limit 1
+    `,
+    [nextCuratorId],
+  );
+  const curator = curatorResult.rows[0];
+
+  if (!curator) {
+    const error = new Error("Назначать можно только активного пользователя с ролью curator");
+    error.status = 400;
+    throw error;
+  }
+
+  if (group.curator_id && group.curator_id !== nextCuratorId) {
+    await query(
+      `
+        update session_users
+        set group_id = null, updated_at = now()
+        where session_id = $1
+          and user_id = $2
+          and role = 'curator'
+      `,
+      [sessionId, group.curator_id],
+    );
+  }
+
+  await upsertUserAssignment({
+    actorId,
+    userId: nextCuratorId,
+    payload: {
+      sessionId,
+      groupId,
+      role: "curator",
+      status: "active",
+    },
+  });
+
+  await writeAuditLog({
+    actorId,
+    sessionId,
+    action: "assign organizer group curator",
+    entityType: "group",
+    entityId: groupId,
+    payload: {
+      curatorId: nextCuratorId,
+      curatorName: curator.full_name,
+      previousCuratorId: group.curator_id || null,
+    },
+  });
+
+  return getOrganizerWorkspace(sessionId);
+}
+
+async function assignParticipantsToOrganizerGroup({
+  actorId,
+  sessionId,
+  groupId,
+  participantIds = [],
+}) {
+  await assertGroupRow(sessionId, groupId);
+
+  const uniqueParticipantIds = Array.from(
+    new Set(
+      (Array.isArray(participantIds) ? participantIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!uniqueParticipantIds.length) {
+    const error = new Error("Выберите хотя бы одного участника");
+    error.status = 400;
+    throw error;
+  }
+
+  const participantsResult = await query(
+    `
+      select user_id
+      from session_users
+      where session_id = $1
+        and role = 'participant'
+        and status = 'active'
+        and user_id = any($2::text[])
+    `,
+    [sessionId, uniqueParticipantIds],
+  );
+  const allowedIds = participantsResult.rows.map((row) => row.user_id);
+
+  if (!allowedIds.length) {
+    const error = new Error("Участники не найдены в этом заезде");
+    error.status = 400;
+    throw error;
+  }
+
+  await query(
+    `
+      update session_users
+      set group_id = $3, updated_at = now()
+      where session_id = $1
+        and user_id = any($2::text[])
+        and role = 'participant'
+        and status = 'active'
+    `,
+    [sessionId, allowedIds, groupId],
+  );
+
+  await writeAuditLog({
+    actorId,
+    sessionId,
+    action: "assign organizer group participants",
+    entityType: "group",
+    entityId: groupId,
+    payload: {
+      participantIds: allowedIds,
+      movedCount: allowedIds.length,
+    },
+  });
+
+  return getOrganizerWorkspace(sessionId);
 }
 
 async function getProgramWorkspace(sessionId) {
@@ -543,7 +908,7 @@ async function getSpeakerLectureSummary(sessionId) {
   };
 }
 
-async function getSessionSummary(sessionId) {
+async function getSessionSummary(sessionId, { analytics = null, audiencePool = [] } = {}) {
   const statsResult = await query(
     `
       select
@@ -572,7 +937,6 @@ async function getSessionSummary(sessionId) {
     [sessionId],
   );
   const stats = statsResult.rows[0] || {};
-  const participation = await getPublishedParticipationData(sessionId);
 
   const reportsResult = await query(
     `
@@ -585,22 +949,45 @@ async function getSessionSummary(sessionId) {
     [sessionId],
   );
 
+  const progress = analytics?.progress || (await getPublishedParticipationData(sessionId)).progress;
+  const eventHealth = (analytics?.eventPulse || []).map((event) => ({
+    id: event.id,
+    label: event.title,
+    completion: event.completion,
+    averageActivation: event.averageStateLevel,
+    riskAnswersCount: event.riskAnswersCount,
+    deltaFromPrevious: event.deltaFromPrevious,
+  }));
+  const typologyMap = new Map();
+  for (const participant of audiencePool) {
+    const label = String(participant.emotionalProfile || "").trim();
+    if (!label) {
+      continue;
+    }
+    typologyMap.set(label, (typologyMap.get(label) || 0) + 1);
+  }
+  const participation = { progress };
+
   return {
-    progress: participation.progress,
+    progress,
     keyStats: [
       { id: "stat-1", label: "Участников", value: String(stats.participants || 0) },
       { id: "stat-2", label: "Средняя активация", value: Number(stats.avg_activation || 0).toFixed(1) },
       { id: "stat-3", label: "Комментариев", value: String(stats.comments || 0) },
       { id: "stat-4", label: "Заполнено", value: `${participation.progress.completion}%` },
     ],
-    eventHealth: [],
+    eventHealth,
     aiReports: reportsResult.rows.map((report) => ({
       id: report.id,
       title: report.title,
       confidence: report.confidence,
       bullets: report.content?.bullets || [],
     })),
-    typologies: [],
+    typologies: Array.from(typologyMap.entries()).map(([label, count]) => ({
+      id: label,
+      label,
+      count,
+    })),
   };
 }
 
@@ -615,9 +1002,11 @@ async function getOrganizerWorkspace(sessionId) {
   const audiencePool = await getAudiencePool(sessionId);
   const programWorkspace = await getProgramWorkspace(sessionId);
   const groupsSummary = await getGroupsSummary(sessionId);
+  const curatorCandidates = await getCuratorCandidates(sessionId);
+  const analytics = await getOrganizerAnalyticsSnapshot(sessionId);
   const surveyWorkspace = await getSurveyWorkspace(sessionId, audiencePool);
   const speakerLectureSummary = await getSpeakerLectureSummary(sessionId);
-  const sessionSummary = await getSessionSummary(sessionId);
+  const sessionSummary = await getSessionSummary(sessionId, { analytics, audiencePool });
   const activeEvent = programWorkspace.programs
     .flatMap((program) => program.days.flatMap((day) => day.events))
     .find((event) => event.id === programWorkspace.activeEventId);
@@ -650,9 +1039,15 @@ async function getOrganizerWorkspace(sessionId) {
           ? null
           : Math.max(Number(session.registration_capacity) - audiencePool.length, 0),
     },
+    curatorCandidates,
     groupsSummary,
     sessionSummary,
     speakerLectureSummary,
+    dataState: analytics.dataState,
+    eventPulse: analytics.eventPulse,
+    groupPulse: analytics.groupPulse,
+    participantScatter: analytics.participantScatter,
+    operationalBrief: analytics.operationalBrief,
     audiencePool,
     programWorkspace,
     surveyWorkspace,
@@ -907,7 +1302,14 @@ async function persistWorkspace(sessionId, workspace) {
 }
 
 module.exports = {
+  assignOrganizerGroupCurator,
+  assignParticipantsToOrganizerGroup,
+  createOrganizerGroup,
+  deleteOrganizerGroup,
+  getCuratorCandidates,
+  getOrganizerAnalyticsSnapshot,
   getOrganizerWorkspace,
   persistWorkspace,
   saveWorkspaceCache,
+  updateOrganizerGroup,
 };

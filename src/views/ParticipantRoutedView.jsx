@@ -422,6 +422,7 @@ function ParticipantRoutedView({
                             onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
                             states={stateScale}
                             variant="arc"
+                            size="compact"
                             animated
                             showDescriptions
                             label="Как вы сейчас после события?"

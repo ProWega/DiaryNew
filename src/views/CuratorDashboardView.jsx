@@ -1,4 +1,9 @@
 import MetricBadge from "../components/MetricBadge";
+import {
+  EventImpactBarChart,
+  RiskScatterChart,
+  StackedDistributionChart,
+} from "../components/Charts";
 import { stateScale } from "../data/mockData";
 
 const stateByLevel = Object.fromEntries(stateScale.map((state) => [state.level, state]));
@@ -375,6 +380,84 @@ function FactList({ title, eyebrow, items = [], emptyLabel, renderItem }) {
   );
 }
 
+const CURATOR_ZONE_SEGMENTS = [
+  { id: "low", label: "Низкий ресурс", color: "#6e98d8" },
+  { id: "mid", label: "Баланс", color: "#7dae42" },
+  { id: "high", label: "Напряжение", color: "#d97757" },
+];
+
+function buildCuratorDistributionRows(events = [], participants = []) {
+  return asArray(events).map((event) => {
+    let low = 0;
+    let mid = 0;
+    let high = 0;
+
+    for (const participant of asArray(participants)) {
+      const point = asArray(participant.trajectory).find((item) => item.eventId === event.id);
+      const level = Number(point?.stateLevel);
+      if (!Number.isFinite(level)) {
+        continue;
+      }
+
+      if (level <= 2) {
+        low += 1;
+      } else if (level === 3) {
+        mid += 1;
+      } else {
+        high += 1;
+      }
+    }
+
+    const total = low + mid + high;
+    return {
+      id: event.id,
+      label: event.title,
+      total,
+      segments: CURATOR_ZONE_SEGMENTS.map((segment) => ({
+        ...segment,
+        value:
+          segment.id === "low"
+            ? low
+            : segment.id === "mid"
+              ? mid
+              : high,
+      })).filter((segment) => segment.value > 0),
+    };
+  }).filter((row) => row.total > 0);
+}
+
+function buildCuratorRiskEventRows(eventPulse = []) {
+  return asArray(eventPulse)
+    .filter((event) => Number(event.riskAnswersCount || 0) > 0)
+    .map((event, index) => ({
+      id: event.id,
+      label: `${index + 1}`,
+      value: Number(event.riskAnswersCount || 0),
+      color: "#d97757",
+    }));
+}
+
+function buildCuratorScatterData(participants = []) {
+  return asArray(participants)
+    .filter((participant) => Number.isFinite(Number(participant.average)))
+    .map((participant, index) => ({
+      id: participant.id,
+      label: participant.name,
+      shortLabel: participant.name?.slice(0, 2)?.toUpperCase() || `${index + 1}`,
+      x: Number(participant.average),
+      y: Number.isFinite(Number(participant.amplitude)) ? Number(participant.amplitude) : 0,
+      size: Math.max(8, Number(participant.completion || 0)),
+      color:
+        participant.status === "risk"
+          ? "#d97757"
+          : participant.status === "watch"
+            ? "#f4b84a"
+            : participant.status === "silent"
+              ? "#a4b2bb"
+              : "#7dae42",
+    }));
+}
+
 function CuratorDashboardView({ dashboard }) {
   const eventPulse = asArray(dashboard.eventPulse);
   const participantRows = asArray(dashboard.participantRows || dashboard.members);
@@ -385,6 +468,9 @@ function CuratorDashboardView({ dashboard }) {
   const commentClusters = asArray(reflectionPrep.commentClusters);
   const organizerBrief = asArray(dashboard.organizerBrief);
   const openRisks = asArray(reflectionPrep.openRisks);
+  const distributionRows = buildCuratorDistributionRows(events, participantRows);
+  const riskEventRows = buildCuratorRiskEventRows(eventPulse);
+  const scatterData = buildCuratorScatterData(participantRows);
 
   return (
     <section className="role-view curator-workspace">
@@ -423,6 +509,30 @@ function CuratorDashboardView({ dashboard }) {
           <span><i className="legend-gap" /> разрыв = нет ответов</span>
         </div>
       </article>
+
+      <div className="curator-brief-grid">
+        <StackedDistributionChart
+          title="Распределение состояний по событиям"
+          description="Только реальные ответы группы: пропуски остаются пустыми и не маскируются нейтральным значением."
+          rows={distributionRows}
+          emptyLabel="Недостаточно ответов, чтобы собрать распределение по событиям."
+        />
+        <EventImpactBarChart
+          title="События с риском"
+          description="Высота столбца показывает, сколько ответов по событию попали в крайние зоны шкалы."
+          data={riskEventRows}
+          emptyLabel="Пока нет событий с ответами в зоне риска."
+          positiveColor="#d97757"
+          negativeColor="#d97757"
+        />
+      </div>
+
+      <RiskScatterChart
+        title="Карта участников группы"
+        description="Размер точки = заполнение, X = среднее состояние, Y = амплитуда дня."
+        data={scatterData}
+        emptyLabel="Нет траекторий участников для scatter-карты."
+      />
 
       <div className="curator-brief-grid">
         <FactList

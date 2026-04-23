@@ -24,6 +24,14 @@ const { hasPostgresConfig, query } = require("./db/postgres.cjs");
 const { getAdminWorkspace } = require("./db/repositories/adminStore.cjs");
 const { getAdminDashboard, getCuratorDashboard } = require("./db/repositories/analyticsStore.cjs");
 const {
+  assignOrganizerGroupCurator,
+  assignParticipantsToOrganizerGroup,
+  createOrganizerGroup,
+  deleteOrganizerGroup,
+  getOrganizerAnalyticsSnapshot,
+  updateOrganizerGroup,
+} = require("./db/repositories/organizerStore.cjs");
+const {
   getParticipantDiary,
   updateParticipantEntry,
   updateParticipantReflection,
@@ -1386,6 +1394,7 @@ app.get(
   requireOrganizer,
   asyncHandler(async (req, res) => {
     const workspace = syncWorkspace(await getWorkspace(req.params.sessionId));
+    const analytics = await getOrganizerAnalyticsSnapshot(req.params.sessionId);
     res.json({
       sessionId: workspace.sessionId,
       meta: {
@@ -1396,7 +1405,81 @@ app.get(
       groupsSummary: workspace.groupsSummary || { groups: [], alerts: [] },
       sessionSummary: workspace.sessionSummary || {},
       speakerLectureSummary: workspace.speakerLectureSummary || { speakers: [], lectures: [] },
+      dataState: analytics.dataState,
+      eventPulse: analytics.eventPulse,
+      groupPulse: analytics.groupPulse,
+      participantScatter: analytics.participantScatter,
+      operationalBrief: analytics.operationalBrief,
+      curatorCandidates: workspace.curatorCandidates || [],
     });
+  }),
+);
+
+app.post(
+  "/api/organizer/sessions/:sessionId/groups",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await createOrganizerGroup({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      payload: req.body || {},
+    });
+    res.status(201).json(syncWorkspace(workspace));
+  }),
+);
+
+app.patch(
+  "/api/organizer/sessions/:sessionId/groups/:groupId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await updateOrganizerGroup({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+      payload: req.body || {},
+    });
+    res.json(syncWorkspace(workspace));
+  }),
+);
+
+app.delete(
+  "/api/organizer/sessions/:sessionId/groups/:groupId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await deleteOrganizerGroup({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+    });
+    res.json(syncWorkspace(workspace));
+  }),
+);
+
+app.patch(
+  "/api/organizer/sessions/:sessionId/groups/:groupId/curator",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await assignOrganizerGroupCurator({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+      curatorId: req.body?.curatorId || "",
+    });
+    res.json(syncWorkspace(workspace));
+  }),
+);
+
+app.post(
+  "/api/organizer/sessions/:sessionId/groups/:groupId/participants",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const workspace = await assignParticipantsToOrganizerGroup({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+      participantIds: req.body?.participantIds || [],
+    });
+    res.json(syncWorkspace(workspace));
   }),
 );
 

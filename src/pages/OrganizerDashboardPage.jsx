@@ -29,6 +29,11 @@ function OrganizerDashboardPage() {
     addParallelEvent,
     deleteEvent,
     activateEvent,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    assignGroupCurator,
+    assignGroupParticipants,
   } = useOrganizerWorkspace(sessionId);
 
   if (loading && !data) {
@@ -73,6 +78,11 @@ function OrganizerDashboardPage() {
       onAddParallelEvent={addParallelEvent}
       onDeleteEvent={deleteEvent}
       onActivateEvent={activateEvent}
+      onCreateGroup={createGroup}
+      onUpdateGroup={updateGroup}
+      onDeleteGroup={deleteGroup}
+      onAssignGroupCurator={assignGroupCurator}
+      onAssignGroupParticipants={assignGroupParticipants}
     />
   );
 }

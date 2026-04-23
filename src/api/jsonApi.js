@@ -130,6 +130,45 @@ export const jsonApi = {
     });
   },
 
+  createOrganizerGroup(viewerId, sessionId, payload) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  updateOrganizerGroup(viewerId, sessionId, groupId, payload) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}`, {
+      method: "PATCH",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  deleteOrganizerGroup(viewerId, sessionId, groupId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}`, {
+      method: "DELETE",
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  assignOrganizerGroupCurator(viewerId, sessionId, groupId, curatorId) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/curator`, {
+      method: "PATCH",
+      headers: viewerHeaders(viewerId),
+      body: { curatorId },
+    });
+  },
+
+  assignOrganizerGroupParticipants(viewerId, sessionId, groupId, participantIds) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/participants`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: { participantIds },
+    });
+  },
+
   getOrganizerSessionOverview(viewerId) {
     return requestJson("/api/organizer/workspace", {
       headers: viewerHeaders(viewerId),

@@ -1228,8 +1228,39 @@ export const GroupsSummaryDefault = {
     groups: workspace.groupsSummary.groups,
     alerts: workspace.groupsSummary.alerts,
     audiencePool: workspace.audiencePool,
+    curatorCandidates: [
+      { id: "curator-1", fullName: "Марина Чернова", assignedGroupId: "group-1", assignedGroupName: "Группа 1" },
+      { id: "curator-2", fullName: "Даниил Крылов", assignedGroupId: "group-2", assignedGroupName: "Группа 2" },
+      { id: "curator-3", fullName: "Елена Лисицына", assignedGroupId: "", assignedGroupName: "" },
+    ],
+    dataState: "ready",
+    eventPulse: [
+      { id: "event-1", title: "Утренний сбор", deltaFromPrevious: null },
+      { id: "event-2", title: "Лекция", deltaFromPrevious: 1.1 },
+      { id: "event-3", title: "Практикум", deltaFromPrevious: -1.6 },
+    ],
+    groupPulse: [
+      { id: "group-1", name: "Группа 1", trajectory: [3.1, 4.0, 2.8], stateDistribution: [{ level: 2, count: 2 }, { level: 3, count: 3 }, { level: 5, count: 2 }] },
+      { id: "group-2", name: "Группа 2", trajectory: [3.0, 3.5, 2.2], stateDistribution: [{ level: 1, count: 1 }, { level: 3, count: 4 }, { level: 4, count: 3 }] },
+    ],
+    participantScatter: [
+      { id: "participant-1", label: "Иван Попов", groupId: "group-1", avgActivation: 3.4, amplitude: 2.2, completion: 84, shortLabel: "ИП" },
+      { id: "participant-2", label: "Анна Сергеева", groupId: "group-2", avgActivation: 2.8, amplitude: 3.6, completion: 68, shortLabel: "АС" },
+    ],
+    operationalBrief: [
+      { id: "brief-1", severity: "high", title: "Практикум перегружает группу 2", evidence: "Есть резкий спад и рост риска." },
+    ],
   },
-  render: (args) => <GroupsSummary {...args} />,
+  render: (args) => (
+    <GroupsSummary
+      {...args}
+      onCreateGroup={async () => args}
+      onUpdateGroup={async () => args}
+      onDeleteGroup={async () => args}
+      onAssignCurator={async () => args}
+      onAssignParticipants={async () => args}
+    />
+  ),
 };
 
 export const GroupsSummaryNoRisks = {
@@ -1285,8 +1316,9 @@ export const ParticipantSearchEmpty = {
 export const ParticipantDetailsFull = {
   args: {
     participant: workspace.audiencePool[1],
+    groups: workspace.groupsSummary.groups,
   },
-  render: (args) => <ParticipantDetailsCard {...args} />,
+  render: (args) => <ParticipantDetailsCard {...args} onAssignGroup={async () => args} />,
 };
 
 export const ParticipantDetailsEmpty = {

@@ -82,6 +82,12 @@ function mergeOrganizerAnalyticsSnapshot(previous, analytics) {
     groupsSummary: analytics.groupsSummary || previous.groupsSummary,
     sessionSummary: analytics.sessionSummary || previous.sessionSummary,
     speakerLectureSummary: analytics.speakerLectureSummary || previous.speakerLectureSummary,
+    dataState: analytics.dataState || previous.dataState,
+    eventPulse: analytics.eventPulse || previous.eventPulse,
+    groupPulse: analytics.groupPulse || previous.groupPulse,
+    participantScatter: analytics.participantScatter || previous.participantScatter,
+    operationalBrief: analytics.operationalBrief || previous.operationalBrief,
+    curatorCandidates: analytics.curatorCandidates || previous.curatorCandidates,
   };
 }
 
@@ -210,14 +216,15 @@ export function useOrganizerWorkspace(sessionId) {
   const { currentUser, refreshBootstrap, refreshUsers } = useAuth();
   const resource = useAsyncResource(
     useCallback(async () => {
-      const [workspace, overview] = await Promise.all([
+      const [workspace, overview, analytics] = await Promise.all([
         jsonApi.getOrganizerWorkspace(currentUser.id, sessionId),
         jsonApi.getOrganizerSessionOverview(currentUser.id),
+        jsonApi.getOrganizerAnalytics(currentUser.id, sessionId),
       ]);
-      return {
+      return mergeOrganizerAnalyticsSnapshot({
         ...workspace,
         sessionCatalog: overview.sessions || [],
-      };
+      }, analytics);
     }, [currentUser?.id, sessionId]),
     Boolean(currentUser?.id && sessionId),
   );
@@ -390,6 +397,51 @@ export function useOrganizerWorkspace(sessionId) {
     [currentUser?.id, mutation, sessionId],
   );
 
+  const createGroup = useCallback(
+    (payload) =>
+      mutation.runMutation(() =>
+        jsonApi.createOrganizerGroup(currentUser.id, sessionId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const updateGroup = useCallback(
+    (groupId, payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerGroup(currentUser.id, sessionId, groupId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const deleteGroup = useCallback(
+    (groupId) =>
+      mutation.runMutation(() =>
+        jsonApi.deleteOrganizerGroup(currentUser.id, sessionId, groupId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const assignGroupCurator = useCallback(
+    (groupId, curatorId) =>
+      mutation.runMutation(() =>
+        jsonApi.assignOrganizerGroupCurator(currentUser.id, sessionId, groupId, curatorId),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
+  const assignGroupParticipants = useCallback(
+    (groupId, participantIds) =>
+      mutation.runMutation(() =>
+        jsonApi.assignOrganizerGroupParticipants(
+          currentUser.id,
+          sessionId,
+          groupId,
+          participantIds,
+        ),
+      ),
+    [currentUser?.id, mutation, sessionId],
+  );
+
   const createSurvey = useCallback(
     (payload) =>
       mutation.runMutation(() => jsonApi.createOrganizerSurvey(currentUser.id, sessionId, payload)),
@@ -455,6 +507,11 @@ export function useOrganizerWorkspace(sessionId) {
     addParallelEvent,
     deleteEvent,
     activateEvent,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    assignGroupCurator,
+    assignGroupParticipants,
     createSurvey,
     updateSurvey,
     addSurveyQuestion,

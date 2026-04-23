@@ -11,6 +11,7 @@ const ARC_CENTER = { x: 180, y: 178 };
 const ARC_RADIUS = 126;
 const ARC_NEEDLE_RADIUS = 68;
 const VALID_VARIANTS = new Set(["arc", "zones", "compact"]);
+const VALID_SIZES = new Set(["default", "compact"]);
 
 function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
   const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
@@ -117,6 +118,7 @@ function StateScalePicker({
   onChange,
   states = [],
   variant = "arc",
+  size = "default",
   animated = true,
   disabled = false,
   showDescriptions = true,
@@ -131,6 +133,7 @@ function StateScalePicker({
     [],
   );
   const safeVariant = VALID_VARIANTS.has(variant) ? variant : "arc";
+  const safeSize = VALID_SIZES.has(size) ? size : "default";
   const selectedState = normalizedStates.find((state) => state.id === value) || null;
   const committedIndex = getStateIndex(normalizedStates, value);
   const neutralPreviewIndex = getNeutralPreviewIndex(normalizedStates);
@@ -269,7 +272,20 @@ function StateScalePicker({
     );
   }
 
+  function renderArcZoneLabels(extraClassName = "") {
+    const className = ["state-scale-slider-zone-labels", extraClassName].filter(Boolean).join(" ");
+
+    return (
+      <div className={className} aria-hidden="true">
+        {STATE_SCALE_ZONES.map((zone) => (
+          <span key={zone.id}>{zone.shortLabel.toLowerCase()}</span>
+        ))}
+      </div>
+    );
+  }
+
   function renderArc() {
+    const isCompactArc = safeSize === "compact";
     const step = (ARC_END - ARC_START) / normalizedStates.length;
     const selectedAngle = arcPreviewState ? getArcAngle(previewIndex, normalizedStates.length) : null;
     const selectedPoint =
@@ -346,15 +362,19 @@ function StateScalePicker({
               </g>
             ) : null}
 
-            <text x="56" y="318" className="state-scale-zone-label">
-              {STATE_SCALE_ZONES[0]?.shortLabel.toLowerCase()}
-            </text>
-            <text x="180" y="18" className="state-scale-zone-label is-center">
-              {STATE_SCALE_ZONES[1]?.shortLabel.toLowerCase()}
-            </text>
-            <text x="304" y="318" className="state-scale-zone-label is-end">
-              {STATE_SCALE_ZONES[2]?.shortLabel.toLowerCase()}
-            </text>
+            {!isCompactArc ? (
+              <>
+                <text x="56" y="318" className="state-scale-zone-label">
+                  {STATE_SCALE_ZONES[0]?.shortLabel.toLowerCase()}
+                </text>
+                <text x="180" y="18" className="state-scale-zone-label is-center">
+                  {STATE_SCALE_ZONES[1]?.shortLabel.toLowerCase()}
+                </text>
+                <text x="304" y="318" className="state-scale-zone-label is-end">
+                  {STATE_SCALE_ZONES[2]?.shortLabel.toLowerCase()}
+                </text>
+              </>
+            ) : null}
           </svg>
 
           <div className="state-scale-arc-center" aria-hidden="true">
@@ -383,6 +403,8 @@ function StateScalePicker({
             </div>
           </div>
         ) : null}
+
+        {isCompactArc && !showSlideBar ? renderArcZoneLabels("is-standalone") : null}
 
         {showSlideBar ? (
           <div className="state-scale-slider" style={{ "--state-slider-track": sliderGradient }}>
@@ -416,11 +438,7 @@ function StateScalePicker({
                 />
               ))}
             </div>
-            <div className="state-scale-slider-zone-labels" aria-hidden="true">
-              {STATE_SCALE_ZONES.map((zone) => (
-                <span key={zone.id}>{zone.shortLabel.toLowerCase()}</span>
-              ))}
-            </div>
+            {renderArcZoneLabels()}
           </div>
         ) : null}
       </div>
@@ -455,9 +473,9 @@ function StateScalePicker({
 
   return (
     <div
-      className={`state-scale-picker is-${safeVariant} ${animated ? "is-animated" : "is-static"} ${
-        disabled ? "is-disabled" : ""
-      } ${hasPendingArcCommit ? "has-pending-preview" : ""}`}
+      className={`state-scale-picker is-${safeVariant} is-size-${safeSize} ${
+        animated ? "is-animated" : "is-static"
+      } ${disabled ? "is-disabled" : ""} ${hasPendingArcCommit ? "has-pending-preview" : ""}`}
       role={safeVariant === "arc" ? undefined : "radiogroup"}
       aria-labelledby={titleId}
       aria-disabled={disabled || undefined}

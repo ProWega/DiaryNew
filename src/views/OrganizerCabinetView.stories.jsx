@@ -168,6 +168,81 @@ const partialProgressWorkspaceFixture = {
   })),
 };
 
+const groupsAnalytics = {
+  dataState: "ready",
+  curatorCandidates: [
+    { id: "curator-1", fullName: "Марина Чернова", assignedGroupId: "group-1", assignedGroupName: "Группа 1" },
+    { id: "curator-2", fullName: "Даниил Крылов", assignedGroupId: "group-2", assignedGroupName: "Группа 2" },
+    { id: "curator-3", fullName: "Елена Лисицына", assignedGroupId: "group-3", assignedGroupName: "Группа 3" },
+    { id: "curator-4", fullName: "Ольга Федорова", assignedGroupId: "", assignedGroupName: "" },
+  ],
+  eventPulse: [
+    { id: "event-d1-start", title: "Утренний сбор", deltaFromPrevious: null, completion: 84, riskAnswersCount: 1 },
+    { id: "event-d2-lecture", title: "Лекция", deltaFromPrevious: 1.1, completion: 92, riskAnswersCount: 2 },
+    { id: "event-d2-workshop-a", title: "Практикум", deltaFromPrevious: -1.8, completion: 63, riskAnswersCount: 5 },
+  ],
+  groupPulse: [
+    { id: "group-1", name: "Группа 1", trajectory: [3.2, 4.1, 2.7], stateDistribution: [{ level: 2, count: 2 }, { level: 3, count: 5 }, { level: 5, count: 3 }] },
+    { id: "group-2", name: "Группа 2", trajectory: [3.0, 3.4, 2.2], stateDistribution: [{ level: 1, count: 2 }, { level: 3, count: 4 }, { level: 4, count: 3 }] },
+    { id: "group-3", name: "Группа 3", trajectory: [3.4, 4.0, 3.6], stateDistribution: [{ level: 2, count: 1 }, { level: 3, count: 3 }, { level: 4, count: 4 }] },
+  ],
+  participantScatter: [
+    { id: "participant-1", label: "Иван Попов", groupId: "group-1", avgActivation: 3.4, amplitude: 2.2, completion: 84, shortLabel: "ИП" },
+    { id: "participant-2", label: "Анна Сергеева", groupId: "group-1", avgActivation: 3.8, amplitude: 1.6, completion: 92, shortLabel: "АС" },
+    { id: "participant-3", label: "Егор Кузнецов", groupId: "group-2", avgActivation: 2.7, amplitude: 3.8, completion: 68, shortLabel: "ЕК" },
+    { id: "participant-4", label: "Дарья Лисина", groupId: "group-3", avgActivation: 4.0, amplitude: 1.2, completion: 90, shortLabel: "ДЛ" },
+  ],
+  operationalBrief: [
+    { id: "brief-1", severity: "high", title: "Практикум перегружает группу 2", evidence: "Низкое заполнение и 5 ответов в зоне риска по практикуму." },
+    { id: "brief-2", severity: "medium", title: "Группа 3 без резервного куратора", evidence: "Если потребуется ротация, сейчас нет свободной замены." },
+  ],
+};
+
+const groupsWorkspaceReady = {
+  ...organizerWorkspaceFixture,
+  ...groupsAnalytics,
+  groupsSummary: {
+    ...organizerWorkspaceFixture.groupsSummary,
+    groups: organizerWorkspaceFixture.groupsSummary.groups.map((group, index) => ({
+      ...group,
+      curatorId: `curator-${index + 1}`,
+      description: group.focus,
+      openRiskSignalsCount: [1, 3, 0][index] ?? 0,
+    })),
+  },
+  audiencePool: organizerWorkspaceFixture.audiencePool.map((participant, index) => ({
+    ...participant,
+    progress: { completion: [84, 92, 68, 90][index] ?? 75 },
+    avgActivation: ["3.4", "3.8", "2.7", "4.0"][index] ?? "3.2",
+  })),
+};
+
+const groupsWorkspaceNoCandidates = {
+  ...groupsWorkspaceReady,
+  curatorCandidates: [],
+};
+
+const groupsWorkspaceNoResponses = {
+  ...groupsWorkspaceReady,
+  dataState: "no_responses",
+  eventPulse: [],
+  groupPulse: groupsWorkspaceReady.groupPulse.map((group) => ({
+    ...group,
+    trajectory: [],
+    stateDistribution: [],
+  })),
+  participantScatter: [],
+  operationalBrief: [],
+};
+
+const groupsWorkspaceHighRisk = {
+  ...groupsWorkspaceReady,
+  operationalBrief: [
+    { id: "brief-risk-1", severity: "high", title: "Группа 2 требует немедленного внимания", evidence: "Резкий провал после практикума и несколько открытых сигналов риска." },
+    ...groupsWorkspaceReady.operationalBrief,
+  ],
+};
+
 const actions = {
   onCreateProgram: async (payload) => {
     console.log("createProgram", payload);
@@ -233,6 +308,26 @@ const actions = {
     console.log("updateProgramDayFlows", args);
     return organizerWorkspaceFixture;
   },
+  onCreateGroup: async (...args) => {
+    console.log("createGroup", args);
+    return groupsWorkspaceReady;
+  },
+  onUpdateGroup: async (...args) => {
+    console.log("updateGroup", args);
+    return groupsWorkspaceReady;
+  },
+  onDeleteGroup: async (...args) => {
+    console.log("deleteGroup", args);
+    return groupsWorkspaceReady;
+  },
+  onAssignGroupCurator: async (...args) => {
+    console.log("assignGroupCurator", args);
+    return groupsWorkspaceReady;
+  },
+  onAssignGroupParticipants: async (...args) => {
+    console.log("assignGroupParticipants", args);
+    return groupsWorkspaceReady;
+  },
   onSessionCreated: (...args) => console.log("sessionCreated", args),
 };
 
@@ -280,6 +375,52 @@ export const GroupsTab = {
   args: {
     ...SessionsTab.args,
     initialTab: "groups",
+    workspace: groupsWorkspaceReady,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsReady = {
+  args: {
+    ...GroupsTab.args,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsNoCuratorCandidates = {
+  args: {
+    ...GroupsTab.args,
+    workspace: groupsWorkspaceNoCandidates,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsNoResponses = {
+  args: {
+    ...GroupsTab.args,
+    workspace: groupsWorkspaceNoResponses,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsHighRisk = {
+  args: {
+    ...GroupsTab.args,
+    workspace: groupsWorkspaceHighRisk,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsBatchMove = {
+  args: {
+    ...GroupsReady.args,
+  },
+  render: renderCabinet,
+};
+
+export const GroupsDeleteBlocked = {
+  args: {
+    ...GroupsReady.args,
   },
   render: renderCabinet,
 };

@@ -268,6 +268,14 @@ function normalizeOrganizerWorkspace(workspace) {
       groups: asArray(rawWorkspace.groupsSummary?.groups),
       alerts: asArray(rawWorkspace.groupsSummary?.alerts),
     },
+    sessionSummary: asObject(rawWorkspace.sessionSummary),
+    speakerLectureSummary: asObject(rawWorkspace.speakerLectureSummary),
+    curatorCandidates: asArray(rawWorkspace.curatorCandidates),
+    dataState: rawWorkspace.dataState || "ready",
+    eventPulse: asArray(rawWorkspace.eventPulse),
+    groupPulse: asArray(rawWorkspace.groupPulse),
+    participantScatter: asArray(rawWorkspace.participantScatter),
+    operationalBrief: asArray(rawWorkspace.operationalBrief),
     audiencePool,
     programWorkspace,
   };
@@ -328,6 +336,11 @@ function OrganizerCabinetView({
   onAddParallelEvent = async () => null,
   onDeleteEvent = async () => null,
   onActivateEvent = async () => null,
+  onCreateGroup = async () => null,
+  onUpdateGroup = async () => null,
+  onDeleteGroup = async () => null,
+  onAssignGroupCurator = async () => null,
+  onAssignGroupParticipants = async () => null,
 }) {
   const safeWorkspace = useMemo(() => normalizeOrganizerWorkspace(workspace), [workspace]);
   const programWorkspace = safeWorkspace.programWorkspace;
@@ -1129,6 +1142,18 @@ function OrganizerCabinetView({
           groups={safeWorkspace.groupsSummary.groups}
           alerts={safeWorkspace.groupsSummary.alerts}
           audiencePool={safeWorkspace.audiencePool}
+          curatorCandidates={safeWorkspace.curatorCandidates}
+          dataState={safeWorkspace.dataState}
+          eventPulse={safeWorkspace.eventPulse}
+          groupPulse={safeWorkspace.groupPulse}
+          participantScatter={safeWorkspace.participantScatter}
+          operationalBrief={safeWorkspace.operationalBrief}
+          saving={saving}
+          onCreateGroup={onCreateGroup}
+          onUpdateGroup={onUpdateGroup}
+          onDeleteGroup={onDeleteGroup}
+          onAssignCurator={onAssignGroupCurator}
+          onAssignParticipants={onAssignGroupParticipants}
         />
       ) : null}
 
@@ -1144,7 +1169,12 @@ function OrganizerCabinetView({
             onQueryChange={setParticipantQuery}
             onSelectParticipant={setSelectedParticipantId}
           />
-          <ParticipantDetailsCard participant={selectedParticipant} />
+          <ParticipantDetailsCard
+            participant={selectedParticipant}
+            groups={safeWorkspace.groupsSummary.groups}
+            saving={saving}
+            onAssignGroup={onAssignGroupParticipants}
+          />
         </div>
       ) : null}
     </section>

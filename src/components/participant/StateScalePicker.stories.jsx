@@ -9,6 +9,7 @@ export default {
   component: StateScalePicker,
   argTypes: {
     variant: { control: "radio", options: ["arc", "zones", "compact"] },
+    size: { control: "radio", options: ["default", "compact"] },
     value: { control: "select", options: stateIds },
     animated: { control: "boolean" },
     disabled: { control: "boolean" },
@@ -22,6 +23,7 @@ export default {
     states: stateScale,
     value: "balance",
     variant: "arc",
+    size: "default",
     animated: true,
     disabled: false,
     showDescriptions: true,
@@ -51,6 +53,7 @@ export const Playground = {
 export const ArcModel = {
   args: {
     variant: "arc",
+    size: "default",
     value: "engaged",
   },
   render: (args) => <StateScalePickerStory {...args} />,
@@ -59,6 +62,7 @@ export const ArcModel = {
 export const ArcNeutralPreview = {
   args: {
     variant: "arc",
+    size: "compact",
     value: "",
   },
   parameters: {
@@ -70,8 +74,34 @@ export const ArcNeutralPreview = {
 export const ArcWithoutSlider = {
   args: {
     variant: "arc",
+    size: "default",
     value: "overstimulated",
     showSlideBar: false,
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const ArcCompactMobile = {
+  args: {
+    variant: "arc",
+    size: "compact",
+    value: "engaged",
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const ArcCompactWithoutSlider = {
+  args: {
+    variant: "arc",
+    size: "compact",
+    value: "overstimulated",
+    showSlideBar: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
   },
   render: (args) => <StateScalePickerStory {...args} />,
 };
