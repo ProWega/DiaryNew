@@ -809,24 +809,6 @@ textarea {
   font-weight: 800;
 }
 
-.participant-event-row-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 80px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(38, 49, 58, 0.06);
-  color: var(--text-soft);
-  font-size: 0.82rem;
-  font-weight: 900;
-}
-
-.participant-event-row.is-open .participant-event-row-action {
-  background: rgba(246, 241, 230, 0.92);
-  color: #786652;
-}
-
 .participant-event-row-main {
   display: grid;
   gap: 4px;
@@ -838,16 +820,30 @@ textarea {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.participant-event-row-main .event-time {
-  width: fit-content;
-  margin-bottom: 0;
+.participant-event-row-main strong {
+  font-size: 1.02rem;
+  line-height: 1.16;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .participant-event-row-main small {
   color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.participant-event-row-meta {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.participant-event-row-time {
+  margin-bottom: 0;
+  white-space: nowrap;
 }
 
 .participant-event-row-state {
@@ -855,14 +851,48 @@ textarea {
   gap: 7px;
   align-items: center;
   justify-content: center;
-  min-width: 112px;
-  padding: 8px 10px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid var(--line-soft);
   background: rgba(255, 255, 255, 0.68);
   color: var(--text-soft);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-event-row-chevron {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(38, 49, 58, 0.06);
+  transition:
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.participant-event-shell.is-open .participant-event-row-chevron {
+  background: rgba(246, 241, 230, 0.92);
+}
+
+.participant-event-chevron {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(38, 49, 58, 0.72);
+  border-bottom: 2px solid rgba(38, 49, 58, 0.72);
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform 180ms ease;
+}
+
+.participant-event-row-chevron.is-open .participant-event-chevron {
+  transform: rotate(-135deg) translateX(-1px);
 }
 
 .participant-event-card {
@@ -917,42 +947,13 @@ textarea {
   font-weight: 900;
 }
 
-.participant-event-body-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "main time"
-    "tags time";
-  gap: 10px 16px;
-  align-items: start;
-}
-
-.participant-event-body-main {
-  grid-area: main;
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.participant-event-body-main h3,
-.participant-event-body-main p {
-  margin: 0;
-}
-
-.participant-event-tags {
-  grid-area: tags;
-}
-
-.participant-event-time-chip {
-  grid-area: time;
-  justify-self: end;
-  align-self: start;
-  margin-bottom: 0;
-  white-space: nowrap;
-}
-
 .participant-event-workspace {
   display: contents;
+}
+
+.participant-event-body-tags {
+  order: 4;
+  gap: 8px;
 }
 
 .participant-event-arc-shell {
@@ -1683,6 +1684,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .participant-event-row-chevron,
+  .participant-event-chevron,
   .participant-event-panel,
   .participant-event-body,
   .participant-event-row,
@@ -4157,21 +4160,30 @@ textarea {
   }
 
   .participant-event-row {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: start;
     padding: 11px 12px;
   }
 
-  .participant-event-row-state {
-    grid-column: 2;
+  .participant-event-row-meta {
+    grid-column: 2 / -1;
     justify-self: start;
-    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
   }
 
-  .participant-event-row-action {
-    grid-column: 2;
-    justify-self: start;
+  .participant-event-row-state {
     min-width: 0;
+    max-width: none;
+  }
+
+  .participant-event-row-chevron {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
   }
 
   .participant-event-shell.is-open .participant-event-row {
@@ -4183,17 +4195,8 @@ textarea {
     padding: 0 12px 14px;
   }
 
-  .participant-event-body-head {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "main"
-      "time"
-      "tags";
-    gap: 8px;
-  }
-
-  .participant-event-time-chip {
-    justify-self: start;
+  .participant-event-body-tags {
+    gap: 6px;
   }
 
   .participant-reflection-gate {

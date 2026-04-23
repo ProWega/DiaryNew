@@ -507,11 +507,12 @@ function ParticipantRoutedView({
                     >
                       <span className="participant-event-index">{index + 1}</span>
                       <span className="participant-event-row-main">
-                        <span className="event-time">{event.time}</span>
                         <strong>{event.title}</strong>
                         <small>{event.type}</small>
                       </span>
-                      <span className="participant-event-row-state">
+                      <span className="participant-event-row-meta">
+                        <span className="event-time participant-event-row-time">{event.time}</span>
+                        <span className="participant-event-row-state">
                         {effectiveState ? (
                           <>
                             <span>{effectiveState.icon}</span>
@@ -521,8 +522,12 @@ function ParticipantRoutedView({
                           "Без отметки"
                         )}
                       </span>
-                      <span className="participant-event-row-action" aria-hidden="true">
-                        {isOpen ? "Свернуть" : "Открыть"}
+                      </span>
+                      <span
+                        className={isOpen ? "participant-event-row-chevron is-open" : "participant-event-row-chevron"}
+                        aria-hidden="true"
+                      >
+                        <span className="participant-event-chevron" />
                       </span>
                     </button>
 
@@ -535,22 +540,15 @@ function ParticipantRoutedView({
                       {...(!isOpen ? { inert: "" } : {})}
                     >
                       <div className="participant-event-body">
-                        <div className="participant-event-body-head">
-                          <div className="participant-event-body-main">
-                            <h3>{event.title}</h3>
-                            <p>{event.type}</p>
+                        {(event.tags || []).length ? (
+                          <div className="tag-row participant-event-body-tags">
+                            {(event.tags || []).map((tag) => (
+                              <span key={tag} className="tag-chip">
+                                {tag}
+                              </span>
+                            ))}
                           </div>
-                          <span className="event-time participant-event-time-chip">{event.time}</span>
-                          {(event.tags || []).length ? (
-                            <div className="tag-row participant-event-tags">
-                              {(event.tags || []).map((tag) => (
-                                <span key={tag} className="tag-chip">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
+                        ) : null}
 
                         <div className="participant-event-workspace">
                           <div className="participant-event-arc-shell">

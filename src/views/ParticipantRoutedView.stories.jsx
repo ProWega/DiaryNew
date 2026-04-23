@@ -50,9 +50,11 @@ function makeDay({
   dateValue = "2026-07-13",
   answeredEvents = 2,
   reflectionAnswered = true,
+  eventOverrides = {},
 } = {}) {
   const events = baseEvents.map((event, index) => ({
     ...event,
+    ...(eventOverrides[event.id] || {}),
     answered: index < answeredEvents,
     stateId: index < answeredEvents ? event.stateId : null,
     comment: index < answeredEvents ? "Короткая заметка участника." : "",
@@ -270,6 +272,30 @@ export const InlineAccordionOpen = {
     mode: "today",
     answeredEvents: 1,
     reflectionAnswered: false,
+  },
+  render: renderParticipant,
+};
+
+export const InlineAccordionOpenMobile = {
+  args: {
+    ...InlineAccordionOpen.args,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const InlineAccordionWithoutTags = {
+  args: {
+    mode: "today",
+    answeredEvents: 1,
+    reflectionAnswered: false,
+    eventOverrides: {
+      "event-2": {
+        tags: [],
+      },
+    },
   },
   render: renderParticipant,
 };
