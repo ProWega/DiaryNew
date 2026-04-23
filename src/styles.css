@@ -726,10 +726,22 @@ textarea {
   display: grid;
   row-gap: 0;
   min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  background: transparent;
+  transition:
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease,
+    row-gap 220ms ease;
 }
 
 .participant-event-shell.is-open {
-  row-gap: 6px;
+  border-color: rgba(132, 154, 111, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 248, 243, 0.9)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 36px rgba(108, 95, 73, 0.08);
 }
 
 .participant-event-row {
@@ -744,6 +756,12 @@ textarea {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.76);
   color: var(--text-main);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    border-radius 180ms ease,
+    padding 180ms ease;
 }
 
 .participant-event-toggle {
@@ -765,9 +783,14 @@ textarea {
 }
 
 .participant-event-row.is-open {
-  border-color: rgba(132, 154, 111, 0.2);
-  background: rgba(255, 253, 248, 0.96);
-  box-shadow: 0 12px 28px rgba(108, 95, 73, 0.07);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.participant-event-shell.is-open .participant-event-row {
+  border-radius: 24px 24px 0 0;
+  padding-bottom: 14px;
 }
 
 .participant-event-shell.is-open .participant-event-index {
@@ -853,28 +876,38 @@ textarea {
   min-width: 0;
   overflow: hidden;
   opacity: 0;
-  transform: none;
+  transform: translateY(-10px);
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    transform 280ms ease;
 }
 
 .participant-event-shell.is-open .participant-event-panel {
   grid-template-rows: 1fr;
   opacity: 1;
+  transform: translateY(0);
 }
 
-.participant-event-panel-inner {
+.participant-event-body {
   min-height: 0;
   overflow: hidden;
-  border-color: rgba(255, 255, 255, 0.76);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 248, 243, 0.84)),
-    rgba(255, 255, 255, 0.88);
-  box-shadow: 0 14px 34px rgba(108, 95, 73, 0.08);
+  display: grid;
+  gap: 16px;
+  padding: 0 18px 18px;
+  border-top: 1px solid rgba(71, 81, 91, 0.08);
   pointer-events: none;
-  transform-origin: top center;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 240ms ease 40ms,
+    transform 260ms ease 40ms;
 }
 
-.participant-event-shell.is-open .participant-event-panel-inner {
+.participant-event-shell.is-open .participant-event-body {
   pointer-events: auto;
+  opacity: 1;
+  transform: none;
 }
 
 .participant-event-microcopy {
@@ -884,45 +917,102 @@ textarea {
   font-weight: 900;
 }
 
-.participant-event-panel-inner .state-scale-segment {
+.participant-event-body-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main time"
+    "tags time";
+  gap: 10px 16px;
+  align-items: start;
+}
+
+.participant-event-body-main {
+  grid-area: main;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.participant-event-body-main h3,
+.participant-event-body-main p {
+  margin: 0;
+}
+
+.participant-event-tags {
+  grid-area: tags;
+}
+
+.participant-event-time-chip {
+  grid-area: time;
+  justify-self: end;
+  align-self: start;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.participant-event-workspace {
+  display: contents;
+}
+
+.participant-event-arc-shell {
+  order: 10;
+  display: grid;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
+  transition:
+    opacity 300ms ease 90ms,
+    transform 320ms ease 90ms;
+}
+
+.participant-event-shell.is-open .participant-event-arc-shell {
+  opacity: 1;
+  transform: none;
+}
+
+.participant-comment-row {
+  order: 20;
+}
+
+.participant-event-body .event-foot {
+  order: 25;
+  margin-top: 0;
+}
+
+.participant-event-body .state-scale-segment {
   stroke: color-mix(in srgb, var(--state-color) 68%, #ffffff);
   opacity: 0.66;
 }
 
-.participant-event-panel-inner .state-scale-segment.is-selected {
+.participant-event-body .state-scale-segment.is-selected {
   stroke: color-mix(in srgb, var(--state-color) 78%, #ffffff);
   opacity: 0.9;
   filter: drop-shadow(0 7px 10px rgba(108, 95, 73, 0.08));
 }
 
-.participant-event-panel-inner .state-scale-arc-description {
+.participant-event-body .state-scale-arc-description {
   border-color: color-mix(in srgb, var(--state-color) 22%, rgba(71, 81, 91, 0.1));
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--state-surface) 48%, #ffffff) 0%, rgba(255, 255, 255, 0.82) 100%);
 }
 
-.participant-event-panel-inner .state-scale-slider-input::-webkit-slider-thumb {
+.participant-event-body .state-scale-slider-input::-webkit-slider-thumb {
   background: color-mix(in srgb, var(--state-color) 76%, #ffffff);
   box-shadow:
     0 7px 18px rgba(108, 95, 73, 0.14),
     0 0 0 1px rgba(38, 49, 58, 0.06);
 }
 
-.participant-event-panel-inner .state-scale-slider-input::-moz-range-thumb {
+.participant-event-body .state-scale-slider-input::-moz-range-thumb {
   background: color-mix(in srgb, var(--state-color) 76%, #ffffff);
   box-shadow:
     0 7px 18px rgba(108, 95, 73, 0.14),
     0 0 0 1px rgba(38, 49, 58, 0.06);
 }
 
-.participant-event-workspace {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-.participant-active-head .tag-row {
-  justify-content: flex-end;
+.participant-event-body .state-scale-picker {
+  width: 100%;
 }
 
 .participant-state-grid {
@@ -1593,6 +1683,10 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .participant-event-panel,
+  .participant-event-body,
+  .participant-event-row,
+  .participant-event-arc-shell,
   .state-scale-picker *,
   .state-scale-picker.is-animated .state-scale-option,
   .state-scale-picker.is-animated .state-scale-segment,
@@ -1611,6 +1705,7 @@ textarea {
 }
 
 .participant-step-actions {
+  order: 30;
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -4077,6 +4172,28 @@ textarea {
     grid-column: 2;
     justify-self: start;
     min-width: 0;
+  }
+
+  .participant-event-shell.is-open .participant-event-row {
+    padding-bottom: 12px;
+  }
+
+  .participant-event-body {
+    gap: 14px;
+    padding: 0 12px 14px;
+  }
+
+  .participant-event-body-head {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "time"
+      "tags";
+    gap: 8px;
+  }
+
+  .participant-event-time-chip {
+    justify-self: start;
   }
 
   .participant-reflection-gate {

@@ -265,6 +265,15 @@ export const DraftCommentFlow = {
   render: renderParticipant,
 };
 
+export const InlineAccordionOpen = {
+  args: {
+    mode: "today",
+    answeredEvents: 1,
+    reflectionAnswered: false,
+  },
+  render: renderParticipant,
+};
+
 export const PartialDay = {
   args: {
     mode: "today",

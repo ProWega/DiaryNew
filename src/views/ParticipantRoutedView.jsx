@@ -5,9 +5,59 @@ import StateScalePicker from "../components/participant/StateScalePicker";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
 
 const reflectionFields = ["q1", "q2", "q3"];
+const EVENT_SCROLL_MARGIN = 16;
 
 function getFirstPendingEventId(events) {
   return events.find((event) => !event.stateId)?.id || events[0]?.id || "";
+}
+
+function prefersReducedMotion() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function getStickyParticipantOffset() {
+  if (typeof document === "undefined") {
+    return EVENT_SCROLL_MARGIN;
+  }
+
+  const topbarHeight = document.querySelector(".participant-topbar")?.getBoundingClientRect().height || 0;
+  return topbarHeight + EVENT_SCROLL_MARGIN;
+}
+
+function focusElementWithoutScroll(element) {
+  if (!element || typeof element.focus !== "function") {
+    return;
+  }
+
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
+function scrollEventIntoView(element) {
+  if (typeof window === "undefined" || !element) {
+    return;
+  }
+
+  const targetTop = Math.max(
+    0,
+    window.scrollY + element.getBoundingClientRect().top - getStickyParticipantOffset(),
+  );
+
+  if (Math.abs(window.scrollY - targetTop) < 4) {
+    return;
+  }
+
+  window.scrollTo({
+    top: targetTop,
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
+  });
 }
 
 function isReflectionAnswered(reflection) {
@@ -49,6 +99,10 @@ function ParticipantRoutedView({
   const [eventDrafts, setEventDrafts] = useState({});
   const [savingEventId, setSavingEventId] = useState("");
   const pendingStateSaveRef = useRef({});
+  const eventShellRefs = useRef({});
+  const eventButtonRefs = useRef({});
+  const pendingNavigationRef = useRef(null);
+  const navigationFrameRef = useRef(0);
   const activeDayId = selectedDay?.id || "";
   const hasMultipleDays = liveHistory.length > 1;
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
@@ -112,9 +166,89 @@ function ParticipantRoutedView({
     }
   }, [allEventsAnswered, reflectionAnswered]);
 
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined" && navigationFrameRef.current) {
+        window.cancelAnimationFrame(navigationFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const pendingNavigation = pendingNavigationRef.current;
+
+    if (!pendingNavigation || pendingNavigation.eventId !== openEventId || typeof window === "undefined") {
+      return;
+    }
+
+    if (navigationFrameRef.current) {
+      window.cancelAnimationFrame(navigationFrameRef.current);
+    }
+
+    navigationFrameRef.current = window.requestAnimationFrame(() => {
+      navigationFrameRef.current = window.requestAnimationFrame(() => {
+        const latestNavigation = pendingNavigationRef.current;
+
+        if (!latestNavigation || latestNavigation.eventId !== openEventId) {
+          navigationFrameRef.current = 0;
+          return;
+        }
+
+        const shell = eventShellRefs.current[openEventId];
+        const button = eventButtonRefs.current[openEventId];
+
+        if (latestNavigation.shouldFocus) {
+          focusElementWithoutScroll(button);
+        }
+
+        if (latestNavigation.shouldScroll) {
+          scrollEventIntoView(shell);
+        }
+
+        pendingNavigationRef.current = null;
+        navigationFrameRef.current = 0;
+      });
+    });
+  }, [activeDayId, openEventId, todayEvents.length]);
+
+  function setEventShellRef(eventId, node) {
+    if (node) {
+      eventShellRefs.current[eventId] = node;
+      return;
+    }
+
+    delete eventShellRefs.current[eventId];
+  }
+
+  function setEventButtonRef(eventId, node) {
+    if (node) {
+      eventButtonRefs.current[eventId] = node;
+      return;
+    }
+
+    delete eventButtonRefs.current[eventId];
+  }
+
+  function openEventWithViewportSync(eventId, options = {}) {
+    if (!eventId) {
+      pendingNavigationRef.current = null;
+      setOpenEventId("");
+      return;
+    }
+
+    pendingNavigationRef.current = {
+      eventId,
+      shouldFocus: options.shouldFocus ?? true,
+      shouldScroll: options.shouldScroll ?? true,
+    };
+    setOpenEventId(eventId);
+  }
+
   function toggleEvent(eventId) {
     const nextEventId = openEventId === eventId ? "" : eventId;
 
+    pendingNavigationRef.current = null;
     setOpenEventId(nextEventId);
   }
 
@@ -191,7 +325,7 @@ function ParticipantRoutedView({
 
     if (!stateId) {
       if (nextEventId) {
-        setOpenEventId(nextEventId);
+        openEventWithViewportSync(nextEventId);
       }
       return false;
     }
@@ -219,7 +353,7 @@ function ParticipantRoutedView({
       }));
 
       if (nextEventId) {
-        setOpenEventId(nextEventId);
+        openEventWithViewportSync(nextEventId);
       }
       return true;
     } catch (error) {
@@ -252,7 +386,7 @@ function ParticipantRoutedView({
       return;
     }
 
-    setOpenEventId(nextEvent.id);
+    openEventWithViewportSync(nextEvent.id);
   }
 
   function saveCurrentEvent(dayId, event) {
@@ -354,12 +488,14 @@ function ParticipantRoutedView({
                 return (
                   <article
                     key={event.id}
+                    ref={(node) => setEventShellRef(event.id, node)}
                     className={`participant-event-shell ${isOpen ? "is-open" : "is-collapsed"} ${
                       effectiveState ? "is-complete" : "is-pending"
                     }`}
                   >
                     <button
                       id={buttonId}
+                      ref={(node) => setEventButtonRef(event.id, node)}
                       type="button"
                       className={`participant-event-row participant-event-toggle ${effectiveState ? "is-complete" : "is-pending"} ${
                         isOpen ? "is-open" : ""
@@ -398,31 +534,36 @@ function ParticipantRoutedView({
                       className="participant-event-panel"
                       {...(!isOpen ? { inert: "" } : {})}
                     >
-                      <div className="event-card participant-event-card participant-event-panel-inner">
-                        <div className="event-head participant-active-head">
-                          <div>
+                      <div className="participant-event-body">
+                        <div className="participant-event-body-head">
+                          <div className="participant-event-body-main">
                             <h3>{event.title}</h3>
                             <p>{event.type}</p>
                           </div>
-                          <div className="tag-row">
-                            {(event.tags || []).map((tag) => (
-                              <span key={tag} className="tag-chip">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
+                          <span className="event-time participant-event-time-chip">{event.time}</span>
+                          {(event.tags || []).length ? (
+                            <div className="tag-row participant-event-tags">
+                              {(event.tags || []).map((tag) => (
+                                <span key={tag} className="tag-chip">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="participant-event-workspace">
-                          <StateScalePicker
-                            value={effectiveStateId}
-                            onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
-                            states={stateScale}
-                            variant="arc"
-                            animated
-                            showDescriptions
-                            label=""
-                          />
+                          <div className="participant-event-arc-shell">
+                            <StateScalePicker
+                              value={effectiveStateId}
+                              onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
+                              states={stateScale}
+                              variant="arc"
+                              animated
+                              showDescriptions
+                              label=""
+                            />
+                          </div>
 
                           <div className="participant-step-actions">
                             <button
