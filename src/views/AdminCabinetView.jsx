@@ -239,7 +239,7 @@ function AdminCabinetView({
   const [selectedSessionId, setSelectedSessionId] = useState(workspace.sessions[0]?.id || null);
   const [sessionDraft, setSessionDraft] = useState(workspace.sessions[0] || EMPTY_SESSION);
   const [registrationDraft, setRegistrationDraft] = useState(workspace.sessions[0] || EMPTY_SESSION);
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isCreatingSession, setIsCreatingSession] = useState(!workspace.sessions.length);
 
   const [assignmentDraft, setAssignmentDraft] = useState({
     userId: workspace.users.find((user) => user.role === "organizer")?.id || workspace.users[0]?.id || "",
@@ -283,6 +283,15 @@ function AdminCabinetView({
     }
   }, [isCreatingSession, selectedSession, workspace.sessions]);
 
+  useEffect(() => {
+    if (!workspace.sessions.length) {
+      setIsCreatingSession(true);
+      setSelectedSessionId(null);
+      setSessionDraft(EMPTY_SESSION);
+      setRegistrationDraft(EMPTY_SESSION);
+    }
+  }, [workspace.sessions.length]);
+
   async function handleUserSubmit(form) {
     if (isCreatingUser) {
       await onCreateUser(form);
@@ -297,8 +306,11 @@ function AdminCabinetView({
   }
 
   async function handleSessionSubmit(form) {
-    if (isCreatingSession) {
-      await onCreateSession(form);
+    if (isCreatingSession || !form.id) {
+      const nextWorkspace = await onCreateSession(form);
+      if (!nextWorkspace) {
+        return;
+      }
       setIsCreatingSession(false);
       setSessionDraft(EMPTY_SESSION);
       return;
@@ -438,7 +450,7 @@ function AdminCabinetView({
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={saving}
+                  disabled={saving || isCreatingSession}
                   onClick={() => {
                     setIsCreatingSession(true);
                     setSessionDraft(EMPTY_SESSION);
@@ -449,11 +461,11 @@ function AdminCabinetView({
                 </button>
                 <SessionEditorForm
                   value={sessionDraft}
-                  mode={isCreatingSession ? "create" : "edit"}
+                  mode={isCreatingSession || !sessionDraft?.id ? "create" : "edit"}
                   saving={saving}
                   onChange={setSessionDraft}
                   onSubmit={handleSessionSubmit}
-                  onCancel={() => setIsCreatingSession(false)}
+                  onCancel={() => setIsCreatingSession(!workspace.sessions.length)}
                 />
                 {!isCreatingSession && sessionDraft?.id ? (
                   <RegistrationAccessPanel

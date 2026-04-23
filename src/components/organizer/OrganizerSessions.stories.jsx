@@ -29,6 +29,7 @@ export function CreateSession() {
         endDate: "",
         registrationStartsAt: "",
         registrationEndsAt: "",
+        registrationCapacity: "",
         registrationStatus: "draft",
       }}
       mode="create"

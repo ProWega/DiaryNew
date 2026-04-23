@@ -49,6 +49,11 @@
   - заготовки под AI-отчеты и дальнейшую кластеризацию комментариев.
 - Storybook подключен для компонентов и страниц, есть controls, viewport presets и `@storybook/addon-a11y`.
 - Есть базовая подготовка к production: env-настройки, PostgreSQL scripts, блокировка demo seed в production, `prod:init`.
+- Добавлена Docker/Ubuntu-конфигурация:
+  - `Dockerfile` собирает Vite frontend и запускает production Express-сервер;
+  - `docker-compose.yml` поднимает приложение и PostgreSQL с persistent volume;
+  - `deploy/app.env.example` описывает production env и секреты;
+  - Express в production отдает `dist` как SPA и сохраняет `/api` на том же порту.
 
 ## Ближайший фокус
 
@@ -97,7 +102,7 @@
 6. Ближайшие задачи после стабилизации organizer UX и кураторского брифа.
    - Пройти сквозную приемку organizer -> participant: создать заезд, заполнить программу, опубликовать, заполнить дневник участником, проверить прогресс у организатора.
    - Добавить рабочие действия куратора: заметки, статусы обработки сигналов риска и панель участника.
-   - Подготовить Docker/Ubuntu deployment.
+   - Проверить Docker/Ubuntu deployment на реальном сервере и подключить reverse proxy/TLS.
    - Укрепить backend/API-контракт публикации и возврата в черновик.
    - Развить аналитику и будущий AI pipeline.
 
@@ -126,11 +131,11 @@
   - развить выводы для участника после каждого дня;
   - подготовить место для настоящего AI pipeline: embeddings, кластеризация комментариев, версии отчетов.
 - Деплой на Ubuntu через Docker:
-  - добавить `Dockerfile` для приложения;
-  - добавить `docker-compose.yml` для app + PostgreSQL;
-  - описать переменные окружения для production;
-  - учесть `APP_MODE=production`, сильный `AUTH_SESSION_SECRET`, secure cookies, `DATABASE_URL`/`PG*`;
-  - отдельно решить reverse proxy/TLS схему позже.
+  - проверить `docker compose --env-file .env.docker up -d --build` на Ubuntu host;
+  - проверить первый запуск: `npm run prod:init` применяет схему, app стартует после healthy PostgreSQL;
+  - подключить reverse proxy/TLS и выставить `APP_BASE_URL`, `AUTH_COOKIE_SECURE=true`;
+  - настроить backup/restore для volume PostgreSQL;
+  - отдельно решить production-процедуру seed/reset без случайного demo seed.
 - Документация:
   - обновить README под актуальный backend/PostgreSQL слой;
   - добавить quick start для dev и production-like запуска;
@@ -157,6 +162,15 @@
 - `Curator/Pulse Dashboard` проверяется на Storybook viewport `Mobile 390` и `Desktop 1280`.
 - `npm run build` проходит без ошибок.
 - `npm run build-storybook` проходит без ошибок.
+
+## Приемка для Docker/Ubuntu
+
+- `docker compose --env-file .env.docker config` проходит после заполнения production env.
+- `docker compose --env-file .env.docker up -d --build` собирает image и поднимает `postgres` + `app`.
+- `app` применяет схему через `npm run prod:init` перед запуском сервера.
+- `/api/health` возвращает `ok: true`, а SPA-маршруты открываются из `dist` без Vite dev server.
+- Данные сохраняются после restart контейнеров за счет volume `postgres-data`.
+- Для публичного домена настроены reverse proxy/TLS, `APP_BASE_URL` и `AUTH_COOKIE_SECURE=true`.
 
 ## Приемка для mobile-first участника
 

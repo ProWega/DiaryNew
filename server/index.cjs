@@ -1,5 +1,7 @@
 const cors = require("cors");
 const express = require("express");
+const fs = require("node:fs");
+const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const {
   getClientFeatures,
@@ -18,7 +20,7 @@ const {
   revokeAuthSession,
 } = require("./db/repositories/authStore.cjs");
 const { getWorkspace, updateWorkspace } = require("./db/organizerWorkspaceStore.cjs");
-const { hasPostgresConfig } = require("./db/postgres.cjs");
+const { hasPostgresConfig, query } = require("./db/postgres.cjs");
 const { getAdminWorkspace } = require("./db/repositories/adminStore.cjs");
 const { getAdminDashboard, getCuratorDashboard } = require("./db/repositories/analyticsStore.cjs");
 const {
@@ -47,6 +49,7 @@ const {
 
 const PORT = Number(process.env.PORT || 4000);
 const HOST = process.env.HOST || "0.0.0.0";
+const CLIENT_DIST_DIR = path.join(__dirname, "..", "dist");
 
 const app = express();
 
@@ -163,6 +166,7 @@ function pickOrganizerSessionPayload(body = {}) {
     "endDate",
     "registrationStartsAt",
     "registrationEndsAt",
+    "registrationCapacity",
     "registrationStatus",
   ];
   return Object.fromEntries(
@@ -1010,13 +1014,26 @@ app.post(
 app.get(
   "/api/health",
   asyncHandler(async (_req, res) => {
-    const workspace = await getWorkspace("session-istoki-school-2026");
+    const postgresConfigured = hasPostgresConfig();
+    let postgresOk = false;
+    let postgresError = null;
 
-    res.json({
+    if (postgresConfigured) {
+      try {
+        await query("select 1");
+        postgresOk = true;
+      } catch (error) {
+        postgresError = error.message;
+      }
+    }
+
+    res.status(postgresConfigured && !postgresOk ? 503 : 200).json({
       ok: true,
       time: new Date().toISOString(),
-      dataMode: workspace.meta?.storageMode || "memory",
-      postgresConfigured: hasPostgresConfig(),
+      dataMode: postgresOk ? "postgres" : "memory",
+      postgresConfigured,
+      postgresOk,
+      postgresError,
     });
   }),
 );
@@ -1263,7 +1280,7 @@ app.patch(
         actorId: req.viewer.id,
         sessionId: req.params.sessionId,
         payload,
-        allowExtendedRegistrationFields: false,
+        allowExtendedRegistrationFields: true,
       }),
     );
   }),
@@ -1828,6 +1845,18 @@ app.post(
     res.json(workspace);
   }),
 );
+
+if (fs.existsSync(CLIENT_DIST_DIR)) {
+  app.use(express.static(CLIENT_DIST_DIR, { index: false }));
+  app.use((req, res, next) => {
+    if ((req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+
+    res.sendFile(path.join(CLIENT_DIST_DIR, "index.html"));
+  });
+}
 
 app.use((error, _req, res, _next) => {
   const status = error.status || 500;

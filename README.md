@@ -170,7 +170,7 @@ npm run build-storybook  # статическая сборка Storybook
 
 - проверить сквозной сценарий "создать заезд -> заполнить программу в таблице -> опубликовать -> участник заполняет дневник -> организатор видит прогресс";
 - добавить рабочие действия куратора: заметки, статусы обработки сигналов риска и панель участника;
-- подготовить Docker/Ubuntu deployment;
+- проверить Docker/Ubuntu deployment на сервере и подключить reverse proxy/TLS;
 - укрепить backend/API-контракты публикации и развить аналитику с будущим AI pipeline.
 
 Подробная дорожная карта лежит в [TODO.md](TODO.md).
@@ -197,16 +197,27 @@ npm run build-storybook  # статическая сборка Storybook
 
 ## Деплой
 
-Планируемый деплой: Docker на Ubuntu.
+Docker-конфигурация для Ubuntu добавлена:
 
-Пока Docker-конфигурации в проекте нет. При подготовке нужно добавить:
+- `Dockerfile` собирает Vite frontend, устанавливает production-зависимости и запускает Express;
+- Express в production отдает API и собранный SPA из `dist` на одном порту `4000`;
+- `docker-compose.yml` поднимает `app` + PostgreSQL с persistent volume;
+- `deploy/app.env.example` фиксирует production env-переменные и секреты.
 
-- `Dockerfile` для приложения;
-- `docker-compose.yml` для app + PostgreSQL;
-- production env example;
-- запуск миграции/схемы через `npm run prod:init`;
-- отдельное решение для reverse proxy и TLS.
+Быстрый запуск на Ubuntu:
+
+```bash
+cp deploy/app.env.example .env.docker
+nano .env.docker
+docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f app
+```
+
+При старте контейнер приложения выполняет `npm run prod:init`, применяет PostgreSQL-схему и затем запускает `node server/index.cjs`. После первого запуска можно открыть `/setup/admin` и создать администратора с `SETUP_TOKEN`.
+
+Для публичного production-доступа приложение лучше ставить за reverse proxy с TLS. В этом случае укажите реальный `APP_BASE_URL`, `AUTH_COOKIE_SECURE=true` и проксируйте внешний HTTPS на внутренний порт `4000`.
 
 ## Статус
 
-Проект уже подходит для демонстрации ролей, пользовательских сценариев, структуры данных, organizer workspace и mobile-first дневника участника. До production-ready состояния нужно пройти сквозную приемку organizer -> participant, подготовить Docker-деплой и довести аналитику до реального пайплайна.
+Проект уже подходит для демонстрации ролей, пользовательских сценариев, структуры данных, organizer workspace и mobile-first дневника участника. До production-ready состояния нужно пройти сквозную приемку organizer -> participant, проверить Docker-деплой на Ubuntu-сервере с reverse proxy/TLS и довести аналитику до реального пайплайна.

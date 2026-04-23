@@ -1088,6 +1088,7 @@ function OrganizerCabinetView({
                   description: "",
                   registrationStartsAt: "",
                   registrationEndsAt: "",
+                  registrationCapacity: "",
                   registrationStatus: "draft",
                 });
               }}

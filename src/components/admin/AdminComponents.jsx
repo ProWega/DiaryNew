@@ -304,6 +304,14 @@ export function SessionEditorForm({
                 onChange={(event) => update("registrationEndsAt", event.target.value)}
               />
             </Field>
+            <Field label="Лимит участников">
+              <input
+                value={form.registrationCapacity ?? ""}
+                disabled={isDisabled}
+                inputMode="numeric"
+                onChange={(event) => update("registrationCapacity", event.target.value)}
+              />
+            </Field>
             <Field label="Статус регистрации">
               <select
                 value={form.registrationStatus || "draft"}
