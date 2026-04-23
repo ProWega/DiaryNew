@@ -401,9 +401,6 @@ function ParticipantRoutedView({
                       <div className="event-card participant-event-card participant-event-panel-inner">
                         <div className="event-head participant-active-head">
                           <div>
-                            <p className="participant-event-microcopy">
-                              {event.stateId ? "Можно уточнить отметку или добавить заметку." : "Выберите точку на шкале."}
-                            </p>
                             <h3>{event.title}</h3>
                             <p>{event.type}</p>
                           </div>
@@ -422,10 +419,9 @@ function ParticipantRoutedView({
                             onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
                             states={stateScale}
                             variant="arc"
-                            size="compact"
                             animated
                             showDescriptions
-                            label="Как вы сейчас после события?"
+                            label=""
                           />
 
                           <div className="participant-step-actions">
