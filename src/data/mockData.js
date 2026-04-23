@@ -38,7 +38,8 @@ export const participantHistory = [
   {
     id: "day-1",
     label: "День 1",
-    dateLabel: "Среда, 24 апреля",
+    dateLabel: "Пятница, 24 апреля",
+    dateValue: "2026-04-24",
     insight:
       "Старт был осторожным, но групповые форматы постепенно включили в общий ритм.",
     aiHighlights: [
@@ -119,7 +120,8 @@ export const participantHistory = [
   {
     id: "day-2",
     label: "День 2",
-    dateLabel: "Четверг, 25 апреля",
+    dateLabel: "Суббота, 25 апреля",
+    dateValue: "2026-04-25",
     insight:
       "Реакция стала контрастнее: на содержательные форматы идёт подъём, а на перегруженные переходы быстро падает ресурс.",
     aiHighlights: [
@@ -200,7 +202,8 @@ export const participantHistory = [
   {
     id: "day-3",
     label: "День 3",
-    dateLabel: "Пятница, 26 апреля",
+    dateLabel: "Воскресенье, 26 апреля",
+    dateValue: "2026-04-26",
     insight:
       "Финальный день прошёл стабильнее: помогли короткие форматы, личные паузы и понятная роль в команде.",
     aiHighlights: [

@@ -13,6 +13,7 @@ export default {
     animated: { control: "boolean" },
     disabled: { control: "boolean" },
     showDescriptions: { control: "boolean" },
+    showSlideBar: { control: "boolean" },
     label: { control: "text" },
     states: { table: { disable: true } },
     onChange: { table: { disable: true } },
@@ -24,6 +25,7 @@ export default {
     animated: true,
     disabled: false,
     showDescriptions: true,
+    showSlideBar: true,
     label: "Шкала состояния",
   },
 };
@@ -61,6 +63,15 @@ export const ArcNeutralPreview = {
   },
   parameters: {
     viewport: { defaultViewport: "mobile" },
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const ArcWithoutSlider = {
+  args: {
+    variant: "arc",
+    value: "overstimulated",
+    showSlideBar: false,
   },
   render: (args) => <StateScalePickerStory {...args} />,
 };

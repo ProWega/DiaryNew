@@ -1,5 +1,6 @@
 const { query } = require("../postgres.cjs");
 const { createId, getSessionInfo, normalizeDateInput, toIsoDate } = require("./common.cjs");
+const { buildBootstrapProgramDays } = require("./programDays.cjs");
 
 const REGISTRATION_STATUSES = new Set(["draft", "open", "closed", "archived"]);
 
@@ -344,25 +345,45 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
     ],
   );
 
-  const dayId = payload.defaultDayId || `day-${programId}-1`;
-  await query(
-    `
-      insert into program_days (
-        id, program_id, session_id, day_number, label, date_label, date_value,
-        flow_order, flow_meta, updated_at
-      )
-      values ($1,$2,$3,1,'День 1',$4,$5,'["A"]'::jsonb,'{"A":{"label":"A","track":""}}'::jsonb,now())
-      on conflict (id)
-      do update set
-        label = excluded.label,
-        date_label = excluded.date_label,
-        date_value = excluded.date_value,
-        flow_order = excluded.flow_order,
-        flow_meta = excluded.flow_meta,
-        updated_at = now()
-    `,
-    [dayId, programId, sessionId, payload.dateLabel || "", startDate],
-  );
+  const programDays = buildBootstrapProgramDays({
+    programId,
+    sessionId,
+    startDate,
+    endDate,
+    firstDayId: payload.defaultDayId || `day-${programId}-1`,
+  });
+
+  for (const day of programDays) {
+    await query(
+      `
+        insert into program_days (
+          id, program_id, session_id, day_number, label, date_label, date_value,
+          flow_order, flow_meta, updated_at
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,now())
+        on conflict (id)
+        do update set
+          day_number = excluded.day_number,
+          label = excluded.label,
+          date_label = excluded.date_label,
+          date_value = excluded.date_value,
+          flow_order = excluded.flow_order,
+          flow_meta = excluded.flow_meta,
+          updated_at = now()
+      `,
+      [
+        day.id,
+        programId,
+        sessionId,
+        day.dayNumber,
+        day.label,
+        day.dateLabel || "",
+        day.dateValue,
+        JSON.stringify(day.flowOrder),
+        JSON.stringify(day.flowMeta),
+      ],
+    );
+  }
 
   if (assignOrganizerId) {
     await query(

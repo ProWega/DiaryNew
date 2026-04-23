@@ -4,28 +4,83 @@ import { useParticipantDiary } from "../api/hooks";
 import { useAuth } from "../auth/AuthContext";
 import FeedbackState from "../components/FeedbackState";
 import { buildPortrait, calculateMetrics, formatAverage } from "../lib/metrics";
+import { selectClosestProgramDay } from "../lib/programDays";
 import ParticipantRoutedView from "../views/ParticipantRoutedView";
 import ParticipantSelfKnowledgeView from "../views/ParticipantSelfKnowledgeView";
+
+function getParticipantDayStorageKey(sessionId) {
+  return sessionId ? `participant:selected-day:${sessionId}` : "";
+}
+
+function readStoredSelectedDay(sessionId) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const storageKey = getParticipantDayStorageKey(sessionId);
+  if (!storageKey) {
+    return "";
+  }
+
+  try {
+    return window.localStorage.getItem(storageKey) || "";
+  } catch {
+    return "";
+  }
+}
 
 function ParticipantPage({ mode }) {
   const { sessionId } = useParams();
   const { bootstrap } = useAuth();
   const { data, loading, error, refresh, updateEntry, updateReflection } =
     useParticipantDiary(sessionId);
-  const [selectedHistoryDay, setSelectedHistoryDay] = useState("");
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState(() => readStoredSelectedDay(sessionId));
+  const liveHistory = data?.history ?? [];
+  const selectedDayStorageKey = getParticipantDayStorageKey(sessionId);
+  const fallbackCurrentDay = useMemo(
+    () => selectClosestProgramDay(liveHistory) || liveHistory[0] || null,
+    [liveHistory],
+  );
+  const currentDay =
+    liveHistory.find((day) => day.id === data?.currentDayId) ?? fallbackCurrentDay;
 
   useEffect(() => {
-    if (data?.currentDayId) {
-      setSelectedHistoryDay((previous) => previous || data.currentDayId);
-    }
-  }, [data?.currentDayId]);
+    setSelectedHistoryDay(readStoredSelectedDay(sessionId));
+  }, [sessionId]);
 
-  const liveHistory = data?.history ?? [];
-  const currentDay = liveHistory.find((day) => day.id === data?.currentDayId) ?? liveHistory[0];
+  useEffect(() => {
+    if (currentDay?.id) {
+      setSelectedHistoryDay((previous) => {
+        if (liveHistory.some((day) => day.id === previous)) {
+          return previous;
+        }
+
+        return currentDay.id;
+      });
+    }
+  }, [currentDay?.id, liveHistory]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedDayStorageKey) {
+      return;
+    }
+
+    try {
+      if (selectedHistoryDay && liveHistory.some((day) => day.id === selectedHistoryDay)) {
+        window.localStorage.setItem(selectedDayStorageKey, selectedHistoryDay);
+      } else {
+        window.localStorage.removeItem(selectedDayStorageKey);
+      }
+    } catch {
+      // Ignore storage errors and keep runtime flow working.
+    }
+  }, [liveHistory, selectedDayStorageKey, selectedHistoryDay]);
+
   const selectedDay =
     liveHistory.find((day) => day.id === selectedHistoryDay) ?? currentDay;
-  const todayEvents = currentDay?.events ?? [];
-  const reflection = currentDay?.reflection ?? {
+  const activeDay = selectedDay ?? currentDay;
+  const todayEvents = activeDay?.events ?? [];
+  const reflection = activeDay?.reflection ?? {
     q1: "",
     q2: "",
     q3: "",
@@ -33,8 +88,8 @@ function ParticipantPage({ mode }) {
   };
 
   const todayMetrics = useMemo(
-    () => calculateMetrics(todayEvents, currentDay?.progress ?? data?.progress),
-    [currentDay?.progress, data?.progress, todayEvents],
+    () => calculateMetrics(todayEvents, activeDay?.progress ?? data?.progress),
+    [activeDay?.progress, data?.progress, todayEvents],
   );
   const todayPortrait = useMemo(
     () => buildPortrait(todayEvents, todayMetrics),
@@ -112,17 +167,19 @@ function ParticipantPage({ mode }) {
     );
   }
 
-  function setReflection(nextValueOrUpdater) {
+  function setReflection(dayId, nextValueOrUpdater) {
+    const sourceDay = liveHistory.find((day) => day.id === dayId) ?? activeDay;
+    const sourceReflection = sourceDay?.reflection ?? reflection;
     const nextValue =
       typeof nextValueOrUpdater === "function"
-        ? nextValueOrUpdater(reflection)
+        ? nextValueOrUpdater(sourceReflection)
         : nextValueOrUpdater;
 
-    updateReflection(currentDay.id, nextValue);
+    return updateReflection(dayId, nextValue);
   }
 
-  function saveEventEntry(eventId, patch) {
-    return updateEntry(currentDay.id, eventId, patch);
+  function saveEventEntry(dayId, eventId, patch) {
+    return updateEntry(dayId, eventId, patch);
   }
 
   return (
@@ -137,7 +194,7 @@ function ParticipantPage({ mode }) {
       setReflection={setReflection}
       saveEventEntry={saveEventEntry}
       liveHistory={liveHistory}
-      selectedDay={selectedDay}
+      selectedDay={activeDay}
       setSelectedHistoryDay={setSelectedHistoryDay}
       overallTrajectory={overallTrajectory}
       overallAverages={overallAverages}

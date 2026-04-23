@@ -43,7 +43,14 @@ function getProgress(events, reflection) {
   };
 }
 
-function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, reflectionAnswered = true } = {}) {
+function makeDay({
+  id = "day-1",
+  label = "День 1",
+  dateLabel = "13 июля",
+  dateValue = "2026-07-13",
+  answeredEvents = 2,
+  reflectionAnswered = true,
+} = {}) {
   const events = baseEvents.map((event, index) => ({
     ...event,
     answered: index < answeredEvents,
@@ -58,7 +65,8 @@ function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, refle
   return {
     id,
     label,
-    dateLabel: "13 июля",
+    dateLabel,
+    dateValue,
     insight: "Сводка меняется по мере заполнения дневника.",
     aiHighlights: ["Пока видна частичная динамика.", "После дневной рефлексии картина станет точнее."],
     reflection: {
@@ -81,53 +89,85 @@ function makeDay({ id = "day-1", label = "День 1", answeredEvents = 2, refle
 }
 
 function ParticipantDiaryStory(args) {
-  const initialDay = useMemo(
-    () => makeDay(args),
+  const initialHistory = useMemo(
+    () => [
+      makeDay(args),
+      makeDay({
+        id: "day-2",
+        label: "День 2",
+        dateLabel: "14 июля",
+        dateValue: "2026-07-14",
+        answeredEvents: Math.max(args.answeredEvents - 1, 0),
+        reflectionAnswered: false,
+      }),
+    ],
     [args.answeredEvents, args.reflectionAnswered],
   );
-  const [events, setEvents] = useState(initialDay.events);
-  const [reflection, setReflectionState] = useState(initialDay.reflection);
+  const [history, setHistory] = useState(initialHistory);
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState(initialHistory[0]?.id || "");
 
   useEffect(() => {
-    setEvents(initialDay.events);
-    setReflectionState(initialDay.reflection);
-  }, [initialDay]);
+    setHistory(initialHistory);
+    setSelectedHistoryDay(initialHistory[0]?.id || "");
+  }, [initialHistory]);
 
-  const progress = getProgress(events, reflection);
-  const currentDay = {
-    ...initialDay,
-    events,
-    reflection: {
-      ...reflection,
-      answered: progress.answeredReflections > 0,
-    },
-    progress,
-  };
-  const history = [
-    currentDay,
-    makeDay({ id: "day-2", label: "День 2", answeredEvents: Math.max(args.answeredEvents - 1, 0), reflectionAnswered: false }),
-  ];
-  const metrics = calculateMetrics(currentDay.events, currentDay.progress);
+  const currentDay =
+    history.find((day) => day.id === selectedHistoryDay) ||
+    history[0];
+  const normalizedHistory = history.map((day) => {
+    const progress = getProgress(day.events, day.reflection);
+    return {
+      ...day,
+      reflection: {
+        ...day.reflection,
+        answered: progress.answeredReflections > 0,
+      },
+      progress,
+    };
+  });
+  const selectedDay =
+    normalizedHistory.find((day) => day.id === currentDay?.id) ||
+    normalizedHistory[0];
+  const metrics = calculateMetrics(selectedDay.events, selectedDay.progress);
 
-  function setReflection(nextValueOrUpdater) {
-    setReflectionState((previous) =>
-      typeof nextValueOrUpdater === "function"
-        ? nextValueOrUpdater(previous)
-        : nextValueOrUpdater,
+  function setReflection(dayId, nextValueOrUpdater) {
+    setHistory((previous) =>
+      previous.map((day) => {
+        if (day.id !== dayId) {
+          return day;
+        }
+
+        const nextReflection =
+          typeof nextValueOrUpdater === "function"
+            ? nextValueOrUpdater(day.reflection)
+            : nextValueOrUpdater;
+
+        return {
+          ...day,
+          reflection: nextReflection,
+        };
+      }),
     );
   }
 
-  async function saveEventEntry(eventId, patch) {
-    setEvents((previous) =>
-      previous.map((event) =>
-        event.id === eventId
+  async function saveEventEntry(dayId, eventId, patch) {
+    setHistory((previous) =>
+      previous.map((day) =>
+        day.id === dayId
           ? {
-              ...event,
-              ...patch,
-              answered: true,
-              respondedAt: "2026-07-13T12:00:00.000Z",
+              ...day,
+              events: day.events.map((event) =>
+                event.id === eventId
+                  ? {
+                      ...event,
+                      ...patch,
+                      answered: true,
+                      respondedAt: "2026-07-13T12:00:00.000Z",
+                    }
+                  : event,
+              ),
             }
-          : event,
+          : day,
       ),
     );
 
@@ -141,21 +181,21 @@ function ParticipantDiaryStory(args) {
       mode={args.mode}
       stateScale={stateScale}
       reflectionPrompts={reflectionPrompts}
-      todayEvents={currentDay.events}
+      todayEvents={selectedDay.events}
       todayMetrics={metrics}
-      todayPortrait={buildPortrait(currentDay.events, metrics)}
-      reflection={currentDay.reflection}
+      todayPortrait={buildPortrait(selectedDay.events, metrics)}
+      reflection={selectedDay.reflection}
       setReflection={setReflection}
       saveEventEntry={saveEventEntry}
-      liveHistory={history}
-      selectedDay={currentDay}
-      setSelectedHistoryDay={() => {}}
-      overallTrajectory={history.flatMap((day) =>
+      liveHistory={normalizedHistory}
+      selectedDay={selectedDay}
+      setSelectedHistoryDay={setSelectedHistoryDay}
+      overallTrajectory={normalizedHistory.flatMap((day) =>
         day.events
           .filter((event) => event.answered && event.stateId)
           .map((event) => ({ label: `${day.label}: ${event.title}`, stateId: event.stateId })),
       )}
-      overallAverages={history.map((day) => ({ day: day.label, value: calculateMetrics(day.events, day.progress).average }))}
+      overallAverages={normalizedHistory.map((day) => ({ day: day.label, value: calculateMetrics(day.events, day.progress).average }))}
       formatAverage={formatAverage}
     />
   );

@@ -1,5 +1,5 @@
 const { query } = require("../postgres.cjs");
-const { createId, getStateById } = require("./common.cjs");
+const { createId, getStateById, selectClosestProgramDay } = require("./common.cjs");
 const { getRawUser } = require("./userStore.cjs");
 const {
   calculateProgress,
@@ -181,6 +181,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
         id: row.day_id,
         label: row.day_label,
         dateLabel: row.date_label,
+        dateValue: row.date_value || "",
         insight: "Динамика дня будет уточняться по мере заполнения дневника.",
         aiHighlights: [
           "Отмечайте состояние после ключевых мероприятий.",
@@ -234,7 +235,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
     entries: answeredEntries.map((entry) => ({ ...entry, user_id: viewerId })),
     reflections: answeredReflections.map((reflection) => ({ ...reflection, user_id: viewerId })),
   });
-  const currentDay = history.find((day) => day.id.includes("day-2")) || history[0];
+  const currentDay = selectClosestProgramDay(history) || history[0];
 
   return {
     sessionId,

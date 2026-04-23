@@ -120,6 +120,7 @@ function StateScalePicker({
   animated = true,
   disabled = false,
   showDescriptions = true,
+  showSlideBar = true,
   label = "Шкала состояния",
 }) {
   const generatedId = useId();
@@ -282,6 +283,25 @@ function StateScalePicker({
     const descriptionText = isNeutralArcPreview
       ? descriptionState.description
       : arcPreviewState?.participantHint || arcPreviewState?.description;
+    const selectedSegment = normalizedStates[previewIndex] || null;
+
+    function renderArcSegment(state, index, extraClassName = "") {
+      const start = ARC_START + index * step;
+      const end = start + step;
+      const className = ["state-scale-segment", index === previewIndex ? "is-selected" : "", extraClassName]
+        .filter(Boolean)
+        .join(" ");
+
+      return (
+        <path
+          key={`${state.id}-${extraClassName || "base"}`}
+          className={className}
+          d={describeArc(ARC_CENTER.x, ARC_CENTER.y, ARC_RADIUS, start + 2.2, end - 2.2)}
+          style={{ "--state-color": state.color }}
+          onClick={() => handleSelect(state.id)}
+        />
+      );
+    }
 
     return (
       <div className="state-scale-arc-flow">
@@ -308,20 +328,10 @@ function StateScalePicker({
               );
             })}
 
-            {normalizedStates.map((state, index) => {
-              const start = ARC_START + index * step;
-              const end = start + step;
-
-              return (
-                <path
-                  key={state.id}
-                  className={index === previewIndex ? "state-scale-segment is-selected" : "state-scale-segment"}
-                  d={describeArc(ARC_CENTER.x, ARC_CENTER.y, ARC_RADIUS, start + 2.2, end - 2.2)}
-                  style={{ "--state-color": state.color }}
-                  onClick={() => handleSelect(state.id)}
-                />
-              );
-            })}
+            {normalizedStates.map((state, index) =>
+              index === previewIndex ? null : renderArcSegment(state, index),
+            )}
+            {selectedSegment ? renderArcSegment(selectedSegment, previewIndex, "is-overlay") : null}
 
             {selectedPoint ? (
               <g className="state-scale-needle">
@@ -374,43 +384,45 @@ function StateScalePicker({
           </div>
         ) : null}
 
-        <div className="state-scale-slider" style={{ "--state-slider-track": sliderGradient }}>
-          <input
-            type="range"
-            min="0"
-            max={Math.max(normalizedStates.length - 1, 0)}
-            step="1"
-            value={previewIndex}
-            disabled={disabled || !normalizedStates.length}
-            className="state-scale-slider-input"
-            aria-labelledby={titleId}
-            aria-valuetext={getSliderValueText(arcPreviewState, isNeutralArcPreview)}
-            style={{ "--state-color": arcPreviewState?.color || STATE_SCALE_NEUTRAL_PREVIEW.color }}
-            onChange={(event) => handleArcPreviewChange(event.target.value)}
-            onPointerUp={commitArcPreview}
-            onMouseUp={commitArcPreview}
-            onTouchEnd={commitArcPreview}
-            onKeyUp={commitArcPreview}
-            onBlur={commitArcPreview}
-          />
-          <div className="state-scale-slider-ticks" aria-hidden="true">
-            {normalizedStates.map((state, index) => (
-              <span
-                key={state.id}
-                className={index === previewIndex ? "is-active" : ""}
-                style={{
-                  "--state-color": state.color,
-                  left: `${normalizedStates.length > 1 ? (index / (normalizedStates.length - 1)) * 100 : 0}%`,
-                }}
-              />
-            ))}
+        {showSlideBar ? (
+          <div className="state-scale-slider" style={{ "--state-slider-track": sliderGradient }}>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(normalizedStates.length - 1, 0)}
+              step="1"
+              value={previewIndex}
+              disabled={disabled || !normalizedStates.length}
+              className="state-scale-slider-input"
+              aria-labelledby={titleId}
+              aria-valuetext={getSliderValueText(arcPreviewState, isNeutralArcPreview)}
+              style={{ "--state-color": arcPreviewState?.color || STATE_SCALE_NEUTRAL_PREVIEW.color }}
+              onChange={(event) => handleArcPreviewChange(event.target.value)}
+              onPointerUp={commitArcPreview}
+              onMouseUp={commitArcPreview}
+              onTouchEnd={commitArcPreview}
+              onKeyUp={commitArcPreview}
+              onBlur={commitArcPreview}
+            />
+            <div className="state-scale-slider-ticks" aria-hidden="true">
+              {normalizedStates.map((state, index) => (
+                <span
+                  key={state.id}
+                  className={index === previewIndex ? "is-active" : ""}
+                  style={{
+                    "--state-color": state.color,
+                    left: `${normalizedStates.length > 1 ? (index / (normalizedStates.length - 1)) * 100 : 0}%`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="state-scale-slider-zone-labels" aria-hidden="true">
+              {STATE_SCALE_ZONES.map((zone) => (
+                <span key={zone.id}>{zone.shortLabel.toLowerCase()}</span>
+              ))}
+            </div>
           </div>
-          <div className="state-scale-slider-zone-labels" aria-hidden="true">
-            {STATE_SCALE_ZONES.map((zone) => (
-              <span key={zone.id}>{zone.shortLabel.toLowerCase()}</span>
-            ))}
-          </div>
-        </div>
+        ) : null}
       </div>
     );
   }

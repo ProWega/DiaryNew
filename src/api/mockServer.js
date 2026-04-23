@@ -7,6 +7,7 @@ import {
   sessionInfo,
   stateScale,
 } from "../data/mockData";
+import { selectClosestProgramDay } from "../lib/programDays";
 import { can, getNavigationItems, getScopeBadges } from "../rbac/permissions";
 
 const STORAGE_KEY = "newdiary-mock-api-v4";
@@ -29,6 +30,10 @@ const SESSION_CATALOG = [
 ];
 
 const DEFAULT_SESSION_ID = "session-istoki-school-2026";
+
+function getDefaultCurrentDayId(history = participantHistory) {
+  return selectClosestProgramDay(history)?.id || history[0]?.id || "";
+}
 
 const GROUPS = [
   {
@@ -144,7 +149,7 @@ function buildSeedDatabase() {
     },
     participantDiaryByUserId: {
       "user-participant-1": {
-        currentDayId: "day-2",
+        currentDayId: getDefaultCurrentDayId(participantHistory),
         history: cloneJson(participantHistory),
       },
     },
@@ -323,7 +328,7 @@ async function registerParticipant({ fullName, sessionId }) {
 
   db.users.push(nextUser);
   db.participantDiaryByUserId[nextUser.id] = {
-    currentDayId: "day-2",
+    currentDayId: getDefaultCurrentDayId(participantHistory),
     history: cloneJson(participantHistory),
   };
 
@@ -357,7 +362,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
 
   return {
     sessionId,
-    currentDayId: diary.currentDayId,
+    currentDayId: diary.currentDayId || getDefaultCurrentDayId(diary.history),
     history: cloneJson(diary.history),
   };
 }
@@ -400,7 +405,7 @@ async function updateParticipantEntry({
 
   return {
     sessionId,
-    currentDayId: diary.currentDayId,
+    currentDayId: diary.currentDayId || getDefaultCurrentDayId(diary.history),
     history: cloneJson(diary.history),
   };
 }
@@ -438,7 +443,7 @@ async function updateParticipantReflection({
 
   return {
     sessionId,
-    currentDayId: diary.currentDayId,
+    currentDayId: diary.currentDayId || getDefaultCurrentDayId(diary.history),
     history: cloneJson(diary.history),
   };
 }

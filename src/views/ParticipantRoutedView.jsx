@@ -49,6 +49,8 @@ function ParticipantRoutedView({
   const [eventDrafts, setEventDrafts] = useState({});
   const [savingEventId, setSavingEventId] = useState("");
   const pendingStateSaveRef = useRef({});
+  const activeDayId = selectedDay?.id || "";
+  const hasMultipleDays = liveHistory.length > 1;
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
   const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
   const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
@@ -128,11 +130,11 @@ function ParticipantRoutedView({
     );
   }
 
-  function queueStateSave(eventId, stateId) {
+  function queueStateSave(dayId, eventId, stateId) {
     const previousTask = pendingStateSaveRef.current[eventId] || Promise.resolve();
     const requestTask = previousTask
       .catch(() => null)
-      .then(() => saveEventEntry(eventId, { stateId }));
+      .then(() => saveEventEntry(dayId, eventId, { stateId }));
     const trackedTask = requestTask.finally(() => {
       if (pendingStateSaveRef.current[eventId] === trackedTask) {
         delete pendingStateSaveRef.current[eventId];
@@ -143,7 +145,7 @@ function ParticipantRoutedView({
     return trackedTask;
   }
 
-  function handleEventStateSelect(event, stateId) {
+  function handleEventStateSelect(dayId, event, stateId) {
     setEventDrafts((previous) => ({
       ...previous,
       [event.id]: {
@@ -152,7 +154,7 @@ function ParticipantRoutedView({
       },
     }));
 
-    void queueStateSave(event.id, stateId).catch(() => null);
+    void queueStateSave(dayId, event.id, stateId).catch(() => null);
   }
 
   function handleEventCommentChange(event, comment) {
@@ -182,7 +184,7 @@ function ParticipantRoutedView({
     });
   }
 
-  async function commitEventDraft(event, options = {}) {
+  async function commitEventDraft(dayId, event, options = {}) {
     const { defaultToBalance = false, nextEventId = "" } = options;
     const draft = getEventDraft(event);
     const stateId = draft.stateId || event.stateId || (defaultToBalance ? "balance" : "");
@@ -191,14 +193,14 @@ function ParticipantRoutedView({
       if (nextEventId) {
         setOpenEventId(nextEventId);
       }
-      return;
+      return false;
     }
 
     setSavingEventId(event.id);
 
     try {
       await (pendingStateSaveRef.current[event.id] || Promise.resolve());
-      await saveEventEntry(event.id, {
+      await saveEventEntry(dayId, event.id, {
         stateId,
         comment: draft.comment,
         confidence: draft.confidence || "high",
@@ -219,14 +221,16 @@ function ParticipantRoutedView({
       if (nextEventId) {
         setOpenEventId(nextEventId);
       }
+      return true;
     } catch (error) {
       console.error(error);
+      return false;
     } finally {
       setSavingEventId((previous) => (previous === event.id ? "" : previous));
     }
   }
 
-  function moveOpenEvent(event, index, direction) {
+  function moveOpenEvent(dayId, event, index, direction) {
     const nextEvent = todayEvents[index + direction];
 
     if (!nextEvent) {
@@ -234,7 +238,7 @@ function ParticipantRoutedView({
     }
 
     if (direction > 0) {
-      void commitEventDraft(event, {
+      void commitEventDraft(dayId, event, {
         defaultToBalance: true,
         nextEventId: nextEvent.id,
       });
@@ -242,7 +246,7 @@ function ParticipantRoutedView({
     }
 
     if (hasPendingEventChanges(event, getEventDraft(event))) {
-      void commitEventDraft(event, {
+      void commitEventDraft(dayId, event, {
         nextEventId: nextEvent.id,
       });
       return;
@@ -251,10 +255,35 @@ function ParticipantRoutedView({
     setOpenEventId(nextEvent.id);
   }
 
-  function saveCurrentEvent(event) {
-    void commitEventDraft(event, {
+  function saveCurrentEvent(dayId, event) {
+    void commitEventDraft(dayId, event, {
       defaultToBalance: true,
     });
+  }
+
+  async function handleDaySwitch(nextDayId) {
+    if (!nextDayId || nextDayId === activeDayId) {
+      return;
+    }
+
+    if (openEvent && hasPendingEventChanges(openEvent, getEventDraft(openEvent))) {
+      const didCommit = await commitEventDraft(activeDayId, openEvent, {
+        defaultToBalance: true,
+      });
+
+      if (!didCommit) {
+        return;
+      }
+    } else if (openEvent && pendingStateSaveRef.current[openEvent.id]) {
+      try {
+        await pendingStateSaveRef.current[openEvent.id];
+      } catch (error) {
+        console.error(error);
+        return;
+      }
+    }
+
+    setSelectedHistoryDay(nextDayId);
   }
 
   return (
@@ -265,11 +294,30 @@ function ParticipantRoutedView({
             <div className="participant-flow-head">
               <div>
                 <p className="eyebrow">Состояние</p>
-                <h3>{openEventPosition ? `Событие ${openEventPosition} из ${todayEvents.length}` : "Выберите событие"}</h3>
+                <h3>
+                  {selectedDay?.label || "День"}{selectedDay?.dateLabel ? ` · ${selectedDay.dateLabel}` : ""}
+                </h3>
                 <p className="participant-flow-copy">
+                  {openEventPosition ? `Событие ${openEventPosition} из ${todayEvents.length}. ` : ""}
                   Откройте карточку и выберите точку на шкале.
                 </p>
               </div>
+              {hasMultipleDays ? (
+                <div className="participant-day-switcher" aria-label="Дни дневника">
+                  {liveHistory.map((day) => (
+                    <button
+                      key={day.id}
+                      type="button"
+                      className={selectedDay?.id === day.id ? "mini-tab participant-day-tab is-active" : "mini-tab participant-day-tab"}
+                      disabled={Boolean(savingEventId)}
+                      onClick={() => void handleDaySwitch(day.id)}
+                    >
+                      <span>{day.label}</span>
+                      <small>{day.dateLabel || "Без даты"}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="participant-progress-meter" aria-label={`Заполнено ${completionValue}%`}>
                 <span style={{ width: `${completionValue}%` }} />
               </div>
@@ -371,7 +419,7 @@ function ParticipantRoutedView({
                         <div className="participant-event-workspace">
                           <StateScalePicker
                             value={effectiveStateId}
-                            onChange={(stateId) => handleEventStateSelect(event, stateId)}
+                            onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
                             states={stateScale}
                             variant="arc"
                             animated
@@ -384,7 +432,7 @@ function ParticipantRoutedView({
                               type="button"
                               className="ghost-button"
                               disabled={index === 0 || isEventSaving}
-                              onClick={() => moveOpenEvent(event, index, -1)}
+                              onClick={() => moveOpenEvent(activeDayId, event, index, -1)}
                             >
                               Назад
                             </button>
@@ -408,8 +456,8 @@ function ParticipantRoutedView({
                               }
                               onClick={() =>
                                 index >= todayEvents.length - 1
-                                  ? saveCurrentEvent(event)
-                                  : moveOpenEvent(event, index, 1)
+                                  ? saveCurrentEvent(activeDayId, event)
+                                  : moveOpenEvent(activeDayId, event, index, 1)
                               }
                             >
                               Далее
@@ -529,7 +577,7 @@ function ParticipantRoutedView({
                             value={reflection[field]}
                             placeholder="Напишите 1–2 предложения"
                             onChange={(event) =>
-                              setReflection((previous) => ({
+                              setReflection(activeDayId, (previous) => ({
                                 ...previous,
                                 [field]: event.target.value,
                               }))
@@ -546,7 +594,7 @@ function ParticipantRoutedView({
                         value={reflection.freeText}
                         placeholder="Что ещё важно зафиксировать?"
                         onChange={(event) =>
-                          setReflection((previous) => ({
+                          setReflection(activeDayId, (previous) => ({
                             ...previous,
                             freeText: event.target.value,
                           }))
@@ -619,7 +667,8 @@ function ParticipantRoutedView({
                     key={day.id}
                     type="button"
                     className={selectedDay.id === day.id ? "mini-tab is-active" : "mini-tab"}
-                    onClick={() => setSelectedHistoryDay(day.id)}
+                    disabled={Boolean(savingEventId)}
+                    onClick={() => void handleDaySwitch(day.id)}
                   >
                     {day.label}
                   </button>

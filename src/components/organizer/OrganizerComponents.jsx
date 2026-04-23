@@ -11,6 +11,11 @@ import {
   getSeverityTone,
   normalizeList,
 } from "../../lib/organizerWorkspace";
+import {
+  createProgramDayDraft as createAutoProgramDayDraft,
+  formatProgramDayDateLabel,
+  isCustomProgramDayDateLabel,
+} from "../../lib/programDays";
 
 export function createProgramDraft() {
   return {
@@ -48,11 +53,28 @@ export function createParallelEventDraft(day, speakerOptions = [], eventTypes = 
 }
 
 export function createProgramDayDraft(program) {
-  const nextNumber = (program?.days?.length || 0) + 1;
+  return createAutoProgramDayDraft(program);
+}
+
+function createProgramDayFormModel(dayDraft = {}) {
+  const dateValue = dayDraft?.dateValue || "";
+  const isAutoDateLabel = !isCustomProgramDayDateLabel(dateValue, dayDraft?.dateLabel || "");
+
   return {
-    label: `День ${nextNumber}`,
-    dateLabel: "",
-    dateValue: "",
+    isAutoDateLabel,
+    form: {
+      label: dayDraft?.label || "День",
+      dateLabel: isAutoDateLabel ? formatProgramDayDateLabel(dateValue) : dayDraft?.dateLabel || "",
+      dateValue,
+    },
+  };
+}
+
+function applyProgramDayDateValue(form, nextDateValue, isAutoDateLabel) {
+  return {
+    ...form,
+    dateValue: nextDateValue,
+    dateLabel: isAutoDateLabel ? formatProgramDayDateLabel(nextDateValue) : form.dateLabel,
   };
 }
 
@@ -2360,30 +2382,64 @@ export function ProgramCreateCard({ saving = false, onCreate }) {
 }
 
 export function ProgramDayComposer({ program, currentDay, saving = false, onCreate, onUpdate, onDelete }) {
-  const [createForm, setCreateForm] = useState(() => createProgramDayDraft(program));
-  const [editForm, setEditForm] = useState(() => ({
-    label: currentDay?.label || "",
-    dateLabel: currentDay?.dateLabel || "",
-    dateValue: currentDay?.dateValue || "",
-  }));
+  const [createForm, setCreateForm] = useState(() => createProgramDayFormModel(createProgramDayDraft(program)).form);
+  const [isCreateDateLabelAuto, setIsCreateDateLabelAuto] = useState(
+    () => createProgramDayFormModel(createProgramDayDraft(program)).isAutoDateLabel,
+  );
+  const [editForm, setEditForm] = useState(() => createProgramDayFormModel(currentDay).form);
+  const [isEditDateLabelAuto, setIsEditDateLabelAuto] = useState(
+    () => createProgramDayFormModel(currentDay).isAutoDateLabel,
+  );
 
   useEffect(() => {
-    setCreateForm(createProgramDayDraft(program));
+    const nextModel = createProgramDayFormModel(createProgramDayDraft(program));
+    setCreateForm(nextModel.form);
+    setIsCreateDateLabelAuto(nextModel.isAutoDateLabel);
   }, [program]);
 
   useEffect(() => {
-    setEditForm({
-      label: currentDay?.label || "",
-      dateLabel: currentDay?.dateLabel || "",
-      dateValue: currentDay?.dateValue || "",
-    });
+    const nextModel = createProgramDayFormModel(currentDay);
+    setEditForm(nextModel.form);
+    setIsEditDateLabelAuto(nextModel.isAutoDateLabel);
   }, [currentDay]);
 
   async function handleCreate() {
     const nextWorkspace = await onCreate?.(createForm);
     if (nextWorkspace) {
-      setCreateForm(createProgramDayDraft(program));
+      const nextProgram =
+        nextWorkspace?.programWorkspace?.programs?.find((item) => item.id === program?.id) || program;
+      const nextModel = createProgramDayFormModel(createProgramDayDraft(nextProgram));
+      setCreateForm(nextModel.form);
+      setIsCreateDateLabelAuto(nextModel.isAutoDateLabel);
     }
+  }
+
+  function handleEditDateValueChange(nextDateValue) {
+    setEditForm((previous) => applyProgramDayDateValue(previous, nextDateValue, isEditDateLabelAuto));
+  }
+
+  function handleCreateDateValueChange(nextDateValue) {
+    setCreateForm((previous) => applyProgramDayDateValue(previous, nextDateValue, isCreateDateLabelAuto));
+  }
+
+  function handleEditDateLabelChange(nextDateLabel) {
+    const trimmedLabel = nextDateLabel.trim();
+    const nextIsAuto = !trimmedLabel;
+    setIsEditDateLabelAuto(nextIsAuto);
+    setEditForm((previous) => ({
+      ...previous,
+      dateLabel: nextIsAuto ? formatProgramDayDateLabel(previous.dateValue) : nextDateLabel,
+    }));
+  }
+
+  function handleCreateDateLabelChange(nextDateLabel) {
+    const trimmedLabel = nextDateLabel.trim();
+    const nextIsAuto = !trimmedLabel;
+    setIsCreateDateLabelAuto(nextIsAuto);
+    setCreateForm((previous) => ({
+      ...previous,
+      dateLabel: nextIsAuto ? formatProgramDayDateLabel(previous.dateValue) : nextDateLabel,
+    }));
   }
 
   return (
@@ -2404,10 +2460,10 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
               <input value={editForm.label} disabled={saving} onChange={(event) => setEditForm({ ...editForm, label: event.target.value })} />
             </Field>
             <Field label="Подпись даты">
-              <input value={editForm.dateLabel} disabled={saving} onChange={(event) => setEditForm({ ...editForm, dateLabel: event.target.value })} />
+              <input value={editForm.dateLabel} disabled={saving} onChange={(event) => handleEditDateLabelChange(event.target.value)} />
             </Field>
             <Field label="Дата">
-              <input type="date" value={editForm.dateValue || ""} disabled={saving} onChange={(event) => setEditForm({ ...editForm, dateValue: event.target.value })} />
+              <input type="date" value={editForm.dateValue || ""} disabled={saving} onChange={(event) => handleEditDateValueChange(event.target.value)} />
             </Field>
           </div>
           <div className="card-actions">
@@ -2428,10 +2484,10 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
           <input value={createForm.label} disabled={saving} onChange={(event) => setCreateForm({ ...createForm, label: event.target.value })} />
         </Field>
         <Field label="Подпись даты">
-          <input value={createForm.dateLabel} disabled={saving} onChange={(event) => setCreateForm({ ...createForm, dateLabel: event.target.value })} />
+          <input value={createForm.dateLabel} disabled={saving} onChange={(event) => handleCreateDateLabelChange(event.target.value)} />
         </Field>
         <Field label="Дата">
-          <input type="date" value={createForm.dateValue} disabled={saving} onChange={(event) => setCreateForm({ ...createForm, dateValue: event.target.value })} />
+          <input type="date" value={createForm.dateValue} disabled={saving} onChange={(event) => handleCreateDateValueChange(event.target.value)} />
         </Field>
       </div>
       <button type="button" className="primary-button" disabled={saving} onClick={() => void handleCreate()}>

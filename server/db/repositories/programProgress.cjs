@@ -1,4 +1,5 @@
 const { query } = require("../postgres.cjs");
+const { repairProgramDaysForProgram } = require("./programDays.cjs");
 
 function mapProgram(row) {
   if (!row) {
@@ -73,16 +74,35 @@ function calculateProgress({ events = [], participants = [], entries = [], refle
 async function getCanonicalProgram(sessionId) {
   const result = await query(
     `
-      select id, title, status
-      from programs
-      where session_id = $1
-      order by is_current desc, created_at, title
+      select p.id, p.title, p.status, p.start_date, p.end_date, s.date_label as session_date_label
+      from programs p
+      join sessions s on s.id = p.session_id
+      where p.session_id = $1
+      order by p.is_current desc, p.created_at, p.title
       limit 1
     `,
     [sessionId],
   );
 
   return result.rows[0] || null;
+}
+
+async function getProgramDays(sessionId, programId) {
+  if (!programId) {
+    return [];
+  }
+
+  const result = await query(
+    `
+      select *
+      from program_days
+      where session_id = $1 and program_id = $2
+      order by day_number, date_value nulls last, label
+    `,
+    [sessionId, programId],
+  );
+
+  return result.rows;
 }
 
 async function getProgramEvents(sessionId, programId) {
@@ -96,6 +116,7 @@ async function getProgramEvents(sessionId, programId) {
         e.*,
         d.label as day_label,
         d.date_label,
+        d.date_value,
         d.day_number,
         coalesce(array_agg(t.tag order by t.tag) filter (where t.tag is not null), '{}') as tags
       from program_events e
@@ -124,13 +145,45 @@ async function getPublishedProgramContext(sessionId) {
     };
   }
 
-  const events = await getProgramEvents(sessionId, program.id);
-  const days = uniqueBy(events, (event) => event.day_id).map((event) => ({
-    id: event.day_id,
-    label: event.day_label,
-    dateLabel: event.date_label || "",
-    dayNumber: event.day_number,
-  }));
+  let events = await getProgramEvents(sessionId, program.id);
+  const eventsByDay = new Map();
+  for (const event of events) {
+    if (!eventsByDay.has(event.day_id)) {
+      eventsByDay.set(event.day_id, []);
+    }
+    eventsByDay.get(event.day_id).push(event);
+  }
+
+  const repairedDays = await repairProgramDaysForProgram({
+    sessionId,
+    sessionDateLabel: canonicalProgram?.session_date_label || "",
+    program: canonicalProgram,
+    days: await getProgramDays(sessionId, program.id),
+    eventsByDay,
+  });
+
+  if (repairedDays.length) {
+    events = await getProgramEvents(sessionId, program.id);
+  }
+
+  const eventDayIds = new Set(events.map((event) => event.day_id));
+  const days = (repairedDays.length
+    ? repairedDays
+        .filter((day) => eventDayIds.has(day.id))
+        .map((day) => ({
+          id: day.id,
+          label: day.label,
+          dateLabel: day.dateLabel || "",
+          dateValue: day.dateValue || null,
+          dayNumber: day.dayNumber,
+        }))
+    : uniqueBy(events, (event) => event.day_id).map((event) => ({
+        id: event.day_id,
+        label: event.day_label,
+        dateLabel: event.date_label || "",
+        dateValue: event.date_value || null,
+        dayNumber: event.day_number,
+      })));
 
   return {
     program,

@@ -36,6 +36,12 @@ const {
   updateSession,
 } = require("./db/repositories/sessionStore.cjs");
 const {
+  addDaysToIsoDate,
+  formatProgramDayDateLabel,
+  getIsoDateDayStamp,
+  getTodayIsoDate,
+} = require("./db/repositories/common.cjs");
+const {
   canAccessOrganizerSession,
   createUser,
   getBootstrap,
@@ -521,11 +527,83 @@ function normalizeProgramPatch(body = {}, { defaultStatus = "draft" } = {}) {
   };
 }
 
-function normalizeDayPatch(body = {}) {
+function hasOwnField(body, key) {
+  return Object.prototype.hasOwnProperty.call(body || {}, key);
+}
+
+function isCustomProgramDayDateLabel(dateValue, dateLabel) {
+  const trimmedLabel = String(dateLabel || "").trim();
+  if (!trimmedLabel) {
+    return false;
+  }
+
+  const autoLabel = formatProgramDayDateLabel(dateValue);
+  if (!autoLabel) {
+    return true;
+  }
+
+  return trimmedLabel !== autoLabel;
+}
+
+function getAutoProgramDayDateValue(program, { currentDay = null } = {}) {
+  const safeDays = Array.isArray(program?.days) ? program.days : [];
+  const currentDayIndex = currentDay ? safeDays.findIndex((day) => day.id === currentDay.id) : -1;
+  const previousDays =
+    currentDayIndex >= 0
+      ? safeDays.slice(0, currentDayIndex)
+      : currentDay
+        ? safeDays.filter((day) => day.id !== currentDay.id)
+        : safeDays;
+
+  for (let index = previousDays.length - 1; index >= 0; index -= 1) {
+    const dateValue = previousDays[index]?.dateValue;
+    if (getIsoDateDayStamp(dateValue) !== null) {
+      return addDaysToIsoDate(dateValue, 1);
+    }
+  }
+
+  if (getIsoDateDayStamp(program?.eventContext?.startDate) !== null) {
+    const offset = currentDay
+      ? Math.max(
+          safeDays.findIndex((day) => day.id === currentDay.id),
+          0,
+        )
+      : safeDays.length;
+    return addDaysToIsoDate(program.eventContext.startDate, offset);
+  }
+
+  return getTodayIsoDate();
+}
+
+function finalizeDayPatch(program, body = {}, currentDay = null) {
+  const explicitDateValue = String(body.dateValue ?? body.date ?? "").trim();
+  const currentDateValue = String(currentDay?.dateValue || "").trim();
+  let dateValue = explicitDateValue;
+
+  if (!dateValue) {
+    dateValue = currentDateValue || getAutoProgramDayDateValue(program, { currentDay });
+  }
+
+  const hasExplicitDateLabel = hasOwnField(body, "dateLabel");
+  const explicitDateLabel = String(body.dateLabel || "");
+  let dateLabel = "";
+
+  if (hasExplicitDateLabel) {
+    dateLabel = explicitDateLabel.trim() ? explicitDateLabel : formatProgramDayDateLabel(dateValue);
+  } else if (currentDay) {
+    const currentDateLabel = String(currentDay.dateLabel || "");
+    const shouldRegenerateLabel =
+      !currentDateLabel.trim() ||
+      (!isCustomProgramDayDateLabel(currentDateValue, currentDateLabel) && currentDateValue !== dateValue);
+    dateLabel = shouldRegenerateLabel ? formatProgramDayDateLabel(dateValue) : currentDateLabel;
+  } else {
+    dateLabel = formatProgramDayDateLabel(dateValue);
+  }
+
   return {
-    label: body.label || "День",
-    dateLabel: body.dateLabel || "",
-    dateValue: body.dateValue || body.date || "",
+    label: String(body.label || currentDay?.label || "День").trim() || "День",
+    dateLabel,
+    dateValue,
   };
 }
 
@@ -1457,11 +1535,10 @@ app.post(
   "/api/organizer/sessions/:sessionId/programs/:programId/days",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    const payload = normalizeDayPatch(req.body);
-
     const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
       syncWorkspace(draft);
       const program = findProgram(draft, req.params.programId);
+      const payload = finalizeDayPatch(program, req.body);
       const nextDayId = `day-${randomUUID().slice(0, 8)}`;
       program.days.push({
         id: nextDayId,
@@ -1484,12 +1561,11 @@ app.patch(
   "/api/organizer/sessions/:sessionId/programs/:programId/days/:dayId",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    const payload = normalizeDayPatch(req.body);
-
     const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
       syncWorkspace(draft);
       const program = findProgram(draft, req.params.programId);
       const day = findDay(program, req.params.dayId);
+      const payload = finalizeDayPatch(program, req.body, day);
       day.label = payload.label;
       day.dateLabel = payload.dateLabel;
       day.dateValue = payload.dateValue;

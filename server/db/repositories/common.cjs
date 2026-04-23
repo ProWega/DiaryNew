@@ -23,6 +23,27 @@ function formatDateObject(value) {
   return `${year}-${month}-${day}`;
 }
 
+function parseIsoDateParts(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+function formatIsoDateParts(parts) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
 function toIsoDate(value) {
   if (value === "" || value === undefined || value === null) {
     return "";
@@ -52,6 +73,80 @@ function toIsoDate(value) {
 
 function normalizeDateInput(value) {
   return toIsoDate(value) || null;
+}
+
+function getIsoDateDayStamp(value) {
+  const parts = parseIsoDateParts(value);
+  if (!parts) {
+    return null;
+  }
+
+  return Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / 86400000);
+}
+
+function getTodayIsoDate() {
+  return formatDateObject(new Date());
+}
+
+function addDaysToIsoDate(value, days) {
+  const stamp = getIsoDateDayStamp(value);
+  if (stamp === null) {
+    return "";
+  }
+
+  const nextDate = new Date((stamp + Number(days || 0)) * 86400000);
+  return formatIsoDateParts({
+    year: nextDate.getUTCFullYear(),
+    month: nextDate.getUTCMonth() + 1,
+    day: nextDate.getUTCDate(),
+  });
+}
+
+function formatProgramDayDateLabel(value) {
+  const parts = parseIsoDateParts(value);
+  if (!parts) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(parts.year, parts.month - 1, parts.day)));
+}
+
+function selectClosestProgramDay(days, todayIso = getTodayIsoDate()) {
+  const safeDays = Array.isArray(days) ? days : [];
+  if (!safeDays.length) {
+    return null;
+  }
+
+  const todayStamp = getIsoDateDayStamp(todayIso);
+  if (todayStamp === null) {
+    return safeDays[0];
+  }
+
+  const exactMatch = safeDays.find((day) => getIsoDateDayStamp(day?.dateValue) === todayStamp);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  let bestMatch = null;
+  for (const day of safeDays) {
+    const stamp = getIsoDateDayStamp(day?.dateValue);
+    if (stamp === null) {
+      continue;
+    }
+
+    const distance = Math.abs(stamp - todayStamp);
+    const isPast = stamp < todayStamp;
+
+    if (!bestMatch || distance < bestMatch.distance || (distance === bestMatch.distance && isPast && !bestMatch.isPast)) {
+      bestMatch = { day, distance, isPast };
+    }
+  }
+
+  return bestMatch?.day || safeDays[0];
 }
 
 function normalizeList(value) {
@@ -181,15 +276,20 @@ async function getSession(sessionId) {
 }
 
 module.exports = {
+  addDaysToIsoDate,
   cloneJson,
   createId,
+  formatProgramDayDateLabel,
   getSession,
   getSessionInfo,
+  getIsoDateDayStamp,
   getStateById,
   getStateScale,
+  getTodayIsoDate,
   normalizeDateInput,
   normalizeList,
   roleLabels,
+  selectClosestProgramDay,
   toIsoDate,
   toPublicUser,
 };

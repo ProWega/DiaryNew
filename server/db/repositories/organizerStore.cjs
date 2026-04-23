@@ -1,6 +1,7 @@
 const { query } = require("../postgres.cjs");
-const { createId, normalizeDateInput, normalizeList, toIsoDate } = require("./common.cjs");
+const { createId, getSession, normalizeDateInput, normalizeList, toIsoDate } = require("./common.cjs");
 const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
+const { repairProgramDaysForProgram } = require("./programDays.cjs");
 
 const DEFAULT_EVENT_TYPES = [
   "Лекция",
@@ -248,6 +249,7 @@ async function getAudiencePool(sessionId) {
 }
 
 async function getProgramWorkspace(sessionId) {
+  const session = await getSession(sessionId);
   const programsResult = await query(
     `
       with canonical_program as (
@@ -315,6 +317,23 @@ async function getProgramWorkspace(sessionId) {
     eventsByDay.get(event.day_id).push(event);
   }
 
+  for (const program of programsResult.rows) {
+    const programDays = daysByProgram.get(program.id) || [];
+    if (!programDays.length) {
+      continue;
+    }
+
+    const repairedDays = await repairProgramDaysForProgram({
+      sessionId,
+      sessionDateLabel: session?.date_label || "",
+      program,
+      days: programDays,
+      eventsByDay,
+    });
+
+    daysByProgram.set(program.id, repairedDays);
+  }
+
   const programs = programsResult.rows.map((program) => ({
     id: program.id,
     title: program.title,
@@ -346,14 +365,14 @@ async function getProgramWorkspace(sessionId) {
         tags: event.tags || [],
         description: event.description || "",
       }));
-      const flowMeta = normalizeFlowMeta(day.flow_meta);
-      const flows = buildDayFlows(day.flow_order, flowMeta, events);
+      const flowMeta = normalizeFlowMeta(day.flow_meta || day.flowMeta);
+      const flows = buildDayFlows(day.flow_order || day.flowOrder, flowMeta, events);
 
       return {
         id: day.id,
         label: day.label,
-        dateLabel: day.date_label || "",
-        dateValue: toIsoDate(day.date_value),
+        dateLabel: day.date_label || day.dateLabel || "",
+        dateValue: toIsoDate(day.date_value || day.dateValue),
         flowOrder: flows.map((flow) => flow.id),
         flowMeta,
         flows,
