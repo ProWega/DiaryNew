@@ -1,5 +1,6 @@
 import { Component, useEffect, useMemo, useState } from "react";
 import MetricBadge from "../components/MetricBadge";
+import { AccessToggle } from "../components/access/AccessComponents";
 import Tabs from "../components/ui/Tabs";
 import { AlertCard, SoftPill } from "../components/ui/Pills";
 import {
@@ -255,6 +256,12 @@ function normalizeOrganizerWorkspace(workspace) {
   return {
     ...rawWorkspace,
     meta: asObject(rawWorkspace.meta),
+    sessionSettings: {
+      participantEventAccessMode:
+        rawWorkspace.sessionSettings?.participantEventAccessMode === "from_start_time"
+          ? "from_start_time"
+          : "always",
+    },
     sessionCatalog: asArray(rawWorkspace.sessionCatalog),
     registration: asObject(rawWorkspace.registration),
     summary: {
@@ -321,6 +328,7 @@ function OrganizerCabinetView({
   mutationError,
   onCreateSession = async () => null,
   onUpdateSession = async () => null,
+  onUpdateSessionSettings = async () => null,
   onSessionCreated = () => {},
   onCreateProgram = async () => null,
   onUpdateProgram = async () => null,
@@ -502,6 +510,12 @@ function OrganizerCabinetView({
     }
 
     return nextWorkspace;
+  }
+
+  async function handleParticipantEventAccessModeChange(isEnabled) {
+    return onUpdateSessionSettings({
+      participantEventAccessMode: isEnabled ? "from_start_time" : "always",
+    });
   }
 
   async function handleProgramSelect(programId) {
@@ -997,6 +1011,24 @@ function OrganizerCabinetView({
               onPublishProgram={() => currentProgram?.id ? onPublishProgram(currentProgram.id) : null}
               onDraftProgram={() => currentProgram?.id ? onDraftProgram(currentProgram.id) : null}
             />
+
+            <article className="panel-card organizer-program-access-card">
+              <div>
+                <p className="eyebrow">Доступ участников</p>
+                <h3>Доступны только прошедшие события</h3>
+                <p className="subtle">
+                  Когда режим включён, участник может поставить состояние только после начала события по дате и времени программы.
+                  Будущие события останутся в списке с замком.
+                </p>
+              </div>
+              <AccessToggle
+                checked={safeWorkspace.sessionSettings.participantEventAccessMode === "from_start_time"}
+                disabled={saving}
+                onLabel="Включено"
+                offLabel="Выключено"
+                onChange={(checked) => void handleParticipantEventAccessModeChange(checked)}
+              />
+            </article>
 
             <div className="organizer-table-mode-grid">
               <ProgramScheduleTable

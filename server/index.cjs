@@ -60,6 +60,7 @@ const {
   updateUserStatus,
   upsertUserAssignment,
 } = require("./db/repositories/userStore.cjs");
+const { getParticipantEventAccessSettings } = require("./db/repositories/eventAccess.cjs");
 
 const PORT = Number(process.env.PORT || 4000);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -535,6 +536,10 @@ function normalizeProgramPatch(body = {}, { defaultStatus = "draft" } = {}) {
   };
 }
 
+function normalizeOrganizerSessionSettingsPatch(body = {}) {
+  return getParticipantEventAccessSettings(body);
+}
+
 function hasOwnField(body, key) {
   return Object.prototype.hasOwnProperty.call(body || {}, key);
 }
@@ -995,6 +1000,7 @@ function buildAudienceSummary(workspace, filters, recipientsCount) {
 }
 
 function syncWorkspace(workspace) {
+  workspace.sessionSettings = getParticipantEventAccessSettings(workspace.sessionSettings);
   ensureProgramWorkspaceDefaults(workspace);
   ensureSurveyFilterOptions(workspace);
   syncSpeakerAndLectureSummary(workspace);
@@ -1377,6 +1383,22 @@ app.patch(
   requireOrganizer,
   asyncHandler(async (req, res) => {
     res.json(await updateRegistration({ actorId: req.viewer.id, sessionId: req.params.sessionId, payload: req.body || {} }));
+  }),
+);
+
+app.patch(
+  "/api/organizer/sessions/:sessionId/settings",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const settingsPatch = normalizeOrganizerSessionSettingsPatch(req.body || {});
+    const workspace = await updateWorkspace(req.params.sessionId, (draft) => {
+      draft.sessionSettings = {
+        ...(draft.sessionSettings || {}),
+        ...settingsPatch,
+      };
+      return syncWorkspace(draft);
+    });
+    res.json(workspace);
   }),
 );
 

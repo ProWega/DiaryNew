@@ -231,6 +231,35 @@ export const SequentialIncompleteDay = {
   render: renderParticipant,
 };
 
+export const LockedFutureEvent = {
+  args: {
+    mode: "today",
+    answeredEvents: 1,
+    reflectionAnswered: false,
+    eventOverrides: {
+      "event-2": {
+        access: {
+          locked: true,
+          mode: "from_start_time",
+          availableAt: "2026-07-13T10:00:00.000Z",
+          reason: "Оценка откроется в момент начала события.",
+        },
+      },
+      "event-3": {
+        access: {
+          locked: true,
+          mode: "from_start_time",
+          reason: "Для события не задано время начала.",
+        },
+      },
+    },
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
 export const CompletedMobileDay = {
   args: {
     mode: "today",

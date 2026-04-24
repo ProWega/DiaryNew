@@ -8,7 +8,46 @@ const reflectionFields = ["q1", "q2"];
 const EVENT_SCROLL_MARGIN = 16;
 
 function getFirstPendingEventId(events) {
-  return events.find((event) => !event.stateId)?.id || events[0]?.id || "";
+  const availableEvents = events.filter((event) => !isEventLocked(event));
+  return (
+    availableEvents.find((event) => !event.stateId)?.id ||
+    availableEvents[0]?.id ||
+    events[0]?.id ||
+    ""
+  );
+}
+
+function isEventLocked(event) {
+  return Boolean(event?.access?.locked);
+}
+
+function getNextAvailableEvent(events, index, direction) {
+  for (let nextIndex = index + direction; nextIndex >= 0 && nextIndex < events.length; nextIndex += direction) {
+    if (!isEventLocked(events[nextIndex])) {
+      return events[nextIndex];
+    }
+  }
+
+  return null;
+}
+
+function formatEventAccessReason(event) {
+  const access = event?.access || {};
+
+  if (access.availableAt) {
+    const availableAt = new Date(access.availableAt);
+    if (!Number.isNaN(availableAt.getTime())) {
+      return `Откроется ${availableAt.toLocaleString("ru-RU", {
+        timeZone: "Europe/Moscow",
+        day: "numeric",
+        month: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}.`;
+    }
+  }
+
+  return access.reason || "Оценка откроется, когда событие начнётся по программе.";
 }
 
 function prefersReducedMotion() {
@@ -84,6 +123,10 @@ function createEventDraft(event, previousDraft = null) {
   };
 }
 
+function getSaveErrorMessage(error) {
+  return error?.message || "Не удалось сохранить отметку. Попробуйте выбрать состояние ещё раз.";
+}
+
 function ParticipantRoutedView({
   mode,
   stateScale,
@@ -105,6 +148,7 @@ function ParticipantRoutedView({
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
   const [isProgrammaticNavigation, setIsProgrammaticNavigation] = useState(false);
   const [eventDrafts, setEventDrafts] = useState({});
+  const [eventSaveStatuses, setEventSaveStatuses] = useState({});
   const [savingEventId, setSavingEventId] = useState("");
   const pendingStateSaveRef = useRef({});
   const eventShellRefs = useRef({});
@@ -282,22 +326,59 @@ function ParticipantRoutedView({
     );
   }
 
-  function queueStateSave(dayId, eventId, stateId) {
-    const previousTask = pendingStateSaveRef.current[eventId] || Promise.resolve();
+  function queueStateSave(dayId, event, stateId) {
+    const previousTask = pendingStateSaveRef.current[event.id] || Promise.resolve();
+    setEventSaveStatuses((previous) => ({
+      ...previous,
+      [event.id]: { status: "saving", message: "Сохраняем отметку..." },
+    }));
+
     const requestTask = previousTask
       .catch(() => null)
-      .then(() => saveEventEntry(dayId, eventId, { stateId }));
+      .then(() => saveEventEntry(dayId, event.id, { stateId }))
+      .then((result) => {
+        setEventSaveStatuses((previous) => ({
+          ...previous,
+          [event.id]: { status: "saved", message: "Отметка сохранена" },
+        }));
+        return result;
+      })
+      .catch((error) => {
+        setEventSaveStatuses((previous) => ({
+          ...previous,
+          [event.id]: { status: "error", message: getSaveErrorMessage(error) },
+        }));
+        throw error;
+      });
     const trackedTask = requestTask.finally(() => {
-      if (pendingStateSaveRef.current[eventId] === trackedTask) {
-        delete pendingStateSaveRef.current[eventId];
+      if (pendingStateSaveRef.current[event.id] === trackedTask) {
+        delete pendingStateSaveRef.current[event.id];
       }
     });
 
-    pendingStateSaveRef.current[eventId] = trackedTask;
+    pendingStateSaveRef.current[event.id] = trackedTask;
     return trackedTask;
   }
 
+  function rollbackEventStateDraft(event) {
+    setEventDrafts((previous) => {
+      const currentDraft = createEventDraft(event, previous[event.id]);
+
+      return {
+        ...previous,
+        [event.id]: {
+          ...currentDraft,
+          stateId: event.stateId || "",
+        },
+      };
+    });
+  }
+
   function handleEventStateSelect(dayId, event, stateId) {
+    if (isEventLocked(event)) {
+      return;
+    }
+
     setEventDrafts((previous) => ({
       ...previous,
       [event.id]: {
@@ -306,7 +387,10 @@ function ParticipantRoutedView({
       },
     }));
 
-    void queueStateSave(dayId, event.id, stateId).catch(() => null);
+    void queueStateSave(dayId, event, stateId).catch((error) => {
+      console.error(error);
+      rollbackEventStateDraft(event);
+    });
   }
 
   function handleEventCommentChange(event, comment) {
@@ -337,6 +421,10 @@ function ParticipantRoutedView({
   }
 
   async function commitEventDraft(dayId, event, options = {}) {
+    if (isEventLocked(event)) {
+      return false;
+    }
+
     const { defaultToBalance = false, nextEventId = "" } = options;
     const draft = getEventDraft(event);
     const stateId = draft.stateId || event.stateId || (defaultToBalance ? "balance" : "");
@@ -383,7 +471,7 @@ function ParticipantRoutedView({
   }
 
   function moveOpenEvent(dayId, event, index, direction) {
-    const nextEvent = todayEvents[index + direction];
+    const nextEvent = getNextAvailableEvent(todayEvents, index, direction);
 
     if (!nextEvent) {
       return;
@@ -495,7 +583,12 @@ function ParticipantRoutedView({
                 const hasDeferredDraftChanges =
                   draft.comment !== (event.comment || "") ||
                   effectiveConfidence !== (event.confidence || "high");
-                const isEventSaving = savingEventId === event.id;
+                const stateSaveStatus = eventSaveStatuses[event.id] || null;
+                const isStateSaving = stateSaveStatus?.status === "saving";
+                const isEventSaving = savingEventId === event.id || isStateSaving;
+                const isLocked = isEventLocked(event);
+                const previousAvailableEvent = getNextAvailableEvent(todayEvents, index, -1);
+                const nextAvailableEvent = getNextAvailableEvent(todayEvents, index, 1);
                 const confidenceNote = isEventSaving
                   ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f"
                   : hasDeferredDraftChanges
@@ -515,7 +608,7 @@ function ParticipantRoutedView({
                     ref={(node) => setEventShellRef(event.id, node)}
                     className={`participant-event-shell ${isOpen ? "is-open" : "is-collapsed"} ${
                       effectiveState ? "is-complete" : "is-pending"
-                    }`}
+                    } ${isLocked ? "is-locked" : ""}`}
                   >
                     <button
                       id={buttonId}
@@ -523,10 +616,11 @@ function ParticipantRoutedView({
                       type="button"
                       className={`participant-event-row participant-event-toggle ${effectiveState ? "is-complete" : "is-pending"} ${
                         isOpen ? "is-open" : ""
-                      }`}
+                      } ${isLocked ? "is-locked" : ""}`}
                       aria-expanded={isOpen}
                       aria-controls={panelId}
                       aria-label={`${isOpen ? "Свернуть" : "Открыть"} событие: ${event.title}`}
+                      aria-disabled={isLocked}
                       onClick={() => toggleEvent(event.id)}
                     >
                       <span className="participant-event-index">{index + 1}</span>
@@ -537,7 +631,12 @@ function ParticipantRoutedView({
                       <span className="participant-event-row-meta">
                         <span className="event-time participant-event-row-time">{event.time}</span>
                         <span className="participant-event-row-state">
-                        {effectiveState ? (
+                        {isLocked ? (
+                          <>
+                            <span className="participant-event-row-lock" aria-hidden="true">🔒</span>
+                            Закрыто
+                          </>
+                        ) : effectiveState ? (
                           <>
                             <span>{effectiveState.icon}</span>
                             {effectiveState.shortLabel || effectiveState.label}
@@ -564,6 +663,16 @@ function ParticipantRoutedView({
                       {...(!isOpen ? { inert: "" } : {})}
                     >
                       <div className="participant-event-body">
+                        {isLocked ? (
+                          <div className="participant-event-locked">
+                            <span className="participant-event-locked-icon" aria-hidden="true">🔒</span>
+                            <div>
+                              <strong>Оценка пока закрыта</strong>
+                              <p>{formatEventAccessReason(event)}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
                         <div className="participant-event-workspace">
                           <div className="participant-event-arc-shell">
                             <StateScalePicker
@@ -575,13 +684,21 @@ function ParticipantRoutedView({
                               showDescriptions
                               label=""
                             />
+                            {stateSaveStatus?.message ? (
+                              <p
+                                className={`participant-event-save-note is-${stateSaveStatus.status}`}
+                                role={stateSaveStatus.status === "error" ? "alert" : "status"}
+                              >
+                                {stateSaveStatus.message}
+                              </p>
+                            ) : null}
                           </div>
 
                           <div className="participant-step-actions">
                             <button
                               type="button"
                               className="ghost-button"
-                              disabled={index === 0 || isEventSaving}
+                              disabled={!previousAvailableEvent || isEventSaving}
                               onClick={() => moveOpenEvent(activeDayId, event, index, -1)}
                             >
                               Назад
@@ -593,19 +710,19 @@ function ParticipantRoutedView({
                               aria-label={
                                 isEventSaving
                                   ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c"
-                                  : index >= todayEvents.length - 1
+                                  : !nextAvailableEvent
                                     ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
                                     : "\u0414\u0430\u043b\u0435\u0435"
                               }
                               data-step-label={
                                 isEventSaving
                                   ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c..."
-                                  : index >= todayEvents.length - 1
+                                  : !nextAvailableEvent
                                     ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
                                     : "\u0414\u0430\u043b\u0435\u0435"
                               }
                               onClick={() =>
-                                index >= todayEvents.length - 1
+                                !nextAvailableEvent
                                   ? saveCurrentEvent(activeDayId, event)
                                   : moveOpenEvent(activeDayId, event, index, 1)
                               }
@@ -646,6 +763,8 @@ function ParticipantRoutedView({
                             </div>
                           </>
                         ) : null}
+                          </>
+                        )}
                       </div>
                     </div>
                   </article>

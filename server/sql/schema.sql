@@ -407,7 +407,7 @@ update diary_entries
 set responded_at = coalesce(updated_at, created_at, now())
 where responded_at is null
   and (
-    (state_id is not null and state_id <> 'balance')
+    state_id is not null
     or nullif(btrim(comment), '') is not null
     or confidence <> 'high'
   );

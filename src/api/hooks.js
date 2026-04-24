@@ -108,40 +108,49 @@ export function useParticipantDiary(sessionId) {
         return null;
       }
 
+      let rollbackData = null;
       resource.setData((previous) =>
-        previous
-          ? {
-              ...previous,
-              history: previous.history.map((day) =>
-                day.id === dayId
-                  ? {
-                      ...day,
-                      events: day.events.map((entry) =>
-                        entry.id === entryId
-                          ? {
-                              ...entry,
-                              ...patch,
-                              answered: true,
-                              respondedAt: new Date().toISOString(),
-                            }
-                          : entry,
-                      ),
-                    }
-                  : day,
-              ),
-            }
-          : previous,
+        {
+          rollbackData = previous;
+          return previous
+            ? {
+                ...previous,
+                history: previous.history.map((day) =>
+                  day.id === dayId
+                    ? {
+                        ...day,
+                        events: day.events.map((entry) =>
+                          entry.id === entryId
+                            ? {
+                                ...entry,
+                                ...patch,
+                                answered: true,
+                                respondedAt: new Date().toISOString(),
+                              }
+                            : entry,
+                        ),
+                      }
+                    : day,
+                ),
+              }
+            : previous;
+        },
       );
 
-      const nextData = await jsonApi.updateParticipantEntry(
-        currentUser.id,
-        sessionId,
-        dayId,
-        entryId,
-        patch,
-      );
-      resource.setData(nextData);
-      return nextData;
+      try {
+        const nextData = await jsonApi.updateParticipantEntry(
+          currentUser.id,
+          sessionId,
+          dayId,
+          entryId,
+          patch,
+        );
+        resource.setData(nextData);
+        return nextData;
+      } catch (error) {
+        resource.setData(rollbackData);
+        throw error;
+      }
     },
     [currentUser?.id, resource, sessionId],
   );
@@ -152,43 +161,52 @@ export function useParticipantDiary(sessionId) {
         return null;
       }
 
+      let rollbackData = null;
       resource.setData((previous) =>
-        previous
-          ? {
-              ...previous,
-              history: previous.history.map((day) =>
-                day.id === dayId
-                  ? (() => {
-                      const reflection = {
-                        ...day.reflection,
-                        ...patch,
-                      };
-                      const answered = ["q1", "q2", "q3", "freeText"].some((field) =>
-                        String(reflection[field] || "").trim(),
-                      );
-                      return {
-                        ...day,
-                        reflection: {
-                          ...reflection,
-                          answered,
-                          respondedAt: answered ? new Date().toISOString() : null,
-                        },
-                      };
-                    })()
-                  : day,
-              ),
-            }
-          : previous,
+        {
+          rollbackData = previous;
+          return previous
+            ? {
+                ...previous,
+                history: previous.history.map((day) =>
+                  day.id === dayId
+                    ? (() => {
+                        const reflection = {
+                          ...day.reflection,
+                          ...patch,
+                        };
+                        const answered = ["q1", "q2", "q3", "freeText"].some((field) =>
+                          String(reflection[field] || "").trim(),
+                        );
+                        return {
+                          ...day,
+                          reflection: {
+                            ...reflection,
+                            answered,
+                            respondedAt: answered ? new Date().toISOString() : null,
+                          },
+                        };
+                      })()
+                    : day,
+                ),
+              }
+            : previous;
+        },
       );
 
-      const nextData = await jsonApi.updateParticipantReflection(
-        currentUser.id,
-        sessionId,
-        dayId,
-        patch,
-      );
-      resource.setData(nextData);
-      return nextData;
+      try {
+        const nextData = await jsonApi.updateParticipantReflection(
+          currentUser.id,
+          sessionId,
+          dayId,
+          patch,
+        );
+        resource.setData(nextData);
+        return nextData;
+      } catch (error) {
+        resource.setData(rollbackData);
+        throw error;
+      }
     },
     [currentUser?.id, resource, sessionId],
   );
@@ -279,6 +297,14 @@ export function useOrganizerWorkspace(sessionId) {
         return resource.refresh();
       }),
     [currentUser?.id, mutation, resource, sessionId],
+  );
+
+  const updateSessionSettings = useCallback(
+    (payload) =>
+      mutation.runMutation(() =>
+        jsonApi.updateOrganizerSessionSettings(currentUser.id, sessionId, payload),
+      ),
+    [currentUser?.id, mutation, sessionId],
   );
 
   const createProgram = useCallback(
@@ -493,6 +519,7 @@ export function useOrganizerWorkspace(sessionId) {
     createSession,
     updateSession,
     updateRegistration,
+    updateSessionSettings,
     createProgram,
     updateProgram,
     publishProgram,

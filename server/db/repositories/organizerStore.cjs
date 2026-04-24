@@ -4,6 +4,7 @@ const { calculateProgress, getPublishedParticipationData } = require("./programP
 const { repairProgramDaysForProgram } = require("./programDays.cjs");
 const { upsertUserAssignment } = require("./userStore.cjs");
 const { getOrganizerAnalyticsSnapshot } = require("./organizerAnalytics.cjs");
+const { getParticipantEventAccessSettings } = require("./eventAccess.cjs");
 
 const DEFAULT_EVENT_TYPES = [
   "Лекция",
@@ -1014,6 +1015,7 @@ async function getOrganizerWorkspace(sessionId) {
   return {
     sessionId,
     sessionLabel: session.name,
+    sessionSettings: getParticipantEventAccessSettings(session.settings),
     title: "Личный кабинет организатора",
     meta: {
       revision: 1,
@@ -1067,6 +1069,19 @@ async function saveWorkspaceCache(sessionId, workspace) {
 }
 
 async function persistWorkspace(sessionId, workspace) {
+  await query(
+    `
+      update sessions
+      set settings = coalesce(settings, '{}'::jsonb) || $2::jsonb,
+          updated_at = now()
+      where id = $1
+    `,
+    [
+      sessionId,
+      JSON.stringify(getParticipantEventAccessSettings(workspace.sessionSettings)),
+    ],
+  );
+
   for (const program of workspace.programWorkspace?.programs || []) {
     await query(
       `

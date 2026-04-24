@@ -15,6 +15,7 @@ function OrganizerDashboardPage() {
     mutationError,
     createSession,
     updateSession,
+    updateSessionSettings,
     createProgram,
     updateProgram,
     publishProgram,
@@ -63,6 +64,7 @@ function OrganizerDashboardPage() {
       mutationError={mutationError}
       onCreateSession={createSession}
       onUpdateSession={updateSession}
+      onUpdateSessionSettings={updateSessionSettings}
       onSessionCreated={(session) => navigate(`/organizer/session/${session.id}`)}
       onCreateProgram={createProgram}
       onUpdateProgram={updateProgram}

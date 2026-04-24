@@ -288,6 +288,15 @@ const actions = {
     console.log("updateSession", args);
     return organizerWorkspaceFixture;
   },
+  onUpdateSessionSettings: async (...args) => {
+    console.log("updateSessionSettings", args);
+    return {
+      ...organizerWorkspaceFixture,
+      sessionSettings: {
+        participantEventAccessMode: args[0]?.participantEventAccessMode || "always",
+      },
+    };
+  },
   onCreateProgramDay: async (...args) => {
     console.log("createProgramDay", args);
     return organizerWorkspaceFixture;
@@ -350,6 +359,19 @@ export const ProgramTab = {
   args: {
     ...SessionsTab.args,
     initialTab: "program",
+  },
+  render: renderCabinet,
+};
+
+export const ProgramTabRestrictedAccess = {
+  args: {
+    ...ProgramTab.args,
+    workspace: {
+      ...organizerWorkspaceFixture,
+      sessionSettings: {
+        participantEventAccessMode: "from_start_time",
+      },
+    },
   },
   render: renderCabinet,
 };

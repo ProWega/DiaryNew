@@ -6,6 +6,7 @@ const {
   createEmptyProgress,
   getPublishedProgramContext,
 } = require("./programProgress.cjs");
+const { computeParticipantEventAccess } = require("./eventAccess.cjs");
 
 function getStateIdByLevel(level) {
   switch (Number(level)) {
@@ -206,6 +207,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
       title: row.title,
       type: row.event_type,
       tags: row.tags || [],
+      access: computeParticipantEventAccess(row, context.sessionSettings),
       stateId: answered ? entry?.state_id || null : null,
       comment: entry?.comment || "",
       confidence: entry?.confidence || "high",
@@ -279,11 +281,19 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
     throw error;
   }
 
+  const access = computeParticipantEventAccess(event, context.sessionSettings);
+  if (access.locked) {
+    const error = new Error(access.reason || "Оценка этого события пока недоступна");
+    error.status = 409;
+    error.access = access;
+    throw error;
+  }
+
   const statePatch = await normalizeStatePatch(patch);
   const hasComment = hasField(patch, "comment");
   const hasConfidence = hasField(patch, "confidence");
 
-  await query(
+  const saveResult = await query(
     `
       insert into diary_entries (
         id, user_id, session_id, day_id, event_id, state_id, state_level, comment, confidence, source, responded_at
@@ -297,6 +307,7 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
         confidence = case when $12::boolean then excluded.confidence else diary_entries.confidence end,
         responded_at = now(),
         updated_at = now()
+      returning state_id, state_level, responded_at
     `,
     [
       `entry-${viewerId}-${entryId}`,
@@ -313,6 +324,18 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
       hasConfidence,
     ],
   );
+  const savedEntry = saveResult.rows[0];
+
+  if (
+    !savedEntry ||
+    (statePatch.hasState && savedEntry.state_id !== statePatch.stateId) ||
+    (statePatch.hasState && savedEntry.state_level !== statePatch.stateLevel) ||
+    !savedEntry.responded_at
+  ) {
+    const error = new Error("Не удалось подтвердить сохранение отметки состояния");
+    error.status = 500;
+    throw error;
+  }
 
   return getParticipantDiary({ viewerId, sessionId });
 }

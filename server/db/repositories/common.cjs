@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { query } = require("../postgres.cjs");
+const { ensureDefaultStateScale } = require("./stateScaleStore.cjs");
 
 const roleLabels = {
   participant: "Участник",
@@ -211,6 +212,7 @@ function toPublicUser(row) {
 }
 
 async function getStateScale(sessionId) {
+  await ensureDefaultStateScale();
   const result = await query(
     `
       select id, label, short_label, icon, level, color, surface, text_color
@@ -234,6 +236,7 @@ async function getStateScale(sessionId) {
 }
 
 async function getStateById(stateId) {
+  await ensureDefaultStateScale();
   const result = await query(
     `
       select id, level

@@ -1,5 +1,6 @@
 const { query } = require("../postgres.cjs");
 const { repairProgramDaysForProgram } = require("./programDays.cjs");
+const { getParticipantEventAccessSettings } = require("./eventAccess.cjs");
 
 function mapProgram(row) {
   if (!row) {
@@ -10,6 +11,8 @@ function mapProgram(row) {
     id: row.id,
     title: row.title,
     status: row.status || "draft",
+    participantEventAccessMode: getParticipantEventAccessSettings(row.session_settings)
+      .participantEventAccessMode,
   };
 }
 
@@ -75,6 +78,7 @@ async function getCanonicalProgram(sessionId) {
   const result = await query(
     `
       select p.id, p.title, p.status, p.start_date, p.end_date, s.date_label as session_date_label
+        , s.settings as session_settings
       from programs p
       join sessions s on s.id = p.session_id
       where p.session_id = $1
@@ -142,6 +146,7 @@ async function getPublishedProgramContext(sessionId) {
       isPublished: false,
       events: [],
       days: [],
+      sessionSettings: getParticipantEventAccessSettings(canonicalProgram?.session_settings),
     };
   }
 
@@ -190,6 +195,7 @@ async function getPublishedProgramContext(sessionId) {
     isPublished: true,
     events,
     days,
+    sessionSettings: getParticipantEventAccessSettings(canonicalProgram?.session_settings),
   };
 }
 

@@ -29,6 +29,21 @@ function readStoredSelectedDay(sessionId) {
   }
 }
 
+function getNextEventUnlockDelay(history) {
+  const now = Date.now();
+  const unlockTimes = history
+    .flatMap((day) => day.events || [])
+    .filter((event) => event.access?.locked && event.access?.availableAt)
+    .map((event) => new Date(event.access.availableAt).getTime())
+    .filter((time) => Number.isFinite(time) && time > now);
+
+  if (!unlockTimes.length) {
+    return null;
+  }
+
+  return Math.min(...unlockTimes) - now + 500;
+}
+
 function ParticipantPage({ mode }) {
   const { sessionId } = useParams();
   const { bootstrap } = useAuth();
@@ -75,6 +90,23 @@ function ParticipantPage({ mode }) {
       // Ignore storage errors and keep runtime flow working.
     }
   }, [liveHistory, selectedDayStorageKey, selectedHistoryDay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !liveHistory.length) {
+      return undefined;
+    }
+
+    const delay = getNextEventUnlockDelay(liveHistory);
+    if (delay === null) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      refresh();
+    }, Math.min(delay, 2147483647));
+
+    return () => window.clearTimeout(timerId);
+  }, [liveHistory, refresh]);
 
   const selectedDay =
     liveHistory.find((day) => day.id === selectedHistoryDay) ?? currentDay;

@@ -199,6 +199,14 @@ export const jsonApi = {
     });
   },
 
+  updateOrganizerSessionSettings(viewerId, sessionId, payload) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/settings`, {
+      method: "PATCH",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
   createOrganizerProgram(viewerId, sessionId, payload) {
     return requestJson(`/api/organizer/sessions/${sessionId}/programs`, {
       method: "POST",

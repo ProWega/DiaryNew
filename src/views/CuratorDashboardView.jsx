@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MetricBadge from "../components/MetricBadge";
 import {
   EventImpactBarChart,
@@ -263,9 +263,9 @@ function PulseOfDayChart({ events = [] }) {
         role="img"
         aria-label="Пульс дня по событиям группы"
       >
-        <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-distress" />
-        <rect x={margin.left} y={margin.top + plotHeight / 3} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-integration" />
-        <rect x={margin.left} y={margin.top + (plotHeight / 3) * 2} width={plotWidth} height={plotHeight / 3} className="pulse-zone zone-burnout" />
+        <rect x={margin.left} y={margin.top} width={plotWidth} height={(plotHeight * 2) / 7} className="pulse-zone zone-distress" />
+        <rect x={margin.left} y={margin.top + (plotHeight * 2) / 7} width={plotWidth} height={(plotHeight * 3) / 7} className="pulse-zone zone-integration" />
+        <rect x={margin.left} y={margin.top + (plotHeight * 5) / 7} width={plotWidth} height={(plotHeight * 2) / 7} className="pulse-zone zone-burnout" />
 
         {[0, 1, 2, 3, 4, 5, 6].map((level) => {
           const y = margin.top + ((PULSE_DOMAIN[1] - level) / (PULSE_DOMAIN[1] - PULSE_DOMAIN[0])) * plotHeight;
@@ -594,12 +594,12 @@ function buildCuratorDistributionRows(events = [], participants = []) {
         continue;
       }
 
-      if (level <= 2) {
+      if (level <= 1) {
         low += 1;
-      } else if (level === 3) {
-        mid += 1;
-      } else {
+      } else if (level >= 5) {
         high += 1;
+      } else {
+        mid += 1;
       }
     }
 
@@ -661,16 +661,38 @@ function buildCuratorScatterData(participants = []) {
     }));
 }
 
+function getReportScopeLabel(scope) {
+  if (!scope?.dayId) {
+    return "Все дни";
+  }
+
+  return scope.dateLabel || scope.label || "День программы";
+}
+
 function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }) {
   const [selectedScatterId, setSelectedScatterId] = useState(initialSelectedParticipantId);
-  const eventPulse = asArray(dashboard.eventPulse);
-  const participantRows = asArray(dashboard.participantRows || dashboard.members);
-  const events = asArray(dashboard.events);
-  const reflectionPrep = dashboard.reflectionPrep || {};
+  const reportScopes = asArray(dashboard.reportScopes);
+  const [selectedScopeId, setSelectedScopeId] = useState(reportScopes[0]?.scopeId || "all");
+
+  useEffect(() => {
+    if (reportScopes.length && !reportScopes.some((scope) => scope.scopeId === selectedScopeId)) {
+      setSelectedScopeId(reportScopes[0].scopeId);
+    }
+  }, [reportScopes, selectedScopeId]);
+
+  const activeReportScope =
+    reportScopes.find((scope) => scope.scopeId === selectedScopeId) ||
+    reportScopes[0] ||
+    null;
+  const scopedDashboard = activeReportScope ? { ...dashboard, ...activeReportScope } : dashboard;
+  const eventPulse = asArray(scopedDashboard.eventPulse);
+  const participantRows = asArray(scopedDashboard.participantRows || scopedDashboard.members);
+  const events = asArray(scopedDashboard.events);
+  const reflectionPrep = scopedDashboard.reflectionPrep || {};
   const focusEvents = asArray(reflectionPrep.focusEvents);
   const dayReflections = asArray(reflectionPrep.dayReflections);
   const commentClusters = asArray(reflectionPrep.commentClusters);
-  const organizerBrief = asArray(dashboard.organizerBrief);
+  const organizerBrief = asArray(scopedDashboard.organizerBrief);
   const openRisks = asArray(reflectionPrep.openRisks);
   const distributionRows = buildCuratorDistributionRows(events, participantRows);
   const riskEventRows = buildCuratorRiskEventRows(eventPulse);
@@ -681,7 +703,7 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
       focusEvents,
       participantRows,
       openRisks,
-      dashboard,
+      dashboard: scopedDashboard,
     });
   const selectedParticipant = participantRows.find((participant) => participant.id === selectedScatterId) || null;
 
@@ -697,14 +719,42 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
         </div>
 
         <div className="hero-stats">
-          <MetricBadge label="Участников" value={`${dashboard.participantsCount || 0}`} />
-          <MetricBadge label="Заполнение" value={formatPercent(dashboard.completion)} />
-          <MetricBadge label="Средний пульс" value={formatNumber(dashboard.averageActivation)} />
+          <MetricBadge label="Участников" value={`${scopedDashboard.participantsCount || 0}`} />
+          <MetricBadge label="Заполнение" value={formatPercent(scopedDashboard.completion)} />
+          <MetricBadge label="Средний пульс" value={formatNumber(scopedDashboard.averageActivation)} />
           <MetricBadge label="Открытых рисков" value={`${openRisks.length}`} />
         </div>
       </div>
 
-      <DataStateBanner state={dashboard.dataState} />
+      {reportScopes.length > 1 ? (
+        <article className="panel-card curator-scope-card">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Отчетный срез</p>
+              <h3>{getReportScopeLabel(scopedDashboard)}</h3>
+            </div>
+            <span className="soft-pill is-outline">
+              {events.length} событий
+            </span>
+          </div>
+          <div className="curator-scope-tabs" role="tablist" aria-label="Отчеты по дням">
+            {reportScopes.map((scope) => (
+              <button
+                key={scope.scopeId}
+                type="button"
+                role="tab"
+                aria-selected={scope.scopeId === scopedDashboard.scopeId}
+                className={scope.scopeId === scopedDashboard.scopeId ? "mini-tab is-active" : "mini-tab"}
+                onClick={() => setSelectedScopeId(scope.scopeId)}
+              >
+                <span>{getReportScopeLabel(scope)}</span>
+              </button>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      <DataStateBanner state={scopedDashboard.dataState} />
 
       <ReflectionBriefCard brief={reflectionBrief} />
 

@@ -1,4 +1,5 @@
 const { ensureSchema, hasPostgresConfig } = require("../db/postgres.cjs");
+const { ensureDefaultStateScale } = require("../db/repositories/stateScaleStore.cjs");
 
 async function main() {
   if (!hasPostgresConfig()) {
@@ -6,6 +7,7 @@ async function main() {
   }
 
   await ensureSchema();
+  await ensureDefaultStateScale();
   console.log("[db:schema] Schema is ready.");
 }
 
