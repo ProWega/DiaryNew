@@ -784,7 +784,9 @@ export function RiskScatterChart({
   emptyLabel = "Нет данных риска",
   thresholds = [],
   palette = DEFAULT_PALETTE,
+  selectedId,
   onPointClick,
+  onClearSelection,
 }) {
   const width = 760;
   const margin = { top: 24, right: 28, bottom: 44, left: 46 };
@@ -800,7 +802,13 @@ export function RiskScatterChart({
   return (
     <ChartShell title={title} description={description} empty={!data.length} emptyLabel={emptyLabel}>
       <div className="chart-svg-wrap">
-        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" preserveAspectRatio="xMidYMid meet">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="chart-svg"
+          role="img"
+          preserveAspectRatio="xMidYMid meet"
+          onClick={() => onClearSelection?.()}
+        >
           {renderGridLines({ ticks, domain: resolvedYDomain, width, height, margin, showGrid })}
           {renderThresholds({ thresholds, domain: resolvedYDomain, width, height, margin })}
           <line x1={margin.left} x2={width - margin.right} y1={height - margin.bottom} y2={height - margin.bottom} stroke="rgba(45,55,65,.34)" />
@@ -820,17 +828,36 @@ export function RiskScatterChart({
             const y = getY(yValue, resolvedYDomain, height, margin);
             const color = item.color ?? palette[index % palette.length];
             const radius = clamp(6 + Math.sqrt(Math.max(size, 0)) * 2.4, 6, 22);
+            const isSelected = selectedId !== undefined && selectedId !== null && selectedId === (item.id ?? item.label);
+            const calloutLabel = String(item.label ?? "");
+            const visibleCalloutLabel = calloutLabel.length > 26 ? `${calloutLabel.slice(0, 25)}…` : calloutLabel;
+            const calloutWidth = clamp(visibleCalloutLabel.length * 7 + 24, 104, 220);
+            const calloutHeight = 30;
+            const calloutX = clamp(x - calloutWidth / 2, 8, width - calloutWidth - 8);
+            const calloutY = y - radius - 42 < 8 ? y + radius + 12 : y - radius - 42;
 
             return (
               <g
                 key={item.id ?? item.label}
-                className={onPointClick ? "chart-click-target" : ""}
-                onClick={() => onPointClick?.(item)}
+                className={`${onPointClick ? "chart-click-target" : ""} ${isSelected ? "is-selected" : ""}`.trim()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPointClick?.(item);
+                }}
               >
+                <circle cx={x} cy={y} r={Math.max(radius + 10, 26)} fill="transparent" />
                 <circle cx={x} cy={y} r={radius} fill={color} opacity="0.78" stroke="rgba(255,255,255,.9)" strokeWidth="2" />
                 <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fill="#22313a">
                   {item.shortLabel ?? index + 1}
                 </text>
+                {isSelected ? (
+                  <g className="chart-point-callout" pointerEvents="none">
+                    <rect x={calloutX} y={calloutY} width={calloutWidth} height={calloutHeight} rx="15" />
+                    <text x={calloutX + calloutWidth / 2} y={calloutY + 20} textAnchor="middle">
+                      {visibleCalloutLabel}
+                    </text>
+                  </g>
+                ) : null}
                 <title>
                   {item.label}: {xLabel} {xValue}, {yLabel} {yValue}
                 </title>

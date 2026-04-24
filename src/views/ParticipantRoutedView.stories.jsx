@@ -22,7 +22,7 @@ const baseEvents = [
 ];
 
 function hasReflectionText(reflection) {
-  return ["q1", "q2", "q3", "freeText"].some((field) =>
+  return ["q1", "q2", "freeText"].some((field) =>
     String(reflection?.[field] || "").trim(),
   );
 }

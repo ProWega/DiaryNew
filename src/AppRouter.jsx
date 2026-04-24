@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
 import AppLayout from "./components/AppLayout";
 import RouteGuard from "./components/RouteGuard";
 import { useAuth } from "./auth/AuthContext";
@@ -15,6 +16,16 @@ import RegistrationPage from "./pages/RegistrationPage";
 import SetupAdminPage from "./pages/SetupAdminPage";
 import { getDefaultRoute } from "./rbac/permissions";
 
+const APP_TITLE = "Истоки";
+
+function PageTitle({ title, children }) {
+  useEffect(() => {
+    document.title = title ? `${title} · ${APP_TITLE}` : APP_TITLE;
+  }, [title]);
+
+  return children;
+}
+
 function AppRouter() {
   const { currentUser } = useAuth();
 
@@ -23,11 +34,31 @@ function AppRouter() {
       <Route
         path="/register"
         element={
-          currentUser ? <Navigate to={getDefaultRoute(currentUser)} replace /> : <RegistrationPage />
+          currentUser ? (
+            <Navigate to={getDefaultRoute(currentUser)} replace />
+          ) : (
+            <PageTitle title="Регистрация участника">
+              <RegistrationPage />
+            </PageTitle>
+          )
         }
       />
-      <Route path="/magic" element={<MagicLinkPage />} />
-      <Route path="/setup/admin" element={<SetupAdminPage />} />
+      <Route
+        path="/magic"
+        element={
+          <PageTitle title="Вход по ссылке">
+            <MagicLinkPage />
+          </PageTitle>
+        }
+      />
+      <Route
+        path="/setup/admin"
+        element={
+          <PageTitle title="Первый администратор">
+            <SetupAdminPage />
+          </PageTitle>
+        }
+      />
 
       <Route
         path="/"
@@ -38,49 +69,61 @@ function AppRouter() {
         <Route
           path="participant/session/:sessionId/today"
           element={
-            <RouteGuard permission="participant.diary.read">
-              <ParticipantTodayPage />
-            </RouteGuard>
+            <PageTitle title="Дневник состояния">
+              <RouteGuard permission="participant.diary.read">
+                <ParticipantTodayPage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route
           path="participant/session/:sessionId/self"
           element={
-            <RouteGuard permission="participant.self.read">
-              <ParticipantSelfKnowledgePage />
-            </RouteGuard>
+            <PageTitle title="Самопознание">
+              <RouteGuard permission="participant.self.read">
+                <ParticipantSelfKnowledgePage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route
           path="participant/session/:sessionId/dynamics"
           element={
-            <RouteGuard permission="participant.dynamics.read">
-              <ParticipantDynamicsPage />
-            </RouteGuard>
+            <PageTitle title="Динамика состояния">
+              <RouteGuard permission="participant.dynamics.read">
+                <ParticipantDynamicsPage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route
           path="curator/session/:sessionId/group/:groupId"
           element={
-            <RouteGuard permission="group.analytics.read">
-              <CuratorDashboardPage />
-            </RouteGuard>
+            <PageTitle title="Кабинет куратора">
+              <RouteGuard permission="group.analytics.read">
+                <CuratorDashboardPage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route
           path="organizer/session/:sessionId"
           element={
-            <RouteGuard permission="session.analytics.read">
-              <OrganizerDashboardPage />
-            </RouteGuard>
+            <PageTitle title="Кабинет организатора">
+              <RouteGuard permission="session.analytics.read">
+                <OrganizerDashboardPage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route
           path="admin/security"
           element={
-            <RouteGuard permission="security.read">
-              <AdminSecurityPage />
-            </RouteGuard>
+            <PageTitle title="Безопасность и доступ">
+              <RouteGuard permission="security.read">
+                <AdminSecurityPage />
+              </RouteGuard>
+            </PageTitle>
           }
         />
         <Route path="*" element={<Navigate to={getDefaultRoute(currentUser)} replace />} />

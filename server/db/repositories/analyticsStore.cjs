@@ -193,14 +193,42 @@ function buildReflectionDays({ days, reflections }) {
   });
 }
 
+function getConfidenceByCompletion(completion) {
+  const value = Number(completion || 0);
+  if (value >= 75) {
+    return "high";
+  }
+  if (value >= 50) {
+    return "medium";
+  }
+  return "low";
+}
+
+function getEventSeverity(event) {
+  const riskRatio = event.answersCount ? event.riskAnswersCount / event.answersCount : 0;
+  const deltaAbs = Math.abs(Number(event.deltaFromPrevious || 0));
+
+  if (riskRatio >= 0.5 || deltaAbs >= 2.5) {
+    return "high";
+  }
+  if (riskRatio > 0 || deltaAbs >= 1 || event.completion < 60) {
+    return "medium";
+  }
+  return "low";
+}
+
 function buildFocusEvents(eventPulse) {
   return eventPulse
     .filter((event) => event.hasResponses)
     .map((event) => {
       const evidence = [];
+      const riskRatio = event.answersCount ? event.riskAnswersCount / event.answersCount : 0;
+      const commentDensity = event.answersCount ? event.commentsCount / event.answersCount : 0;
+      const deltaAbs = Math.abs(Number(event.deltaFromPrevious || 0));
+      const confidence = getConfidenceByCompletion(event.completion);
 
       if (event.riskAnswersCount > 0) {
-        evidence.push(`${event.riskAnswersCount} ответов в зоне риска`);
+        evidence.push(`${event.riskAnswersCount} из ${event.answersCount} ответов в зоне риска`);
       }
 
       if (event.deltaFromPrevious !== null && Math.abs(event.deltaFromPrevious) >= 1) {
@@ -211,9 +239,14 @@ function buildFocusEvents(eventPulse) {
         evidence.push(`низкая видимость данных: ${event.completion}% заполнения`);
       }
 
-      if (event.commentsCount > 0) {
+      if (event.commentsCount > 0 && (event.commentsCount >= 2 || commentDensity >= 0.5)) {
         evidence.push(`${event.commentsCount} комментариев`);
       }
+
+      const prompt =
+        confidence === "low"
+          ? `Уточнить у группы, что происходило в точке «${event.title}»: данных пока мало.`
+          : `Обсудить с группой точку «${event.title}» и проверить, что помогло или дало напряжение.`;
 
       return {
         id: event.id,
@@ -225,12 +258,15 @@ function buildFocusEvents(eventPulse) {
         completion: event.completion,
         riskAnswersCount: event.riskAnswersCount,
         deltaFromPrevious: event.deltaFromPrevious,
+        confidence,
+        severity: getEventSeverity(event),
+        prompt,
         evidence,
         score:
-          event.riskAnswersCount * 4 +
-          Math.abs(event.deltaFromPrevious || 0) * 2 +
-          (event.completion < 60 ? 3 : 0) +
-          event.commentsCount,
+          riskRatio * 10 +
+          deltaAbs * 2 +
+          commentDensity * 3 +
+          (event.completion < 60 ? 1 : 0),
       };
     })
     .filter((event) => event.evidence.length)
@@ -239,8 +275,120 @@ function buildFocusEvents(eventPulse) {
     .map(({ score, ...event }) => event);
 }
 
+function buildReflectionBrief({ eventPulse, participantRows, dayReflections, alerts, focusEvents }) {
+  const safeEvents = eventPulse.filter((event) => event.hasResponses);
+  const answeredEvents = safeEvents.length;
+  const totalEvents = eventPulse.length;
+  const averageCompletion = totalEvents
+    ? Math.round(eventPulse.reduce((sum, event) => sum + Number(event.completion || 0), 0) / totalEvents)
+    : 0;
+  const coverageConfidence = getConfidenceByCompletion(averageCompletion);
+  const openAlerts = alerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt);
+  const talkingPoints = focusEvents.slice(0, 5).map((event) => ({
+    id: event.id,
+    title: event.confidence === "low" ? `Уточнить: ${event.title}` : event.title,
+    prompt: event.prompt,
+    confidence: event.confidence,
+    severity: event.severity,
+    anchor: event.id,
+    evidence: event.evidence,
+  }));
+  const participantsToCheckIn = participantRows
+    .filter((participant) => {
+      return (
+        participant.status === "risk" ||
+        participant.status === "watch" ||
+        participant.status === "silent" ||
+        Number(participant.openRiskSignalsCount || 0) > 0 ||
+        Number(participant.completion || 0) < 50
+      );
+    })
+    .map((participant) => {
+      const evidence = [];
+
+      if (participant.status === "silent") {
+        evidence.push("нет ответов по событиям");
+      }
+      if (participant.status === "risk") {
+        evidence.push("статус групповой карты: нужно внимание");
+      } else if (participant.status === "watch") {
+        evidence.push("статус групповой карты: под наблюдением");
+      }
+      if (Number(participant.openRiskSignalsCount || 0) > 0) {
+        evidence.push(`${participant.openRiskSignalsCount} открытых сигналов риска`);
+      }
+      if (Number.isFinite(Number(participant.amplitude)) && Number(participant.amplitude) >= 3) {
+        evidence.push(`амплитуда дня ${participant.amplitude}`);
+      }
+      if (Number(participant.completion || 0) < 50) {
+        evidence.push(`заполнение ${participant.completion}%`);
+      }
+
+      return {
+        id: participant.id,
+        name: participant.name,
+        status: participant.status,
+        confidence: participant.completion >= 50 || participant.status === "silent" ? "medium" : "low",
+        evidence: evidence.slice(0, 4),
+      };
+    })
+    .filter((participant) => participant.evidence.length)
+    .slice(0, 6);
+  const blindSpots = [];
+
+  if (totalEvents && answeredEvents < totalEvents) {
+    blindSpots.push({
+      id: "events-without-responses",
+      title: "Не по всем событиям есть ответы",
+      detail: `${answeredEvents} из ${totalEvents} событий имеют данные. Остальное не стоит интерпретировать как нейтральное состояние.`,
+      confidence: "high",
+    });
+  }
+
+  eventPulse
+    .filter((event) => event.hasResponses && event.completion < 50)
+    .slice(0, 3)
+    .forEach((event) => {
+      blindSpots.push({
+        id: `low-coverage-${event.id}`,
+        title: `Мало данных: ${event.title}`,
+        detail: `Заполнение ${event.completion}%, поэтому выводы лучше проверить в круге.`,
+        confidence: "high",
+      });
+    });
+
+  const reflectionResponses = dayReflections.reduce((sum, day) => sum + Number(day.responsesCount || 0), 0);
+  if (participantRows.length && reflectionResponses === 0) {
+    blindSpots.push({
+      id: "no-day-reflections",
+      title: "Нет дневной рефлексии",
+      detail: "Подготовка опирается только на отметки по событиям и риск-сигналы.",
+      confidence: "high",
+    });
+  }
+
+  return {
+    coverage: {
+      confidence: coverageConfidence,
+      completion: averageCompletion,
+      answeredEvents,
+      totalEvents,
+      participantsCount: participantRows.length,
+      openRisksCount: openAlerts.length,
+      summary:
+        coverageConfidence === "low"
+          ? "Данных пока недостаточно для уверенных выводов: лучше формулировать вопросы."
+          : "Данных достаточно для рабочего брифа куратора.",
+    },
+    talkingPoints,
+    participantsToCheckIn,
+    blindSpots: blindSpots.slice(0, 5),
+  };
+}
+
 function buildOrganizerBrief({ eventPulse, alerts }) {
   const cards = [];
+  const seenAnchors = new Set();
   const openAlerts = alerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt);
 
   for (const alert of openAlerts) {
@@ -248,14 +396,23 @@ function buildOrganizerBrief({ eventPulse, alerts }) {
       id: `risk-${alert.id}`,
       type: "risk_signal",
       severity: alert.severity,
+      confidence: "high",
       title: alert.title,
       evidence: alert.detail || "Открытый сигнал риска по группе.",
       anchor: "risk_signals",
     });
+    if (alert.userId) {
+      seenAnchors.add(`user-${alert.userId}`);
+    }
   }
 
   for (const event of eventPulse) {
     if (!event.hasResponses) {
+      continue;
+    }
+
+    const anchorKey = `event-${event.id}`;
+    if (seenAnchors.has(anchorKey)) {
       continue;
     }
 
@@ -264,10 +421,13 @@ function buildOrganizerBrief({ eventPulse, alerts }) {
         id: `event-risk-${event.id}`,
         type: "event_risk",
         severity: event.riskAnswersCount > 1 ? "high" : "medium",
+        confidence: getConfidenceByCompletion(event.completion),
         title: `Пик напряжения: ${event.title}`,
         evidence: `${event.riskAnswersCount} из ${event.answersCount} ответов попали в крайние зоны шкалы.`,
         anchor: event.id,
       });
+      seenAnchors.add(anchorKey);
+      continue;
     }
 
     if (event.deltaFromPrevious !== null && Math.abs(event.deltaFromPrevious) >= 1.5) {
@@ -275,10 +435,13 @@ function buildOrganizerBrief({ eventPulse, alerts }) {
         id: `event-delta-${event.id}`,
         type: "sharp_transition",
         severity: Math.abs(event.deltaFromPrevious) >= 2 ? "high" : "medium",
+        confidence: getConfidenceByCompletion(event.completion),
         title: `Резкий переход: ${event.title}`,
         evidence: `Среднее состояние изменилось на ${event.deltaFromPrevious > 0 ? "+" : ""}${event.deltaFromPrevious} относительно предыдущего события с ответами.`,
         anchor: event.id,
       });
+      seenAnchors.add(anchorKey);
+      continue;
     }
 
     if (event.completion < 50) {
@@ -286,10 +449,12 @@ function buildOrganizerBrief({ eventPulse, alerts }) {
         id: `event-visibility-${event.id}`,
         type: "low_visibility",
         severity: "low",
+        confidence: "high",
         title: `Мало данных: ${event.title}`,
         evidence: `Заполнено ${event.completion}% дневников по событию, выводы стоит проверять в разговоре.`,
         anchor: event.id,
       });
+      seenAnchors.add(anchorKey);
     }
   }
 
@@ -506,16 +671,25 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
         createdAt: report.created_at,
       }
     : null;
+  const focusEvents = buildFocusEvents(eventPulse);
+  const dayReflections = buildReflectionDays({
+    days: participation.days,
+    reflections: reflectionRows,
+  });
   const reflectionPrep = {
-    focusEvents: buildFocusEvents(eventPulse),
-    dayReflections: buildReflectionDays({
-      days: participation.days,
-      reflections: reflectionRows,
-    }),
+    focusEvents,
+    dayReflections,
     commentClusters,
     openRisks: alerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt),
     aiReport,
   };
+  reflectionPrep.reflectionBrief = buildReflectionBrief({
+    eventPulse,
+    participantRows,
+    dayReflections,
+    alerts,
+    focusEvents,
+  });
   const organizerBrief = buildOrganizerBrief({ eventPulse, alerts });
   const dataState = getDataState({ participation, members });
 

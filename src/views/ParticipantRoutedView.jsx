@@ -4,7 +4,7 @@ import MetricBadge from "../components/MetricBadge";
 import StateScalePicker from "../components/participant/StateScalePicker";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
 
-const reflectionFields = ["q1", "q2", "q3"];
+const reflectionFields = ["q1", "q2"];
 const EVENT_SCROLL_MARGIN = 16;
 
 function getFirstPendingEventId(events) {
@@ -40,14 +40,15 @@ function focusElementWithoutScroll(element) {
   }
 }
 
-function scrollEventIntoView(element) {
+function scrollEventIntoView(element, options = {}) {
   if (typeof window === "undefined" || !element) {
     return;
   }
 
+  const offset = options.offset ?? getStickyParticipantOffset();
   const targetTop = Math.max(
     0,
-    window.scrollY + element.getBoundingClientRect().top - getStickyParticipantOffset(),
+    window.scrollY + element.getBoundingClientRect().top - offset,
   );
 
   if (Math.abs(window.scrollY - targetTop) < 4) {
@@ -61,9 +62,15 @@ function scrollEventIntoView(element) {
 }
 
 function isReflectionAnswered(reflection) {
-  return ["q1", "q2", "q3", "freeText"].some((field) =>
+  return [...reflectionFields, "freeText"].some((field) =>
     String(reflection?.[field] || "").trim(),
   );
+}
+
+function isHelpTomorrowPrompt(prompt) {
+  const normalizedPrompt = String(prompt || "").toLowerCase();
+
+  return normalizedPrompt.includes("помощ") && normalizedPrompt.includes("завтра");
 }
 
 function createEventDraft(event, previousDraft = null) {
@@ -96,6 +103,7 @@ function ParticipantRoutedView({
 }) {
   const [openEventId, setOpenEventId] = useState("");
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
+  const [isProgrammaticNavigation, setIsProgrammaticNavigation] = useState(false);
   const [eventDrafts, setEventDrafts] = useState({});
   const [savingEventId, setSavingEventId] = useState("");
   const pendingStateSaveRef = useRef({});
@@ -108,6 +116,13 @@ function ParticipantRoutedView({
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
   const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
   const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
+  const visibleReflectionPrompts = useMemo(
+    () =>
+      (reflectionPrompts || [])
+        .filter((prompt) => !isHelpTomorrowPrompt(prompt))
+        .slice(0, reflectionFields.length),
+    [reflectionPrompts],
+  );
   const openEvent = todayEvents.find((event) => event.id === openEventId) || null;
   const openEventIndex = todayEvents.findIndex((event) => event.id === openEvent?.id);
   const answeredEventCount = todayEvents.filter((event) => Boolean(event.stateId)).length;
@@ -192,22 +207,24 @@ function ParticipantRoutedView({
 
         if (!latestNavigation || latestNavigation.eventId !== openEventId) {
           navigationFrameRef.current = 0;
+          setIsProgrammaticNavigation(false);
           return;
         }
 
-        const shell = eventShellRefs.current[openEventId];
         const button = eventButtonRefs.current[openEventId];
+        const scrollTarget = eventShellRefs.current[openEventId] || button;
 
         if (latestNavigation.shouldFocus) {
           focusElementWithoutScroll(button);
         }
 
         if (latestNavigation.shouldScroll) {
-          scrollEventIntoView(shell);
+          scrollEventIntoView(scrollTarget);
         }
 
         pendingNavigationRef.current = null;
         navigationFrameRef.current = 0;
+        setIsProgrammaticNavigation(false);
       });
     });
   }, [activeDayId, openEventId, todayEvents.length]);
@@ -242,6 +259,7 @@ function ParticipantRoutedView({
       shouldFocus: options.shouldFocus ?? true,
       shouldScroll: options.shouldScroll ?? true,
     };
+    setIsProgrammaticNavigation(Boolean(options.shouldScroll ?? true));
     setOpenEventId(eventId);
   }
 
@@ -374,8 +392,8 @@ function ParticipantRoutedView({
     if (direction > 0) {
       void commitEventDraft(dayId, event, {
         defaultToBalance: true,
-        nextEventId: nextEvent.id,
       });
+      openEventWithViewportSync(nextEvent.id);
       return;
     }
 
@@ -423,7 +441,13 @@ function ParticipantRoutedView({
   return (
     <section className="role-view participant-view">
       {mode === "today" ? (
-        <div className="participant-layout">
+        <div
+          className={
+            isProgrammaticNavigation
+              ? "participant-layout is-programmatic-navigation"
+              : "participant-layout"
+          }
+        >
           <div className="event-column participant-stepper">
             <div className="participant-flow-head">
               <div>
@@ -540,16 +564,6 @@ function ParticipantRoutedView({
                       {...(!isOpen ? { inert: "" } : {})}
                     >
                       <div className="participant-event-body">
-                        {(event.tags || []).length ? (
-                          <div className="tag-row participant-event-body-tags">
-                            {(event.tags || []).map((tag) => (
-                              <span key={tag} className="tag-chip">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-
                         <div className="participant-event-workspace">
                           <div className="participant-event-arc-shell">
                             <StateScalePicker
@@ -702,7 +716,7 @@ function ParticipantRoutedView({
                   </div>
 
                   <div className="reflection-list participant-reflection-list">
-                    {reflectionPrompts.map((prompt, index) => {
+                    {visibleReflectionPrompts.map((prompt, index) => {
                       const field = reflectionFields[index] || `q${index + 1}`;
 
                       return (

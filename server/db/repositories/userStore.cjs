@@ -251,7 +251,6 @@ async function getBootstrap(viewerId) {
     reflectionPrompts: settings.reflectionPrompts || [
       "Как я себя чувствую в конце дня?",
       "Что сегодня было особенно важным?",
-      "Какая помощь мне пригодилась бы завтра?",
     ],
     navigation: getNavigationItems(viewer),
     scopeBadges: getScopeBadges(viewer),

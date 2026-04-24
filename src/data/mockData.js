@@ -31,7 +31,6 @@ export const sessionInfo = {
 export const reflectionPrompts = [
   "Как я себя чувствую в конце этого дня?",
   "Что сегодня было особенно важным и значимым?",
-  "Что я хочу сделать завтра лучше?",
 ];
 
 export const participantHistory = [

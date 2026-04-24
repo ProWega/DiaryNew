@@ -168,6 +168,52 @@ const baseDashboard = {
         detail: "Участник отметил уровень 1 и комментарий про отсутствие ясности маршрута.",
       },
     ],
+    reflectionBrief: {
+      coverage: {
+        confidence: "medium",
+        completion: 72,
+        answeredEvents: 4,
+        totalEvents: 5,
+        participantsCount: 4,
+        openRisksCount: 1,
+        summary: "Данных достаточно для рабочего брифа, но отдельные выводы стоит проверить в круге.",
+      },
+      talkingPoints: [
+        {
+          id: "event-4",
+          title: "Переезд",
+          prompt: "Обсудить, что именно было неясно в переходе и что поможет группе завтра.",
+          confidence: "medium",
+          severity: "high",
+          evidence: ["2 из 2 ответов в зоне риска", "низкая видимость данных: 50% заполнения"],
+        },
+        {
+          id: "event-3",
+          title: "Проектная мастерская",
+          prompt: "Проверить, где мастерская дала ресурс, а где перегрузила.",
+          confidence: "medium",
+          severity: "medium",
+          evidence: ["2 из 3 ответов в зоне риска", "3 комментария"],
+        },
+      ],
+      participantsToCheckIn: [
+        {
+          id: "participant-3",
+          name: "Егор Кузнецов",
+          status: "risk",
+          confidence: "medium",
+          evidence: ["статус групповой карты: нужно внимание", "1 открытых сигналов риска", "амплитуда дня 5"],
+        },
+      ],
+      blindSpots: [
+        {
+          id: "low-coverage-event-4",
+          title: "Мало данных: Переезд",
+          detail: "Заполнение 50%, поэтому выводы лучше проверить в круге.",
+          confidence: "high",
+        },
+      ],
+    },
     aiReport: {
       id: "ai-report-1",
       title: "Итоги дня по группе",
@@ -219,6 +265,72 @@ export const Normal = {
 export const Mobile = {
   parameters: { viewport: { defaultViewport: "mobile" } },
   render: () => <CuratorDashboardView dashboard={cloneDashboard()} />,
+};
+
+export const SelectedParticipant = {
+  render: () => (
+    <CuratorDashboardView
+      dashboard={cloneDashboard()}
+      initialSelectedParticipantId="participant-3"
+    />
+  ),
+};
+
+export const LowCoverageReflectionBrief = {
+  render: () => (
+    <CuratorDashboardView
+      dashboard={cloneDashboard({
+        completion: 32,
+        progress: { completion: 32, answeredEvents: 4, totalEvents: 20, answeredReflections: 0, totalReflections: 4 },
+        eventPulse: eventPulse.map((event) => ({
+          ...event,
+          completion: event.hasResponses ? Math.min(event.completion, 40) : 0,
+          answersCount: event.hasResponses ? 1 : 0,
+        })),
+        reflectionPrep: {
+          ...structuredClone(baseDashboard.reflectionPrep),
+          reflectionBrief: {
+            coverage: {
+              confidence: "low",
+              completion: 32,
+              answeredEvents: 4,
+              totalEvents: 5,
+              participantsCount: 4,
+              openRisksCount: 1,
+              summary: "Данных мало: пункты брифа лучше использовать как вопросы к группе.",
+            },
+            talkingPoints: [
+              {
+                id: "event-4",
+                title: "Уточнить: Переезд",
+                prompt: "Уточнить у группы, что происходило в точке «Переезд»: данных пока мало.",
+                confidence: "low",
+                severity: "medium",
+                evidence: ["низкая видимость данных: 40% заполнения"],
+              },
+            ],
+            participantsToCheckIn: [
+              {
+                id: "participant-4",
+                name: "Дарья Лисина",
+                status: "silent",
+                confidence: "medium",
+                evidence: ["нет ответов по событиям"],
+              },
+            ],
+            blindSpots: [
+              {
+                id: "low-coverage",
+                title: "Мало данных по событиям",
+                detail: "Заполнение ниже 50%, поэтому выводы нельзя подавать как утверждения.",
+                confidence: "high",
+              },
+            ],
+          },
+        },
+      })}
+    />
+  ),
 };
 
 export const NoResponses = {

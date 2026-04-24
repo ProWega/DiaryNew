@@ -1,3 +1,4 @@
+import { useState } from "react";
 import MetricBadge from "../components/MetricBadge";
 import {
   EventImpactBarChart,
@@ -93,6 +94,79 @@ function getSeverityClass(severity) {
   }
 
   return "is-medium";
+}
+
+function getConfidenceLabel(confidence) {
+  if (confidence === "high") {
+    return "уверенно";
+  }
+  if (confidence === "low") {
+    return "проверить";
+  }
+  return "рабочая гипотеза";
+}
+
+function getCoverageSummary(brief, dashboard) {
+  const coverage = brief?.coverage;
+  if (coverage) {
+    return coverage;
+  }
+
+  return {
+    confidence: Number(dashboard.completion || 0) >= 75 ? "high" : Number(dashboard.completion || 0) >= 50 ? "medium" : "low",
+    completion: Number(dashboard.completion || 0),
+    answeredEvents: Number(dashboard.progress?.answeredEvents || 0),
+    totalEvents: Number(dashboard.progress?.totalEvents || 0),
+    participantsCount: Number(dashboard.participantsCount || 0),
+    openRisksCount: asArray(dashboard.reflectionPrep?.openRisks).length,
+    summary:
+      Number(dashboard.completion || 0) >= 50
+        ? "Данных достаточно для рабочего разговора, но выводы стоит проверять с группой."
+        : "Данных пока мало: лучше формулировать вопросы, а не выводы.",
+  };
+}
+
+function buildReflectionBriefFallback({ focusEvents, participantRows, openRisks, dashboard }) {
+  return {
+    coverage: getCoverageSummary(null, dashboard),
+    talkingPoints: asArray(focusEvents).slice(0, 5).map((event) => ({
+      id: event.id,
+      title: event.title,
+      prompt:
+        event.confidence === "low"
+          ? `Уточнить, что происходило в точке «${event.title}».`
+          : `Обсудить точку «${event.title}» и проверить, что повлияло на состояние группы.`,
+      confidence: event.confidence || "medium",
+      severity: event.severity || "medium",
+      evidence: asArray(event.evidence),
+    })),
+    participantsToCheckIn: asArray(participantRows)
+      .filter((participant) => ["risk", "watch", "silent"].includes(participant.status) || Number(participant.openRiskSignalsCount || 0) > 0)
+      .slice(0, 6)
+      .map((participant) => ({
+        id: participant.id,
+        name: participant.name,
+        status: participant.status,
+        confidence: participant.status === "silent" ? "medium" : "high",
+        evidence: [
+          getStatusCopy(participant.status).label,
+          Number(participant.openRiskSignalsCount || 0) > 0 ? `${participant.openRiskSignalsCount} открытых сигналов риска` : "",
+          Number.isFinite(Number(participant.amplitude)) ? `амплитуда ${formatNumber(participant.amplitude)}` : "",
+          `заполнение ${formatPercent(participant.completion)}`,
+        ].filter(Boolean),
+      })),
+    blindSpots:
+      Number(dashboard.completion || 0) < 50
+        ? [
+            {
+              id: "low-coverage",
+              title: "Мало данных",
+              detail: "Заполнение низкое, поэтому факты лучше использовать как вопросы к группе.",
+              confidence: "high",
+            },
+          ]
+        : [],
+  };
 }
 
 function DataStateBanner({ state }) {
@@ -380,6 +454,127 @@ function FactList({ title, eyebrow, items = [], emptyLabel, renderItem }) {
   );
 }
 
+function ConfidencePill({ confidence }) {
+  return (
+    <span className={`curator-confidence-pill is-${confidence || "medium"}`}>
+      {getConfidenceLabel(confidence)}
+    </span>
+  );
+}
+
+function ReflectionBriefCard({ brief }) {
+  const coverage = brief.coverage || {};
+  const talkingPoints = asArray(brief.talkingPoints);
+  const participantsToCheckIn = asArray(brief.participantsToCheckIn);
+  const blindSpots = asArray(brief.blindSpots);
+
+  return (
+    <article className="panel-card curator-reflection-card">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Бриф к рефлексии</p>
+          <h3>Что вынести в вечерний круг</h3>
+        </div>
+        <ConfidencePill confidence={coverage.confidence} />
+      </div>
+
+      <div className="curator-coverage-strip">
+        <strong>{formatPercent(coverage.completion)}</strong>
+        <span>{coverage.summary}</span>
+      </div>
+
+      <div className="curator-reflection-columns">
+        <section className="curator-reflection-block">
+          <h4>Темы для разговора</h4>
+          {talkingPoints.length ? (
+            <div className="curator-fact-list">
+              {talkingPoints.map((point) => (
+                <div key={point.id} className={`curator-fact-item ${getSeverityClass(point.severity)}`}>
+                  <div className="curator-fact-title-row">
+                    <strong>{point.title}</strong>
+                    <ConfidencePill confidence={point.confidence} />
+                  </div>
+                  <p>{point.prompt}</p>
+                  {asArray(point.evidence).length ? <span>{asArray(point.evidence).join("; ")}</span> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="curator-empty-copy">Пока нет подтвержденных тем для выноса в круг.</p>
+          )}
+        </section>
+
+        <section className="curator-reflection-block">
+          <h4>Кого бережно проверить</h4>
+          {participantsToCheckIn.length ? (
+            <div className="curator-fact-list">
+              {participantsToCheckIn.map((participant) => {
+                const status = getStatusCopy(participant.status);
+                return (
+                  <div key={participant.id} className="curator-fact-item">
+                    <div className="curator-fact-title-row">
+                      <strong>{participant.name}</strong>
+                      <span className={`status-pill ${status.className}`}>{status.label}</span>
+                    </div>
+                    <p>{asArray(participant.evidence).join("; ")}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="curator-empty-copy">Нет участников с подтвержденными сигналами для отдельной проверки.</p>
+          )}
+        </section>
+      </div>
+
+      {blindSpots.length ? (
+        <div className="curator-blind-spots">
+          <h4>Где не перегревать выводы</h4>
+          {blindSpots.map((spot) => (
+            <div key={spot.id} className="curator-blind-spot">
+              <strong>{spot.title}</strong>
+              <p>{spot.detail}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function SelectedParticipantCard({ participant, onClear }) {
+  if (!participant) {
+    return (
+      <div className="curator-selected-participant is-empty">
+        Нажмите на точку на карте, чтобы увидеть имя участника и краткие метрики.
+      </div>
+    );
+  }
+
+  const status = getStatusCopy(participant.status);
+
+  return (
+    <article className="curator-selected-participant">
+      <div>
+        <span className={`status-pill ${status.className}`}>{status.label}</span>
+        <h3>{participant.name}</h3>
+      </div>
+      <div className="curator-selected-metrics">
+        <MetricBadge label="Среднее" value={formatNumber(participant.average)} />
+        <MetricBadge label="Амплитуда" value={formatNumber(participant.amplitude)} />
+        <MetricBadge label="Заполнение" value={formatPercent(participant.completion)} />
+        <MetricBadge label="Риски" value={`${participant.openRiskSignalsCount || 0}`} />
+      </div>
+      <p>
+        Комментариев: {participant.commentsCount || 0}; событий заполнено: {participant.answeredEvents || 0}/{participant.totalEvents || 0}.
+      </p>
+      <button type="button" className="ghost-button curator-clear-selection" onClick={onClear}>
+        Снять выбор
+      </button>
+    </article>
+  );
+}
+
 const CURATOR_ZONE_SEGMENTS = [
   { id: "low", label: "Низкий ресурс", color: "#6e98d8" },
   { id: "mid", label: "Баланс", color: "#7dae42" },
@@ -447,6 +642,14 @@ function buildCuratorScatterData(participants = []) {
       x: Number(participant.average),
       y: Number.isFinite(Number(participant.amplitude)) ? Number(participant.amplitude) : 0,
       size: Math.max(8, Number(participant.completion || 0)),
+      status: participant.status,
+      average: participant.average,
+      amplitude: participant.amplitude,
+      completion: participant.completion,
+      commentsCount: participant.commentsCount,
+      answeredEvents: participant.answeredEvents,
+      totalEvents: participant.totalEvents,
+      openRiskSignalsCount: participant.openRiskSignalsCount,
       color:
         participant.status === "risk"
           ? "#d97757"
@@ -458,7 +661,8 @@ function buildCuratorScatterData(participants = []) {
     }));
 }
 
-function CuratorDashboardView({ dashboard }) {
+function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }) {
+  const [selectedScatterId, setSelectedScatterId] = useState(initialSelectedParticipantId);
   const eventPulse = asArray(dashboard.eventPulse);
   const participantRows = asArray(dashboard.participantRows || dashboard.members);
   const events = asArray(dashboard.events);
@@ -471,6 +675,15 @@ function CuratorDashboardView({ dashboard }) {
   const distributionRows = buildCuratorDistributionRows(events, participantRows);
   const riskEventRows = buildCuratorRiskEventRows(eventPulse);
   const scatterData = buildCuratorScatterData(participantRows);
+  const reflectionBrief =
+    reflectionPrep.reflectionBrief ||
+    buildReflectionBriefFallback({
+      focusEvents,
+      participantRows,
+      openRisks,
+      dashboard,
+    });
+  const selectedParticipant = participantRows.find((participant) => participant.id === selectedScatterId) || null;
 
   return (
     <section className="role-view curator-workspace">
@@ -493,6 +706,8 @@ function CuratorDashboardView({ dashboard }) {
 
       <DataStateBanner state={dashboard.dataState} />
 
+      <ReflectionBriefCard brief={reflectionBrief} />
+
       <article className="panel-card curator-pulse-card">
         <div className="panel-head">
           <div>
@@ -510,45 +725,18 @@ function CuratorDashboardView({ dashboard }) {
         </div>
       </article>
 
-      <div className="curator-brief-grid">
-        <StackedDistributionChart
-          title="Распределение состояний по событиям"
-          description="Только реальные ответы группы: пропуски остаются пустыми и не маскируются нейтральным значением."
-          rows={distributionRows}
-          emptyLabel="Недостаточно ответов, чтобы собрать распределение по событиям."
-        />
-        <EventImpactBarChart
-          title="События с риском"
-          description="Высота столбца показывает, сколько ответов по событию попали в крайние зоны шкалы."
-          data={riskEventRows}
-          emptyLabel="Пока нет событий с ответами в зоне риска."
-          positiveColor="#d97757"
-          negativeColor="#d97757"
-        />
-      </div>
-
       <RiskScatterChart
         title="Карта участников группы"
         description="Размер точки = заполнение, X = среднее состояние, Y = амплитуда дня."
         data={scatterData}
         emptyLabel="Нет траекторий участников для scatter-карты."
+        selectedId={selectedScatterId}
+        onPointClick={(item) => setSelectedScatterId((current) => (current === item.id ? null : item.id))}
+        onClearSelection={() => setSelectedScatterId(null)}
       />
+      <SelectedParticipantCard participant={selectedParticipant} onClear={() => setSelectedScatterId(null)} />
 
-      <div className="curator-brief-grid">
-        <FactList
-          eyebrow="К рефлексии"
-          title="На чём сфокусировать разговор"
-          items={focusEvents}
-          emptyLabel="Пока нет событий с риском, резкими переходами, низкой видимостью данных или комментариями."
-          renderItem={(event) => (
-            <div key={event.id} className="curator-fact-item">
-              <strong>{event.title}</strong>
-              <span>{[event.dayLabel, event.timeLabel, event.type].filter(Boolean).join(" · ")}</span>
-              <p>{event.evidence.join("; ")}</p>
-            </div>
-          )}
-        />
-
+      <div className="curator-brief-grid curator-organizer-brief-grid">
         <FactList
           eyebrow="Организаторам"
           title="Сигналы для живого разговора"
@@ -574,7 +762,24 @@ function CuratorDashboardView({ dashboard }) {
         <GroupScore participants={participantRows} events={events} />
       </article>
 
-      <div className="curator-brief-grid">
+      <div className="curator-brief-grid curator-secondary-analytics">
+        <StackedDistributionChart
+          title="Распределение состояний по событиям"
+          description="Только реальные ответы группы: пропуски остаются пустыми и не маскируются нейтральным значением."
+          rows={distributionRows}
+          emptyLabel="Недостаточно ответов, чтобы собрать распределение по событиям."
+        />
+        <EventImpactBarChart
+          title="События с риском"
+          description="Высота столбца показывает, сколько ответов по событию попали в крайние зоны шкалы."
+          data={riskEventRows}
+          emptyLabel="Пока нет событий с ответами в зоне риска."
+          positiveColor="#d97757"
+          negativeColor="#d97757"
+        />
+      </div>
+
+      <div className="curator-brief-grid curator-secondary-analytics">
         <FactList
           eyebrow="Дневная рефлексия"
           title="Факты по завершению дня"
