@@ -4053,6 +4053,27 @@ textarea {
   letter-spacing: 0.08em;
 }
 
+.curator-score-event-head {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 50px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.curator-score-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curator-score-event-head small {
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 .curator-score-person {
   display: grid;
   gap: 8px;
@@ -4068,11 +4089,14 @@ textarea {
   display: grid;
   place-items: center;
   min-height: 58px;
-  padding: 8px;
+  padding: 8px 10px;
+  text-align: center;
 }
 
 .curator-score-cell strong {
-  font-size: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .curator-score-cell.is-empty {
@@ -4127,6 +4151,12 @@ textarea {
 
 .curator-selected-metrics .metric-badge {
   min-width: 0;
+}
+
+.curator-hero-card .metric-badge strong,
+.curator-selected-metrics .metric-badge strong {
+  line-height: 1.18;
+  overflow-wrap: anywhere;
 }
 
 .curator-clear-selection {

@@ -51,7 +51,7 @@ const participantRows = [
       { eventId: "event-1", stateLevel: 2, answered: true, comment: "" },
       { eventId: "event-2", stateLevel: 4, answered: true, comment: "Сильная лекция." },
       { eventId: "event-3", stateLevel: 4, answered: true, comment: "" },
-      { eventId: "event-4", stateLevel: 2, answered: true, comment: "Устала ждать." },
+      { eventId: "event-4", stateLevel: 0, answered: true, comment: "Устала ждать." },
       { eventId: "event-5", stateLevel: null, answered: false, comment: "" },
     ],
   },

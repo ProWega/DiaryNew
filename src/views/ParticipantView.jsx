@@ -202,7 +202,7 @@ function ParticipantView({
                   <p className="eyebrow">Психологический портрет дня</p>
                   <h3>Автосводка по текущим отметкам</h3>
                 </div>
-                <span className="confidence-tag">confidence: medium</span>
+                <span className="confidence-tag">ориентировочная сводка</span>
               </div>
 
               <ul className="bullet-list">

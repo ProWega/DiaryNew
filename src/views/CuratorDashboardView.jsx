@@ -80,6 +80,28 @@ function getStateByLevel(value) {
   return stateByLevel[Math.round(clamp(Number(value), PULSE_DOMAIN[0], PULSE_DOMAIN[1]))] || null;
 }
 
+function getStateLabel(value, fallback = "Нет данных") {
+  const state = getStateByLevel(value);
+  return state?.shortLabel || state?.label || fallback;
+}
+
+function formatAverageState(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "Нет данных";
+  }
+
+  return `${getStateLabel(value)} · ${formatNumber(value)}`;
+}
+
+function getEventShortLabel(event) {
+  const title = event?.title || "Событие";
+  return title.length > 18 ? `${title.slice(0, 18)}…` : title;
+}
+
+function formatCuratorText(value) {
+  return String(value ?? "").replace(/уровень\s+([0-6])\b/gi, (_, level) => `состояние «${getStateLabel(Number(level))}»`);
+}
+
 function getStatusCopy(status) {
   return STATUS_COPY[status] || STATUS_COPY.ok;
 }
@@ -325,7 +347,7 @@ function PulseOfDayChart({ events = [] }) {
                 </>
               )}
               <title>
-                {point.title}: {point.value === null ? "нет ответов" : `среднее ${formatNumber(point.value)}, заполнение ${formatPercent(point.completion)}`}
+                {point.title}: {point.value === null ? "нет ответов" : `среднее ${formatAverageState(point.value)}, заполнение ${formatPercent(point.completion)}`}
               </title>
             </g>
           );
@@ -372,13 +394,15 @@ function GroupScore({ participants = [], events = [] }) {
       <div
         className="curator-score-grid"
         style={{
-          gridTemplateColumns: `minmax(190px, 1.2fr) repeat(${safeEvents.length}, minmax(72px, 1fr)) minmax(116px, 0.7fr)`,
+          gridTemplateColumns: `minmax(190px, 1.15fr) repeat(${safeEvents.length}, minmax(122px, 1fr)) minmax(116px, 0.7fr)`,
+          minWidth: `${Math.max(760, 330 + safeEvents.length * 130)}px`,
         }}
       >
         <div className="curator-score-head">Участник</div>
-        {safeEvents.map((event, index) => (
-          <div key={event.id} className="curator-score-head" title={event.title}>
-            {index + 1}
+        {safeEvents.map((event) => (
+          <div key={event.id} className="curator-score-head curator-score-event-head" title={`${event.title}${event.timeLabel ? ` · ${event.timeLabel}` : ""}`}>
+            <span className="curator-score-event-title">{getEventShortLabel(event)}</span>
+            {event.timeLabel ? <small>{event.timeLabel}</small> : null}
           </div>
         ))}
         <div className="curator-score-head">Заполнено</div>
@@ -416,7 +440,7 @@ function GroupScore({ participants = [], events = [] }) {
                     }}
                     title={`${event.title}: ${state.label}${point?.comment ? ` — ${point.comment}` : ""}`}
                   >
-                    <strong>{state.level}</strong>
+                    <strong>{state.shortLabel || state.label}</strong>
                   </div>
                 );
               })}
@@ -495,7 +519,7 @@ function ReflectionBriefCard({ brief }) {
                     <ConfidencePill confidence={point.confidence} />
                   </div>
                   <p>{point.prompt}</p>
-                  {asArray(point.evidence).length ? <span>{asArray(point.evidence).join("; ")}</span> : null}
+                  {asArray(point.evidence).length ? <span>{asArray(point.evidence).map(formatCuratorText).join("; ")}</span> : null}
                 </div>
               ))}
             </div>
@@ -516,7 +540,7 @@ function ReflectionBriefCard({ brief }) {
                       <strong>{participant.name}</strong>
                       <span className={`status-pill ${status.className}`}>{status.label}</span>
                     </div>
-                    <p>{asArray(participant.evidence).join("; ")}</p>
+                    <p>{asArray(participant.evidence).map(formatCuratorText).join("; ")}</p>
                   </div>
                 );
               })}
@@ -560,7 +584,7 @@ function SelectedParticipantCard({ participant, onClear }) {
         <h3>{participant.name}</h3>
       </div>
       <div className="curator-selected-metrics">
-        <MetricBadge label="Среднее" value={formatNumber(participant.average)} />
+        <MetricBadge label="Среднее" value={formatAverageState(participant.average)} />
         <MetricBadge label="Амплитуда" value={formatNumber(participant.amplitude)} />
         <MetricBadge label="Заполнение" value={formatPercent(participant.completion)} />
         <MetricBadge label="Риски" value={`${participant.openRiskSignalsCount || 0}`} />
@@ -624,9 +648,9 @@ function buildCuratorDistributionRows(events = [], participants = []) {
 function buildCuratorRiskEventRows(eventPulse = []) {
   return asArray(eventPulse)
     .filter((event) => Number(event.riskAnswersCount || 0) > 0)
-    .map((event, index) => ({
+    .map((event) => ({
       id: event.id,
-      label: `${index + 1}`,
+      label: getEventShortLabel(event),
       value: Number(event.riskAnswersCount || 0),
       color: "#d97757",
     }));
@@ -645,6 +669,8 @@ function buildCuratorScatterData(participants = []) {
       status: participant.status,
       average: participant.average,
       amplitude: participant.amplitude,
+      xValueLabel: formatAverageState(participant.average),
+      yValueLabel: formatNumber(participant.amplitude),
       completion: participant.completion,
       commentsCount: participant.commentsCount,
       answeredEvents: participant.answeredEvents,
@@ -721,7 +747,7 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
         <div className="hero-stats">
           <MetricBadge label="Участников" value={`${scopedDashboard.participantsCount || 0}`} />
           <MetricBadge label="Заполнение" value={formatPercent(scopedDashboard.completion)} />
-          <MetricBadge label="Средний пульс" value={formatNumber(scopedDashboard.averageActivation)} />
+          <MetricBadge label="Средний пульс" value={formatAverageState(scopedDashboard.averageActivation)} />
           <MetricBadge label="Открытых рисков" value={`${openRisks.length}`} />
         </div>
       </div>
@@ -795,7 +821,7 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
           renderItem={(item) => (
             <div key={item.id} className={`curator-signal-card ${getSeverityClass(item.severity)}`}>
               <strong>{item.title}</strong>
-              <p>{item.evidence}</p>
+              <p>{formatCuratorText(item.evidence)}</p>
             </div>
           )}
         />
@@ -882,13 +908,13 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
           <div className="curator-fact-list">
             {asArray(reflectionPrep.aiReport.content?.bullets).map((item) => (
               <div key={item} className="curator-fact-item">
-                <p>{item}</p>
+                <p>{formatCuratorText(item)}</p>
               </div>
             ))}
             {reflectionPrep.aiReport.content?.recommendation ? (
               <div className="curator-fact-item is-accent">
                 <strong>Рекомендация отчёта</strong>
-                <p>{reflectionPrep.aiReport.content.recommendation}</p>
+                <p>{formatCuratorText(reflectionPrep.aiReport.content.recommendation)}</p>
               </div>
             ) : null}
           </div>

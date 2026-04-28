@@ -823,6 +823,8 @@ export function RiskScatterChart({
           {data.map((item, index) => {
             const xValue = Number(item.x ?? item.avgActivation ?? 0);
             const yValue = Number(item.y ?? item.amplitude ?? 0);
+            const xValueLabel = item.xValueLabel ?? xValue;
+            const yValueLabel = item.yValueLabel ?? yValue;
             const size = Number(item.size ?? item.jumps ?? 1);
             const x = getXFromValue(xValue, resolvedXDomain, width, margin);
             const y = getY(yValue, resolvedYDomain, height, margin);
@@ -859,7 +861,7 @@ export function RiskScatterChart({
                   </g>
                 ) : null}
                 <title>
-                  {item.label}: {xLabel} {xValue}, {yLabel} {yValue}
+                  {item.label}: {xLabel} {xValueLabel}, {yLabel} {yValueLabel}
                 </title>
               </g>
             );

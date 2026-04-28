@@ -346,6 +346,81 @@ export const CompletedDay = {
   render: renderParticipant,
 };
 
+export const StablePortraitDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 4,
+    reflectionAnswered: true,
+    eventOverrides: {
+      "event-1": { stateId: "relaxed" },
+      "event-2": { stateId: "balance" },
+      "event-3": { stateId: "balance" },
+      "event-4": { stateId: "engaged" },
+    },
+  },
+  render: renderParticipant,
+};
+
+export const OverstrainPortraitDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 4,
+    reflectionAnswered: true,
+    eventOverrides: {
+      "event-1": { stateId: "balance" },
+      "event-2": { stateId: "engaged" },
+      "event-3": { stateId: "overstimulated" },
+      "event-4": { stateId: "panic" },
+    },
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const LowResourcePortraitDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 4,
+    reflectionAnswered: true,
+    eventOverrides: {
+      "event-1": { stateId: "apathy" },
+      "event-2": { stateId: "passive" },
+      "event-3": { stateId: "relaxed" },
+      "event-4": { stateId: "balance" },
+    },
+  },
+  render: renderParticipant,
+};
+
+export const SingleMarkPortraitDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 1,
+    reflectionAnswered: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: renderParticipant,
+};
+
+export const SharpTransitionsPortraitDay = {
+  args: {
+    mode: "today",
+    answeredEvents: 4,
+    reflectionAnswered: true,
+    eventOverrides: {
+      "event-1": { stateId: "apathy" },
+      "event-2": { stateId: "engaged" },
+      "event-3": { stateId: "passive" },
+      "event-4": { stateId: "panic" },
+    },
+  },
+  render: renderParticipant,
+};
+
 export const DynamicsPartial = {
   args: {
     ...PartialDay.args,
