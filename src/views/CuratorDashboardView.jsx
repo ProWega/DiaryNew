@@ -600,9 +600,9 @@ function SelectedParticipantCard({ participant, onClear }) {
 }
 
 const CURATOR_ZONE_SEGMENTS = [
-  { id: "low", label: "Низкий ресурс", color: "#6e98d8" },
-  { id: "mid", label: "Баланс", color: "#7dae42" },
-  { id: "high", label: "Напряжение", color: "#d97757" },
+  { id: "low", label: "Низкий ресурс", color: "#4f5759" },
+  { id: "mid", label: "Баланс", color: "#78733d" },
+  { id: "high", label: "Напряжение", color: "#c95c36" },
 ];
 
 function buildCuratorDistributionRows(events = [], participants = []) {
@@ -652,7 +652,7 @@ function buildCuratorRiskEventRows(eventPulse = []) {
       id: event.id,
       label: getEventShortLabel(event),
       value: Number(event.riskAnswersCount || 0),
-      color: "#d97757",
+      color: "#6b1f2a",
     }));
 }
 
@@ -678,12 +678,12 @@ function buildCuratorScatterData(participants = []) {
       openRiskSignalsCount: participant.openRiskSignalsCount,
       color:
         participant.status === "risk"
-          ? "#d97757"
+          ? "#6b1f2a"
           : participant.status === "watch"
-            ? "#f4b84a"
+            ? "#9a7a32"
             : participant.status === "silent"
-              ? "#a4b2bb"
-              : "#7dae42",
+              ? "#4f5759"
+              : "#78733d",
     }));
 }
 
@@ -850,8 +850,8 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
           description="Высота столбца показывает, сколько ответов по событию попали в крайние зоны шкалы."
           data={riskEventRows}
           emptyLabel="Пока нет событий с ответами в зоне риска."
-          positiveColor="#d97757"
-          negativeColor="#d97757"
+          positiveColor="#6b1f2a"
+          negativeColor="#6b1f2a"
         />
       </div>
 

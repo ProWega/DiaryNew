@@ -80,3 +80,65 @@ export function FieldsAndPills() {
     </div>
   );
 }
+
+export function BrandSystemReview() {
+  return (
+    <div className="app-shell" style={{ minHeight: "auto" }}>
+      <header className="topbar">
+        <div className="brand-block">
+          <div className="brand-mark" aria-label="Истоки">И</div>
+          <div>
+            <p className="eyebrow">Истоки · UI review</p>
+            <h1>Система интерфейса</h1>
+            <p className="subtle">Проверка палитры, типографики, контролов и состояний.</p>
+          </div>
+        </div>
+        <div className="pill-grid">
+          <span className="soft-pill">Бордовый</span>
+          <span className="soft-pill is-outline">Песчаный фон</span>
+        </div>
+      </header>
+
+      <main className="page-grid">
+        <section className="hero-card">
+          <div>
+            <p className="eyebrow">Рабочий экран</p>
+            <h2>Сдержанный продуктовый слой Истоков</h2>
+            <p className="subtle">Бренд присутствует через цвет, ритм и состояние компонентов.</p>
+          </div>
+          <div className="hero-stats">
+            <MetricBadge label="Контраст" value="AA" />
+            <MetricBadge label="Радиус" value="8px" />
+            <MetricBadge label="Палитра" value="Истоки" />
+          </div>
+        </section>
+
+        <section className="panel-card">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Состояния</p>
+              <h3>Кнопки, поля, статусы</h3>
+            </div>
+            <span className="confidence-tag">review</span>
+          </div>
+          <div className="pill-grid" style={{ marginTop: 16 }}>
+            <button type="button" className="primary-button">Основное действие</button>
+            <button type="button" className="ghost-button">Вторичное</button>
+            <button type="button" className="primary-button" disabled>Недоступно</button>
+            <StatusPill tone="tone-ok">Стабильно</StatusPill>
+            <StatusPill tone="tone-watch">Наблюдать</StatusPill>
+            <StatusPill tone="tone-risk">Риск</StatusPill>
+          </div>
+          <div className="field-grid" style={{ marginTop: 16 }}>
+            <Field label="Название">
+              <input defaultValue="Истоки. Школа" />
+            </Field>
+            <Field label="Комментарий" error="Проверьте формулировку">
+              <textarea rows={3} defaultValue="Короткий рабочий текст внутри интерфейса." />
+            </Field>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

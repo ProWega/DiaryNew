@@ -2,13 +2,13 @@ import { useId } from "react";
 import { stateScale } from "../data/mockData";
 
 const DEFAULT_PALETTE = [
-  "#6fb9c8",
-  "#8dbf4f",
-  "#f4b84a",
-  "#e97864",
-  "#8978d4",
-  "#3f8f72",
-  "#cc7a3f",
+  "#6b1f2a",
+  "#9a7a32",
+  "#78733d",
+  "#c95c36",
+  "#4f5759",
+  "#c7b273",
+  "#4a111b",
 ];
 
 const DEFAULT_DOMAIN = [0, stateScale.length - 1];
@@ -233,7 +233,7 @@ function renderThresholds({ thresholds = [], domain, width, height, margin }) {
           x2={width - margin.right}
           y1={y}
           y2={y}
-          stroke={threshold.color ?? "#d97757"}
+          stroke={threshold.color ?? "#c95c36"}
           strokeDasharray={threshold.dash ?? "8 8"}
           strokeWidth="2"
         />
@@ -243,7 +243,7 @@ function renderThresholds({ thresholds = [], domain, width, height, margin }) {
             y={y - 6}
             textAnchor="end"
             fontSize="11"
-            fill={threshold.color ?? "#8b4a35"}
+            fill={threshold.color ?? "#6b1f2a"}
           >
             {threshold.label}
           </text>
@@ -255,7 +255,7 @@ function renderThresholds({ thresholds = [], domain, width, height, margin }) {
 
 function renderAnnotations({ annotations = [], domain, width, height, margin, xCount }) {
   return annotations.map((annotation, index) => {
-    const color = annotation.color ?? "#4f6975";
+    const color = annotation.color ?? "#4f5759";
 
     if (Number.isFinite(annotation.value)) {
       const y = getY(annotation.value, domain, height, margin);
@@ -463,7 +463,7 @@ export function MultiLineTrendChart(props) {
 export function Sparkline({
   data,
   values = [],
-  color = "#6fb9c8",
+  color = "#6b1f2a",
   height = 56,
   width = 180,
   strokeWidth = 3,
@@ -624,9 +624,9 @@ export function EventImpactBarChart({
   showValues = true,
   emptyLabel = "Нет данных по эффекту мероприятий",
   yDomain,
-  positiveColor = "#7dae42",
-  negativeColor = "#df765f",
-  neutralColor = "#90a4ae",
+  positiveColor = "#78733d",
+  negativeColor = "#c95c36",
+  neutralColor = "#4f5759",
 }) {
   const items = normalizeData({ data, values, labels });
   const width = 760;

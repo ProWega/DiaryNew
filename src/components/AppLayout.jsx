@@ -12,7 +12,7 @@ function getInitials(fullName = "") {
       .slice(0, 2)
       .map((part) => part[0])
       .join("")
-      .toUpperCase() || "ND"
+      .toUpperCase() || "И"
   );
 }
 
@@ -182,9 +182,9 @@ function AppLayout() {
         <>
           <header className="topbar">
             <div className="brand-block">
-              <div className="brand-mark">ND</div>
+              <div className="brand-mark" aria-label="Истоки">И</div>
               <div>
-                <p className="eyebrow">React Sandbox / JSON API / RBAC</p>
+                <p className="eyebrow">Истоки · цифровой кабинет</p>
                 <h1>{bootstrap.sessionInfo.name}</h1>
                 <p className="subtle">
                   {bootstrap.sessionInfo.cycle} · {bootstrap.sessionInfo.dateLabel} · {bootstrap.sessionInfo.location}
