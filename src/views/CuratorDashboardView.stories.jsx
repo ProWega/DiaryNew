@@ -425,6 +425,32 @@ baseDashboard.averageActivation = allScope.averageActivation;
 baseDashboard.reflectionPrep = allScope.reflectionPrep;
 baseDashboard.reportScopes = [allScope, dayOneScope, dayTwoScope];
 
+function withoutEventComments(scope) {
+  const nextScope = structuredClone(scope);
+  const participantRows = (nextScope.participantRows || nextScope.members || []).map((participant) => ({
+    ...participant,
+    commentsCount: 0,
+    trajectory: (participant.trajectory || []).map((point) => ({
+      ...point,
+      comment: "",
+    })),
+  }));
+
+  nextScope.eventPulse = (nextScope.eventPulse || []).map((event) => ({
+    ...event,
+    commentsCount: 0,
+  }));
+  nextScope.participantRows = participantRows;
+  nextScope.members = participantRows;
+  nextScope.reflectionPrep = {
+    ...(nextScope.reflectionPrep || {}),
+    commentClusters: [],
+  };
+  nextScope.organizerBrief = [];
+
+  return nextScope;
+}
+
 function cloneDashboard(patch = {}) {
   return {
     ...structuredClone(baseDashboard),
@@ -465,6 +491,21 @@ export const DayTwoLowCoverageReport = {
       })}
     />
   ),
+};
+
+export const EventCommentsEmpty = {
+  render: () => {
+    const dayOneWithoutComments = withoutEventComments(dayOneScope);
+
+    return (
+      <CuratorDashboardView
+        dashboard={cloneDashboard({
+          ...dayOneWithoutComments,
+          reportScopes: [dayOneWithoutComments],
+        })}
+      />
+    );
+  },
 };
 
 export const SelectedParticipant = {

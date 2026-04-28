@@ -4061,6 +4061,158 @@ textarea {
   color: #6d5946;
 }
 
+.curator-comments-card {
+  display: grid;
+  gap: 18px;
+}
+
+.curator-comments-card .subtle {
+  max-width: 760px;
+}
+
+.curator-comments-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.curator-event-comments-column,
+.curator-ai-side,
+.curator-comment-event,
+.curator-comment-list,
+.curator-ai-zone {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.curator-ai-side {
+  position: sticky;
+  top: 18px;
+}
+
+.curator-comment-event,
+.curator-ai-zone {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.curator-comment-event {
+  border-left: 5px solid rgba(64, 126, 145, 0.28);
+}
+
+.curator-ai-zone {
+  background: rgba(247, 250, 249, 0.74);
+}
+
+.curator-ai-zone.is-event {
+  background: rgba(236, 248, 252, 0.62);
+}
+
+.curator-comment-event-head,
+.curator-ai-zone-head,
+.curator-comment-author {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.curator-comment-event-head h4,
+.curator-ai-zone h4 {
+  margin: 3px 0 0;
+  color: var(--curator-ink);
+  line-height: 1.2;
+}
+
+.curator-comment-event-index,
+.curator-comment-event-meta,
+.curator-comment-state {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.curator-comment-event-index {
+  display: inline-flex;
+  margin-bottom: 2px;
+  color: #8d5d48;
+}
+
+.curator-comment-metrics,
+.curator-ai-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.curator-ai-side .curator-ai-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.curator-comment-metric {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(64, 126, 145, 0.14);
+  border-radius: 14px;
+  background: rgba(236, 248, 252, 0.68);
+}
+
+.curator-comment-metric strong {
+  color: var(--curator-ink);
+  font-size: 1rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.curator-comment-metric span {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.curator-comment-row {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(214, 138, 55, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 248, 239, 0.72);
+}
+
+.curator-comment-author strong {
+  color: var(--curator-ink);
+  overflow-wrap: anywhere;
+}
+
+.curator-comment-author .status-pill {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.curator-comment-row blockquote {
+  margin: 0;
+  color: var(--text-main);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.curator-ai-placeholder {
+  margin: 0;
+  color: var(--text-soft);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 .curator-chart-empty {
   display: grid;
   place-items: center;
@@ -4369,6 +4521,7 @@ textarea {
 
   .curator-reflection-card,
   .curator-pulse-card,
+  .curator-comments-card,
   .curator-score-card,
   .curator-fact-card,
   .curator-ai-card {
@@ -4399,6 +4552,20 @@ textarea {
     padding-bottom: 8px;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+  }
+
+  .curator-comments-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .curator-ai-side {
+    position: static;
+  }
+
+  .curator-comment-metrics,
+  .curator-ai-metrics,
+  .curator-ai-side .curator-ai-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .curator-pulse-shell::after,
@@ -4507,6 +4674,25 @@ textarea {
   .curator-hero-card .metric-badge,
   .curator-selected-metrics .metric-badge {
     min-width: 0;
+  }
+
+  .curator-comment-event,
+  .curator-ai-zone {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .curator-comment-metrics,
+  .curator-ai-metrics,
+  .curator-ai-side .curator-ai-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .curator-comment-event-head,
+  .curator-ai-zone-head,
+  .curator-comment-author {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .curator-pulse-chart,
