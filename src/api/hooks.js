@@ -124,6 +124,7 @@ export function useParticipantDiary(sessionId) {
                             ? {
                                 ...entry,
                                 ...patch,
+                                reflectionAnswers: patch.reflectionAnswers || entry.reflectionAnswers,
                                 answered: true,
                                 respondedAt: new Date().toISOString(),
                               }
@@ -174,10 +175,18 @@ export function useParticipantDiary(sessionId) {
                         const reflection = {
                           ...day.reflection,
                           ...patch,
+                          answers: {
+                            ...(day.reflection?.answers || {}),
+                            ...(patch.answers || {}),
+                          },
                         };
-                        const answered = ["q1", "q2", "q3", "freeText"].some((field) =>
-                          String(reflection[field] || "").trim(),
-                        );
+                        const answered =
+                          ["q1", "q2", "q3", "freeText"].some((field) =>
+                            String(reflection[field] || "").trim(),
+                          ) ||
+                          Object.values(reflection.answers || {}).some((value) =>
+                            String(value || "").trim(),
+                          );
                         return {
                           ...day,
                           reflection: {

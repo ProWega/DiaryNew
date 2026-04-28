@@ -34,6 +34,17 @@
 - `PATCH /api/participant/sessions/:sessionId/diary/:entryId`
 - `PATCH /api/participant/sessions/:sessionId/reflections/:dayId`
 
+Participant diary payload включает опубликованные дни и мероприятия программы. Для настроенной рефлексии:
+
+- `day.reflectionQuestions: [{ id, text, required }]` — вопросы итогов дня;
+- `event.reflectionQuestions: [{ id, text, required }]` — вопросы конкретного мероприятия;
+- `event.reflectionAnswers` — ответы участника на вопросы мероприятия;
+- `day.reflection.answers` — ответы участника на вопросы дня.
+
+`PATCH /diary/:entryId` принимает обычные поля отметки (`stateId`, `comment`, `confidence`) и `reflectionAnswers`. Обязательные event-вопросы валидируются при финальном сохранении карточки. Быстрый автосейв выбора состояния может передавать служебный `allowIncompleteReflection: true`, чтобы сохранить шкалу до заполнения текстовых ответов.
+
+`PATCH /reflections/:dayId` принимает legacy `q1`/`q2`/`q3` или `answers` для day-level вопросов. Если обязательный day-вопрос пустой, черновик сохраняется, но `responded_at` не выставляется и рефлексия не засчитывается в прогресс.
+
 ## API: curator
 
 - `GET /api/curator/sessions/:sessionId/groups/:groupId/dashboard`
@@ -87,6 +98,12 @@
 - `POST /api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/events/parallel`
 - `DELETE /api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/events/:eventId`
 - `POST /api/organizer/sessions/:sessionId/programs/:programId/days/:dayId/events/:eventId/activate`
+
+Program day и event payload поддерживают `reflectionQuestions: [{ id, text, required }]`.
+
+- Для дней вопросы сохраняются в `program_days.reflection_prompts` и отображаются в participant-блоке «Итог дня».
+- Для мероприятий вопросы сохраняются в `program_events.meta.reflectionQuestions` и отображаются внутри карточки события.
+- Если список вопросов мероприятия пустой, participant view показывает старое поле комментария.
 
 ### Surveys
 

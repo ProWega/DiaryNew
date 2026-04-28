@@ -113,6 +113,7 @@ function ParticipantPage({ mode }) {
   const activeDay = selectedDay ?? currentDay;
   const todayEvents = activeDay?.events ?? [];
   const reflection = activeDay?.reflection ?? {
+    answers: {},
     q1: "",
     q2: "",
     q3: "",

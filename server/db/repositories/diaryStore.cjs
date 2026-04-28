@@ -37,6 +37,47 @@ function hasText(value) {
   return String(value || "").trim().length > 0;
 }
 
+function normalizeReflectionQuestions(value = []) {
+  const questions = Array.isArray(value) ? value : [];
+  return questions
+    .map((question) => {
+      const text = String(question?.text || question?.title || "").trim();
+      const id = String(question?.id || "").trim();
+      if (!id || !text) {
+        return null;
+      }
+
+      return {
+        id,
+        text,
+        required: Boolean(question?.required),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeReflectionAnswers(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, answer]) => [String(key), String(answer || "")]),
+  );
+}
+
+function validateRequiredReflectionAnswers(questions = [], answers = {}) {
+  const missingQuestion = normalizeReflectionQuestions(questions).find(
+    (question) => question.required && !hasText(answers[question.id]),
+  );
+
+  if (missingQuestion) {
+    const error = new Error(`Ответьте на обязательный вопрос: ${missingQuestion.text}`);
+    error.status = 400;
+    throw error;
+  }
+}
+
 function mapAvailability(context) {
   if (!context.program || !context.isPublished) {
     return "unpublished";
@@ -103,6 +144,7 @@ async function getParticipantEntries(userId, sessionId, eventIds) {
   const result = await query(
     `
       select event_id, day_id, state_id, state_level, comment, confidence, responded_at
+        , meta
       from diary_entries
       where session_id = $1 and user_id = $2 and event_id = any($3::text[])
     `,
@@ -189,6 +231,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
           "Комментарии помогают куратору увидеть причины изменений.",
         ],
         reflection: {
+          answers: normalizeReflectionAnswers(reflection?.answers),
           q1: reflection?.answers?.q1 || "",
           q2: reflection?.answers?.q2 || "",
           q3: reflection?.answers?.q3 || "",
@@ -196,6 +239,9 @@ async function getParticipantDiary({ viewerId, sessionId }) {
           answered: reflectionAnswered,
           respondedAt: reflection?.responded_at || null,
         },
+        reflectionQuestions: normalizeReflectionQuestions(
+          row.reflection_prompts || context.days.find((day) => day.id === row.day_id)?.reflectionQuestions,
+        ),
         progress: createEmptyProgress(),
         events: [],
       });
@@ -207,6 +253,8 @@ async function getParticipantDiary({ viewerId, sessionId }) {
       title: row.title,
       type: row.event_type,
       tags: row.tags || [],
+      reflectionQuestions: normalizeReflectionQuestions(row.meta?.reflectionQuestions),
+      reflectionAnswers: normalizeReflectionAnswers(entry?.meta?.reflectionAnswers),
       access: computeParticipantEventAccess(row, context.sessionSettings),
       stateId: answered ? entry?.state_id || null : null,
       comment: entry?.comment || "",
@@ -292,19 +340,25 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
   const statePatch = await normalizeStatePatch(patch);
   const hasComment = hasField(patch, "comment");
   const hasConfidence = hasField(patch, "confidence");
+  const hasReflectionAnswers = hasField(patch, "reflectionAnswers");
+  const reflectionAnswers = hasReflectionAnswers ? normalizeReflectionAnswers(patch.reflectionAnswers) : {};
+  if (!patch.allowIncompleteReflection && (statePatch.hasState || hasReflectionAnswers || hasComment || hasConfidence)) {
+    validateRequiredReflectionAnswers(event.meta?.reflectionQuestions, reflectionAnswers);
+  }
 
   const saveResult = await query(
     `
       insert into diary_entries (
-        id, user_id, session_id, day_id, event_id, state_id, state_level, comment, confidence, source, responded_at
+        id, user_id, session_id, day_id, event_id, state_id, state_level, comment, confidence, source, meta, responded_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'web', now())
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'web', $13::jsonb, now())
       on conflict (user_id, session_id, day_id, event_id)
       do update set
         state_id = case when $10::boolean then excluded.state_id else diary_entries.state_id end,
         state_level = case when $10::boolean then excluded.state_level else diary_entries.state_level end,
         comment = case when $11::boolean then excluded.comment else diary_entries.comment end,
         confidence = case when $12::boolean then excluded.confidence else diary_entries.confidence end,
+        meta = case when $14::boolean then coalesce(diary_entries.meta, '{}'::jsonb) || excluded.meta else diary_entries.meta end,
         responded_at = now(),
         updated_at = now()
       returning state_id, state_level, responded_at
@@ -322,6 +376,8 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
       statePatch.hasState,
       hasComment,
       hasConfidence,
+      JSON.stringify(hasReflectionAnswers ? { reflectionAnswers } : {}),
+      hasReflectionAnswers,
     ],
   );
   const savedEntry = saveResult.rows[0];
@@ -351,13 +407,20 @@ async function updateParticipantReflection({ viewerId, sessionId, dayId, patch }
     throw error;
   }
 
-  const answers = {
-    q1: patch.q1 || "",
-    q2: patch.q2 || "",
-    q3: patch.q3 || "",
-  };
+  const day = context.days.find((item) => item.id === dayId);
+  const configuredQuestions = normalizeReflectionQuestions(day?.reflectionQuestions);
+  const answers = configuredQuestions.length
+    ? normalizeReflectionAnswers(patch.answers || patch)
+    : {
+        q1: patch.q1 || "",
+        q2: patch.q2 || "",
+        q3: patch.q3 || "",
+      };
   const freeText = patch.freeText || "";
-  const answered = Object.values(answers).some(hasText) || hasText(freeText);
+  const hasMissingRequiredAnswers = configuredQuestions.some(
+    (question) => question.required && !hasText(answers[question.id]),
+  );
+  const answered = (Object.values(answers).some(hasText) || hasText(freeText)) && !hasMissingRequiredAnswers;
 
   await query(
     `

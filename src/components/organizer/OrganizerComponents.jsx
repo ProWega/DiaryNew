@@ -103,6 +103,29 @@ function safeObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function createReflectionQuestionDraft() {
+  const suffix =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().slice(0, 8)
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+  return {
+    id: `reflection-question-${suffix}`,
+    text: "",
+    required: false,
+  };
+}
+
+function normalizeReflectionQuestions(value = []) {
+  return safeArray(value)
+    .map((question) => ({
+      id: String(question?.id || createReflectionQuestionDraft().id).trim(),
+      text: String(question?.text || question?.title || "").trimStart(),
+      required: Boolean(question?.required),
+    }))
+    .filter((question) => question.id);
+}
+
 function normalizeScheduleEvent(event, fallbackIndex = 0, fallbackPrefix = "event") {
   const rawEvent = safeObject(event);
   return {
@@ -120,6 +143,7 @@ function normalizeScheduleEvent(event, fallbackIndex = 0, fallbackPrefix = "even
     status: rawEvent.status || "planned",
     tags: normalizeList(rawEvent.tags),
     description: rawEvent.description || "",
+    reflectionQuestions: normalizeReflectionQuestions(rawEvent.reflectionQuestions),
   };
 }
 
@@ -325,6 +349,7 @@ function normalizeEventFormValue(event = {}, eventTypes = []) {
     status: rawEvent.status || "planned",
     tags: Array.isArray(rawEvent.tags) ? rawEvent.tags.join(", ") : rawEvent.tags || "",
     description: rawEvent.description || "",
+    reflectionQuestions: normalizeReflectionQuestions(rawEvent.reflectionQuestions),
   };
 }
 
@@ -334,7 +359,83 @@ function normalizeEventPayload(form, speakersCatalog = []) {
     ...form,
     speakerName,
     tags: normalizeList(form.tags),
+    reflectionQuestions: normalizeReflectionQuestions(form.reflectionQuestions).filter((question) => question.text.trim()),
   };
+}
+
+export function ReflectionQuestionEditor({
+  value = [],
+  disabled = false,
+  title = "Вопросы рефлексии",
+  emptyLabel = "Вопросы не настроены",
+  onChange,
+}) {
+  const questions = normalizeReflectionQuestions(value);
+
+  function updateQuestion(questionId, patch) {
+    onChange?.(
+      questions.map((question) =>
+        question.id === questionId ? { ...question, ...patch } : question,
+      ),
+    );
+  }
+
+  function addQuestion() {
+    onChange?.([...questions, createReflectionQuestionDraft()]);
+  }
+
+  function removeQuestion(questionId) {
+    onChange?.(questions.filter((question) => question.id !== questionId));
+  }
+
+  return (
+    <div className="reflection-question-editor">
+      <div className="panel-head is-compact">
+        <div>
+          <p className="eyebrow">{title}</p>
+          <p className="subtle">{questions.length ? `${questions.length} вопросов` : emptyLabel}</p>
+        </div>
+        <button type="button" className="ghost-button" disabled={disabled} onClick={addQuestion}>
+          Добавить вопрос
+        </button>
+      </div>
+
+      {questions.length ? (
+        <div className="reflection-question-list">
+          {questions.map((question, index) => (
+            <div key={question.id} className="reflection-question-row">
+              <Field label={`Вопрос ${index + 1}`} wide>
+                <textarea
+                  rows={2}
+                  value={question.text}
+                  disabled={disabled}
+                  placeholder="Что важно осмыслить участнику?"
+                  onChange={(event) => updateQuestion(question.id, { text: event.target.value })}
+                />
+              </Field>
+              <label className="toggle-line">
+                <input
+                  type="checkbox"
+                  checked={question.required}
+                  disabled={disabled}
+                  onChange={(event) => updateQuestion(question.id, { required: event.target.checked })}
+                />
+                Обязательный
+              </label>
+              <button
+                type="button"
+                className="ghost-button is-danger"
+                disabled={disabled}
+                onClick={() => removeQuestion(question.id)}
+              >
+                Удалить
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function createScheduleEventDraft({ start, parallelGroup, track, eventTypes, defaultDurationMinutes }) {
@@ -588,6 +689,14 @@ export function ProgramEventForm({
           />
         </Field>
       </div>
+
+      <ReflectionQuestionEditor
+        value={form.reflectionQuestions}
+        disabled={disabled || saving}
+        title="Рефлексия мероприятия"
+        emptyLabel="Если вопросов нет, участник увидит обычный комментарий"
+        onChange={(reflectionQuestions) => updateField("reflectionQuestions", reflectionQuestions)}
+      />
 
       {onSubmit ? (
         <div className="card-actions">

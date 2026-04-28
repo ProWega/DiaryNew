@@ -12,6 +12,7 @@ import {
   ProgramScheduleInspector,
   ProgramScheduleTable,
   ProgramScheduleToolbar,
+  ReflectionQuestionEditor,
 } from "../components/organizer/OrganizerComponents";
 import { SessionCatalog, SessionEditorForm } from "../components/admin/AdminComponents";
 import { formatPublicationDate } from "../lib/organizerWorkspace";
@@ -425,6 +426,9 @@ function OrganizerCabinetView({
     asArray(currentProgram?.days).find((day) => day.id === selectedDayId) ||
     asArray(currentProgram?.days)[0] ||
     null;
+  const [dayReflectionQuestions, setDayReflectionQuestions] = useState(
+    () => asArray(currentDay?.reflectionQuestions),
+  );
   const currentFlowColumns = useMemo(() => getDayFlowColumns(currentDay), [currentDay]);
 
   const selectedScheduleEvent =
@@ -435,6 +439,10 @@ function OrganizerCabinetView({
     setSelectedScheduleEventId(null);
     setScheduleDraftEvent(null);
   }, [currentProgram?.id, currentDay?.id]);
+
+  useEffect(() => {
+    setDayReflectionQuestions(asArray(currentDay?.reflectionQuestions));
+  }, [currentDay?.id, currentDay?.reflectionQuestions]);
 
   useEffect(() => {
     setScheduleUndoStack([]);
@@ -515,6 +523,19 @@ function OrganizerCabinetView({
   async function handleParticipantEventAccessModeChange(isEnabled) {
     return onUpdateSessionSettings({
       participantEventAccessMode: isEnabled ? "from_start_time" : "always",
+    });
+  }
+
+  async function handleProgramDayReflectionSave() {
+    if (!currentProgram?.id || !currentDay?.id) {
+      return null;
+    }
+
+    return onUpdateProgramDay(currentProgram.id, currentDay.id, {
+      label: currentDay.label,
+      dateLabel: currentDay.dateLabel,
+      dateValue: currentDay.dateValue,
+      reflectionQuestions: dayReflectionQuestions,
     });
   }
 
@@ -1029,6 +1050,37 @@ function OrganizerCabinetView({
                 onChange={(checked) => void handleParticipantEventAccessModeChange(checked)}
               />
             </article>
+
+            {currentDay ? (
+              <article className="panel-card organizer-program-access-card">
+                <div>
+                  <p className="eyebrow">Рефлексия дня</p>
+                  <h3>Вопросы для итогов выбранного дня</h3>
+                  <p className="subtle">
+                    Эти вопросы появятся в participant view в блоке «Итог дня». Если список пустой, используется стандартный набор.
+                  </p>
+                </div>
+                <div className="organizer-day-reflection-editor">
+                  <ReflectionQuestionEditor
+                    value={dayReflectionQuestions}
+                    disabled={saving}
+                    title={`${currentDay.label || "День"}${currentDay.dateLabel ? ` · ${currentDay.dateLabel}` : ""}`}
+                    emptyLabel="Будут показаны стандартные вопросы"
+                    onChange={setDayReflectionQuestions}
+                  />
+                  <div className="card-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={saving}
+                      onClick={() => void handleProgramDayReflectionSave()}
+                    >
+                      Сохранить вопросы дня
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ) : null}
 
             <div className="organizer-table-mode-grid">
               <ProgramScheduleTable

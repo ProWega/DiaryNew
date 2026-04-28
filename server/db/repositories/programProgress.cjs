@@ -32,6 +32,24 @@ function uniqueBy(values, keyGetter) {
   return result;
 }
 
+function normalizeReflectionQuestions(value = []) {
+  const questions = Array.isArray(value) ? value : [];
+  return questions
+    .map((question) => {
+      const text = String(question?.text || question?.title || "").trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: String(question?.id || "").trim(),
+        text,
+        required: Boolean(question?.required),
+      };
+    })
+    .filter((question) => question.id);
+}
+
 function createEmptyProgress() {
   return {
     completion: 0,
@@ -122,6 +140,7 @@ async function getProgramEvents(sessionId, programId) {
         d.date_label,
         d.date_value,
         d.day_number,
+        d.reflection_prompts,
         coalesce(array_agg(t.tag order by t.tag) filter (where t.tag is not null), '{}') as tags
       from program_events e
       join program_days d on d.id = e.day_id
@@ -181,6 +200,7 @@ async function getPublishedProgramContext(sessionId) {
           dateLabel: day.dateLabel || "",
           dateValue: day.dateValue || null,
           dayNumber: day.dayNumber,
+          reflectionQuestions: normalizeReflectionQuestions(day.reflection_prompts || day.reflectionQuestions),
         }))
     : uniqueBy(events, (event) => event.day_id).map((event) => ({
         id: event.day_id,
@@ -188,6 +208,7 @@ async function getPublishedProgramContext(sessionId) {
         dateLabel: event.date_label || "",
         dateValue: event.date_value || null,
         dayNumber: event.day_number,
+        reflectionQuestions: normalizeReflectionQuestions(event.reflection_prompts),
       })));
 
   return {

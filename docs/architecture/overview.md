@@ -31,8 +31,8 @@
 
 - public registration;
 - auth через cookie sessions и magic links;
-- organizer program management;
-- participant daily diary и reflection;
+- organizer program management, включая вопросы рефлексии на уровне дня и мероприятия;
+- participant daily diary, event-level reflection и day-level reflection;
 - curator pulse dashboard;
 - admin security / access management.
 
@@ -41,6 +41,22 @@
 - production-like режим работает с PostgreSQL;
 - часть legacy fallback-механик ещё существует, но целевой путь — реальные API-агрегаты;
 - Docker-контур запускает `npm run prod:init` перед стартом сервера.
+
+Основные таблицы для программы и дневника:
+
+- `program_days` — дни программы, порядок потоков и вопросы итоговой рефлексии дня;
+- `program_events` — мероприятия программы, метаданные события и вопросы рефлексии мероприятия;
+- `diary_entries` — отметки состояния, комментарии и ответы участника по мероприятию;
+- `daily_reflections` — ответы участника на итоговую рефлексию дня.
+
+## Контракт рефлексии
+
+- единая структура вопроса: `reflectionQuestions: [{ id, text, required }]`;
+- вопросы мероприятия хранятся в `program_events.meta.reflectionQuestions`;
+- вопросы итогов дня хранятся в `program_days.reflection_prompts`;
+- ответы на вопросы мероприятия хранятся в `diary_entries.meta.reflectionAnswers`;
+- ответы на вопросы дня хранятся в `daily_reflections.answers`;
+- пустой список вопросов мероприятия означает legacy UX с обычным комментарием.
 
 ## Что считать Definition of Done
 

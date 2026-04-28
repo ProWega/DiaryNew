@@ -113,6 +113,32 @@ function normalizeDayFlowMeta(day) {
   return meta;
 }
 
+function normalizeReflectionQuestions(value = []) {
+  const questions = Array.isArray(value) ? value : [];
+  return questions
+    .map((question) => {
+      const text = String(question?.text || question?.title || "").trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: String(question?.id || createId("reflection-question")).trim(),
+        text,
+        required: Boolean(question?.required),
+      };
+    })
+    .filter(Boolean);
+}
+
+function getEventMeta(event = {}) {
+  const meta = event.meta && typeof event.meta === "object" && !Array.isArray(event.meta) ? event.meta : {};
+  return {
+    ...meta,
+    reflectionQuestions: normalizeReflectionQuestions(event.reflectionQuestions || meta.reflectionQuestions),
+  };
+}
+
 function average(values) {
   const finite = values.map(Number).filter(Number.isFinite);
   if (!finite.length) {
@@ -730,6 +756,7 @@ async function getProgramWorkspace(sessionId) {
         status: event.status || "planned",
         tags: event.tags || [],
         description: event.description || "",
+        reflectionQuestions: normalizeReflectionQuestions(event.meta?.reflectionQuestions),
       }));
       const flowMeta = normalizeFlowMeta(day.flow_meta || day.flowMeta);
       const flows = buildDayFlows(day.flow_order || day.flowOrder, flowMeta, events);
@@ -742,6 +769,7 @@ async function getProgramWorkspace(sessionId) {
         flowOrder: flows.map((flow) => flow.id),
         flowMeta,
         flows,
+        reflectionQuestions: normalizeReflectionQuestions(day.reflection_prompts || day.reflectionQuestions),
         events,
       };
     }),
@@ -1125,8 +1153,8 @@ async function persistWorkspace(sessionId, workspace) {
     for (const [dayIndex, day] of (program.days || []).entries()) {
       await query(
         `
-          insert into program_days (id, program_id, session_id, day_number, label, date_label, date_value, flow_order, flow_meta, updated_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,now())
+          insert into program_days (id, program_id, session_id, day_number, label, date_label, date_value, flow_order, flow_meta, reflection_prompts, updated_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,now())
           on conflict (id)
           do update set
             label = excluded.label,
@@ -1134,6 +1162,7 @@ async function persistWorkspace(sessionId, workspace) {
             date_value = excluded.date_value,
             flow_order = excluded.flow_order,
             flow_meta = excluded.flow_meta,
+            reflection_prompts = excluded.reflection_prompts,
             updated_at = now()
         `,
         [
@@ -1146,6 +1175,7 @@ async function persistWorkspace(sessionId, workspace) {
           normalizeDateInput(day.dateValue),
           JSON.stringify(normalizeDayFlowOrder(day)),
           JSON.stringify(normalizeDayFlowMeta(day)),
+          JSON.stringify(normalizeReflectionQuestions(day.reflectionQuestions)),
         ],
       );
 
@@ -1169,7 +1199,7 @@ async function persistWorkspace(sessionId, workspace) {
               end_time, event_type, location, track, parallel_group, status,
               description, sort_order, meta, updated_at
             )
-            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'{}'::jsonb,now())
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,now())
             on conflict (id)
             do update set
               speaker_id = excluded.speaker_id,
@@ -1183,6 +1213,7 @@ async function persistWorkspace(sessionId, workspace) {
               status = excluded.status,
               description = excluded.description,
               sort_order = excluded.sort_order,
+              meta = excluded.meta,
               updated_at = now()
           `,
           [
@@ -1201,6 +1232,7 @@ async function persistWorkspace(sessionId, workspace) {
             event.status || "planned",
             event.description || "",
             eventIndex,
+            JSON.stringify(getEventMeta(event)),
           ],
         );
 

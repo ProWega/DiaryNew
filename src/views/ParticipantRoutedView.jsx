@@ -101,8 +101,26 @@ function scrollEventIntoView(element, options = {}) {
 }
 
 function isReflectionAnswered(reflection) {
-  return [...reflectionFields, "freeText"].some((field) =>
-    String(reflection?.[field] || "").trim(),
+  const answers = reflection?.answers && typeof reflection.answers === "object" ? reflection.answers : {};
+  return (
+    [...reflectionFields, "freeText"].some((field) => String(reflection?.[field] || "").trim()) ||
+    Object.values(answers).some((value) => String(value || "").trim())
+  );
+}
+
+function safeReflectionQuestions(value = []) {
+  return Array.isArray(value)
+    ? value.filter((question) => question?.id && String(question.text || "").trim())
+    : [];
+}
+
+function safeReflectionAnswers(value = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function hasMissingRequiredAnswers(questions = [], answers = {}) {
+  return safeReflectionQuestions(questions).some(
+    (question) => question.required && !String(answers[question.id] || "").trim(),
   );
 }
 
@@ -113,12 +131,16 @@ function isHelpTomorrowPrompt(prompt) {
 }
 
 function createEventDraft(event, previousDraft = null) {
+  const previousAnswers = safeReflectionAnswers(previousDraft?.reflectionAnswers);
+  const eventAnswers = safeReflectionAnswers(event?.reflectionAnswers);
   return {
     stateId: previousDraft?.stateId || event?.stateId || "",
     comment: previousDraft?.isCommentDirty ? previousDraft.comment : event?.comment || "",
+    reflectionAnswers: previousDraft?.isReflectionAnswersDirty ? previousAnswers : eventAnswers,
     confidence:
       previousDraft?.isConfidenceDirty ? previousDraft.confidence : event?.confidence || "high",
     isCommentDirty: Boolean(previousDraft?.isCommentDirty),
+    isReflectionAnswersDirty: Boolean(previousDraft?.isReflectionAnswersDirty),
     isConfidenceDirty: Boolean(previousDraft?.isConfidenceDirty),
   };
 }
@@ -167,12 +189,20 @@ function ParticipantRoutedView({
         .slice(0, reflectionFields.length),
     [reflectionPrompts],
   );
+  const dayReflectionQuestions = useMemo(
+    () => safeReflectionQuestions(selectedDay?.reflectionQuestions),
+    [selectedDay?.reflectionQuestions],
+  );
   const openEvent = todayEvents.find((event) => event.id === openEventId) || null;
   const openEventIndex = todayEvents.findIndex((event) => event.id === openEvent?.id);
   const answeredEventCount = todayEvents.filter((event) => Boolean(event.stateId)).length;
-  const reflectionAnswered = isReflectionAnswered(reflection);
+  const reflectionAnswered =
+    isReflectionAnswered(reflection) &&
+    !hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
   const allEventsAnswered = todayEvents.length > 0 && answeredEventCount === todayEvents.length;
   const showReflectionForm = reflectionAnswered || (allEventsAnswered && isReflectionStarted);
+  const hasDayRequiredReflectionGap =
+    showReflectionForm && hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
   const checklistTotal = todayEvents.length + 1;
   const checklistAnswered = answeredEventCount + (reflectionAnswered ? 1 : 0);
   const completionValue = Math.max(0, Math.min(todayMetrics.completion || 0, 100));
@@ -322,6 +352,8 @@ function ParticipantRoutedView({
     return (
       (draft.stateId || "") !== (event.stateId || "") ||
       draft.comment !== (event.comment || "") ||
+      JSON.stringify(safeReflectionAnswers(draft.reflectionAnswers)) !==
+        JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)) ||
       draft.confidence !== (event.confidence || "high")
     );
   }
@@ -335,7 +367,7 @@ function ParticipantRoutedView({
 
     const requestTask = previousTask
       .catch(() => null)
-      .then(() => saveEventEntry(dayId, event.id, { stateId }))
+      .then(() => saveEventEntry(dayId, event.id, { stateId, allowIncompleteReflection: true }))
       .then((result) => {
         setEventSaveStatuses((previous) => ({
           ...previous,
@@ -404,6 +436,26 @@ function ParticipantRoutedView({
     }));
   }
 
+  function handleEventReflectionAnswerChange(event, questionId, value) {
+    setEventDrafts((previous) => {
+      const currentDraft = createEventDraft(event, previous[event.id]);
+      const nextAnswers = {
+        ...safeReflectionAnswers(currentDraft.reflectionAnswers),
+        [questionId]: value,
+      };
+
+      return {
+        ...previous,
+        [event.id]: {
+          ...currentDraft,
+          reflectionAnswers: nextAnswers,
+          isReflectionAnswersDirty:
+            JSON.stringify(nextAnswers) !== JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)),
+        },
+      };
+    });
+  }
+
   function handleEventConfidenceToggle(event) {
     setEventDrafts((previous) => {
       const currentDraft = createEventDraft(event, previous[event.id]);
@@ -428,11 +480,16 @@ function ParticipantRoutedView({
     const { defaultToBalance = false, nextEventId = "" } = options;
     const draft = getEventDraft(event);
     const stateId = draft.stateId || event.stateId || (defaultToBalance ? "balance" : "");
+    const reflectionAnswers = safeReflectionAnswers(draft.reflectionAnswers);
 
     if (!stateId) {
       if (nextEventId) {
         openEventWithViewportSync(nextEventId);
       }
+      return false;
+    }
+
+    if (hasMissingRequiredAnswers(event.reflectionQuestions, reflectionAnswers)) {
       return false;
     }
 
@@ -443,6 +500,7 @@ function ParticipantRoutedView({
       await saveEventEntry(dayId, event.id, {
         stateId,
         comment: draft.comment,
+        reflectionAnswers,
         confidence: draft.confidence || "high",
       });
 
@@ -452,8 +510,10 @@ function ParticipantRoutedView({
           ...createEventDraft(event, previous[event.id]),
           stateId,
           comment: draft.comment,
+          reflectionAnswers,
           confidence: draft.confidence || "high",
           isCommentDirty: false,
+          isReflectionAnswersDirty: false,
           isConfidenceDirty: false,
         },
       }));
@@ -580,8 +640,14 @@ function ParticipantRoutedView({
                 const effectiveState = effectiveStateId ? getStateInfo(effectiveStateId) : null;
                 const effectiveConfidence = draft.confidence || "high";
                 const hasStateSelection = Boolean(effectiveStateId);
+                const eventReflectionQuestions = safeReflectionQuestions(event.reflectionQuestions);
+                const eventReflectionAnswers = safeReflectionAnswers(draft.reflectionAnswers);
+                const hasRequiredReflectionGap = hasStateSelection &&
+                  hasMissingRequiredAnswers(eventReflectionQuestions, eventReflectionAnswers);
                 const hasDeferredDraftChanges =
                   draft.comment !== (event.comment || "") ||
+                  JSON.stringify(eventReflectionAnswers) !==
+                    JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)) ||
                   effectiveConfidence !== (event.confidence || "high");
                 const stateSaveStatus = eventSaveStatuses[event.id] || null;
                 const isStateSaving = stateSaveStatus?.status === "saving";
@@ -706,7 +772,7 @@ function ParticipantRoutedView({
                             <button
                               type="button"
                               className="primary-button participant-step-primary"
-                              disabled={isEventSaving}
+                              disabled={isEventSaving || hasRequiredReflectionGap}
                               aria-label={
                                 isEventSaving
                                   ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c"
@@ -734,17 +800,46 @@ function ParticipantRoutedView({
 
                         {hasStateSelection ? (
                           <>
-                            <div className="input-row participant-comment-row">
-                              <textarea
-                                rows="3"
-                                value={draft.comment}
-                                disabled={isEventSaving}
-                                placeholder="Можно добавить пару слов, если хочется"
-                                onChange={(eventInput) =>
-                                  handleEventCommentChange(event, eventInput.target.value)
-                                }
-                              />
-                            </div>
+                            {eventReflectionQuestions.length ? (
+                              <div className="reflection-list participant-event-reflection-list">
+                                {eventReflectionQuestions.map((question) => (
+                                  <label key={question.id} className="reflection-item">
+                                    <span>
+                                      {question.text}
+                                      {question.required ? " *" : ""}
+                                    </span>
+                                    <textarea
+                                      rows="2"
+                                      value={eventReflectionAnswers[question.id] || ""}
+                                      disabled={isEventSaving}
+                                      placeholder="Напишите 1–2 предложения"
+                                      aria-required={question.required}
+                                      onChange={(eventInput) =>
+                                        handleEventReflectionAnswerChange(event, question.id, eventInput.target.value)
+                                      }
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="input-row participant-comment-row">
+                                <textarea
+                                  rows="3"
+                                  value={draft.comment}
+                                  disabled={isEventSaving}
+                                  placeholder="Можно добавить пару слов, если хочется"
+                                  onChange={(eventInput) =>
+                                    handleEventCommentChange(event, eventInput.target.value)
+                                  }
+                                />
+                              </div>
+                            )}
+
+                            {hasRequiredReflectionGap ? (
+                              <p className="confidence-note participant-required-note" role="alert">
+                                Ответьте на обязательные вопросы, чтобы продолжить.
+                              </p>
+                            ) : null}
 
                             <div className="event-foot">
                               <button
@@ -835,26 +930,60 @@ function ParticipantRoutedView({
                   </div>
 
                   <div className="reflection-list participant-reflection-list">
-                    {visibleReflectionPrompts.map((prompt, index) => {
-                      const field = reflectionFields[index] || `q${index + 1}`;
+                    {dayReflectionQuestions.length
+                      ? dayReflectionQuestions.map((question) => {
+                          const answers = safeReflectionAnswers(reflection.answers);
 
-                      return (
-                        <label key={prompt} className="reflection-item">
-                          <span>{prompt}</span>
-                          <textarea
-                            rows="2"
-                            value={reflection[field]}
-                            placeholder="Напишите 1–2 предложения"
-                            onChange={(event) =>
-                              setReflection(activeDayId, (previous) => ({
-                                ...previous,
-                                [field]: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                      );
-                    })}
+                          return (
+                            <label key={question.id} className="reflection-item">
+                              <span>
+                                {question.text}
+                                {question.required ? " *" : ""}
+                              </span>
+                              <textarea
+                                rows="2"
+                                value={answers[question.id] || ""}
+                                placeholder="Напишите 1–2 предложения"
+                                aria-required={question.required}
+                                onChange={(event) =>
+                                  setReflection(activeDayId, (previous) => ({
+                                    ...previous,
+                                    answers: {
+                                      ...safeReflectionAnswers(previous.answers),
+                                      [question.id]: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                          );
+                        })
+                      : visibleReflectionPrompts.map((prompt, index) => {
+                          const field = reflectionFields[index] || `q${index + 1}`;
+
+                          return (
+                            <label key={prompt} className="reflection-item">
+                              <span>{prompt}</span>
+                              <textarea
+                                rows="2"
+                                value={reflection[field]}
+                                placeholder="Напишите 1–2 предложения"
+                                onChange={(event) =>
+                                  setReflection(activeDayId, (previous) => ({
+                                    ...previous,
+                                    [field]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          );
+                        })}
+
+                    {hasDayRequiredReflectionGap ? (
+                      <p className="confidence-note participant-required-note" role="alert">
+                        Ответьте на обязательные вопросы, чтобы итог дня считался заполненным.
+                      </p>
+                    ) : null}
 
                     <label className="reflection-item">
                       <span>Дополнить, если важно</span>

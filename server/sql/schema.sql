@@ -139,6 +139,7 @@ create table if not exists program_days (
   date_value date,
   flow_order jsonb not null default '[]'::jsonb,
   flow_meta jsonb not null default '{}'::jsonb,
+  reflection_prompts jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -388,6 +389,7 @@ create table if not exists auth_magic_links (
 );
 alter table program_days add column if not exists flow_order jsonb not null default '[]'::jsonb;
 alter table program_days add column if not exists flow_meta jsonb not null default '{}'::jsonb;
+alter table program_days add column if not exists reflection_prompts jsonb not null default '[]'::jsonb;
 alter table diary_entries add column if not exists responded_at timestamptz;
 alter table daily_reflections add column if not exists responded_at timestamptz;
 do $$

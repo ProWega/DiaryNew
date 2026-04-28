@@ -502,6 +502,24 @@ function getDefaultEventTypes() {
   ];
 }
 
+function normalizeReflectionQuestions(value = []) {
+  const questions = Array.isArray(value) ? value : [];
+  return questions
+    .map((question) => {
+      const text = String(question?.text || question?.title || "").trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: String(question?.id || `reflection-question-${randomUUID().slice(0, 8)}`).trim(),
+        text,
+        required: Boolean(question?.required),
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizeEventPatch(body = {}) {
   return {
     title: body.title || "",
@@ -516,6 +534,7 @@ function normalizeEventPatch(body = {}) {
     status: body.status || "planned",
     tags: normalizeList(body.tags),
     description: body.description || "",
+    reflectionQuestions: normalizeReflectionQuestions(body.reflectionQuestions),
   };
 }
 
@@ -617,6 +636,9 @@ function finalizeDayPatch(program, body = {}, currentDay = null) {
     label: String(body.label || currentDay?.label || "День").trim() || "День",
     dateLabel,
     dateValue,
+    reflectionQuestions: hasOwnField(body, "reflectionQuestions")
+      ? normalizeReflectionQuestions(body.reflectionQuestions)
+      : normalizeReflectionQuestions(currentDay?.reflectionQuestions),
   };
 }
 
@@ -1653,6 +1675,7 @@ app.post(
         flowOrder: ["A"],
         flowMeta: { A: { label: "A", track: "" } },
         flows: [{ id: "A", label: "A", track: "" }],
+        reflectionQuestions: payload.reflectionQuestions,
         events: [],
       });
       return syncWorkspace(draft);
@@ -1674,6 +1697,7 @@ app.patch(
       day.label = payload.label;
       day.dateLabel = payload.dateLabel;
       day.dateValue = payload.dateValue;
+      day.reflectionQuestions = payload.reflectionQuestions;
       return syncWorkspace(draft);
     });
 
@@ -1801,6 +1825,7 @@ app.patch(
         ...event,
         ...normalizedPatch,
         speakerName: speaker?.name || normalizedPatch.speakerName || event.speakerName,
+        reflectionQuestions: normalizedPatch.reflectionQuestions,
       };
 
       validateEventSchedule(day, candidate, event.id);
