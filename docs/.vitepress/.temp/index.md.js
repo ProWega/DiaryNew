@@ -1,0 +1,19 @@
+import { ssrRenderAttrs } from "vue/server-renderer";
+import { useSSRContext } from "vue";
+import { _ as _export_sfc } from "./plugin-vue_export-helper.1tPrXgE0.js";
+const __pageData = JSON.parse('{"title":"NewDiary Docs","description":"","frontmatter":{},"headers":[],"relativePath":"index.md","filePath":"index.md","lastUpdated":null}');
+const _sfc_main = { name: "index.md" };
+function _sfc_ssrRender(_ctx, _push, _parent, _attrs, $props, $setup, $data, $options) {
+  _push(`<div${ssrRenderAttrs(_attrs)}><h1 id="newdiary-docs" tabindex="-1">NewDiary Docs <a class="header-anchor" href="#newdiary-docs" aria-label="Permalink to &quot;NewDiary Docs&quot;">​</a></h1><p>NewDiary — платформа для сопровождения заезда по четырём ролям: <code>participant</code>, <code>curator</code>, <code>organizer</code>, <code>admin</code>. Эта документация — рабочий источник правды по запуску, деплою, QA-процессу и текущим ограничениям продукта.</p><h2 id="что-здесь-лежит" tabindex="-1">Что здесь лежит <a class="header-anchor" href="#что-здесь-лежит" aria-label="Permalink to &quot;Что здесь лежит&quot;">​</a></h2><ul><li><a href="/getting-started/local-setup">Локальный запуск</a> — как поднять проект у разработчика.</li><li><a href="/getting-started/first-admin-and-auth">Первый администратор и auth</a> — setup token, magic links, базовые access-процедуры.</li><li><a href="/product/roles-and-flows">Роли и ключевые сценарии</a> — что уже работает у участника, куратора, организатора и админа.</li><li><a href="/deploy/ubuntu-docker">Ubuntu + Docker deploy</a> — канонический production-like путь через Docker Hub pull.</li><li><a href="/qa/playbook">QA Playbook</a> — как организовать ручное тестирование, smoke и регрессию.</li><li><a href="/architecture/overview">Обзор архитектуры</a> — где живут frontend, backend, данные и границы runtime.</li><li><a href="/reference/environment">Reference</a> — env vars, npm scripts, маршруты и API верхнего уровня.</li></ul><h2 id="как-устроен-контур-документации" tabindex="-1">Как устроен контур документации <a class="header-anchor" href="#как-устроен-контур-документации" aria-label="Permalink to &quot;Как устроен контур документации&quot;">​</a></h2><ul><li><code>README.md</code> — короткий вход в проект.</li><li><code>TODO.md</code> — текущий статус и roadmap.</li><li><code>docs/</code> — подробные рабочие инструкции и процессы.</li><li>Storybook — отдельный UI reference, не замена продуктовой и эксплуатационной документации.</li></ul><h2 id="правило-сопровождения" tabindex="-1">Правило сопровождения <a class="header-anchor" href="#правило-сопровождения" aria-label="Permalink to &quot;Правило сопровождения&quot;">​</a></h2><p>Документация считается частью Definition of Done:</p><ol><li>Любое изменение env, release flow, ролей или пользовательского сценария обновляется в том же PR.</li><li>Generated reference-страницы не редактируются руками — они собираются через <code>npm run docs:generate</code>.</li><li>CI валидирует <code>npm run build</code>, <code>npm run build-storybook</code>, <code>npm run docs:check</code> и <code>npm run docs:build</code>.</li></ol><h2 id="быстрые-ссылки" tabindex="-1">Быстрые ссылки <a class="header-anchor" href="#быстрые-ссылки" aria-label="Permalink to &quot;Быстрые ссылки&quot;">​</a></h2><ul><li><a href="/deploy/release-checklist">Release checklist</a></li><li><a href="/qa/smoke-checklist">Smoke checklist</a></li><li><a href="/qa/bug-report-template">Bug report template</a></li><li><a href="/ops/magic-links-and-access">Magic links и доступы</a></li></ul></div>`);
+}
+const _sfc_setup = _sfc_main.setup;
+_sfc_main.setup = (props, ctx) => {
+  const ssrContext = useSSRContext();
+  (ssrContext.modules || (ssrContext.modules = /* @__PURE__ */ new Set())).add("index.md");
+  return _sfc_setup ? _sfc_setup(props, ctx) : void 0;
+};
+const index = /* @__PURE__ */ _export_sfc(_sfc_main, [["ssrRender", _sfc_ssrRender]]);
+export {
+  __pageData,
+  index as default
+};

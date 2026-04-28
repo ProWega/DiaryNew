@@ -16,7 +16,12 @@
     "build": "vite build",
     "storybook": "storybook dev -p 6006 --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docs:dev": "vitepress dev docs",
+    "docs:generate": "node scripts/docs/generateReference.cjs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:check": "node scripts/docs/generateReference.cjs --check"
   },
   "keywords": [],
   "author": "",
@@ -38,6 +43,7 @@
     "concurrently": "^9.2.1",
     "nodemon": "^3.1.14",
     "storybook": "^10.3.5",
-    "vite": "^8.0.7"
+    "vite": "^8.0.7",
+    "vitepress": "^1.6.4"
   }
 }
