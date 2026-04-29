@@ -5,7 +5,7 @@ import CuratorDashboardView from "../views/CuratorDashboardView";
 
 function CuratorDashboardPage() {
   const { sessionId, groupId } = useParams();
-  const { data, loading, error, refresh } = useCuratorDashboard(sessionId, groupId);
+  const { data, loading, error, refresh, analyzeComments } = useCuratorDashboard(sessionId, groupId);
 
   if (loading && !data) {
     return (
@@ -27,7 +27,7 @@ function CuratorDashboardPage() {
     );
   }
 
-  return <CuratorDashboardView dashboard={data} />;
+  return <CuratorDashboardView dashboard={data} onAnalyzeComments={analyzeComments} />;
 }
 
 export default CuratorDashboardPage;

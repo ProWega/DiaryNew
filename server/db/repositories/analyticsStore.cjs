@@ -1,6 +1,10 @@
 const { query } = require("../postgres.cjs");
 const { getRawUser } = require("./userStore.cjs");
 const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
+const {
+  DEFAULT_LLM_PROMPT_SETTINGS,
+  normalizeLlmPromptSettings,
+} = require("../../llm/commentAnalysis.cjs");
 
 function average(values) {
   const finite = values.map(Number).filter(Number.isFinite);
@@ -60,6 +64,37 @@ function normalizeJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeReflectionAnswers(value = {}) {
+  const source = normalizeJson(value, {});
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([key, answer]) => [String(key).trim(), trimText(answer)])
+      .filter(([key, answer]) => key && answer),
+  );
+}
+
+function normalizeReflectionQuestions(value = []) {
+  const questions = Array.isArray(value) ? value : [];
+  return questions
+    .map((question) => {
+      const text = trimText(question?.text || question?.title);
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: String(question?.id || "").trim(),
+        text,
+        required: Boolean(question?.required),
+      };
+    })
+    .filter((question) => question && question.id);
 }
 
 function formatTimeRange(event) {
@@ -492,6 +527,7 @@ function mapCuratorEvent(event) {
     location: event.location || "",
     track: event.track || "",
     tags: event.tags || [],
+    reflectionQuestions: normalizeReflectionQuestions(normalizeJson(event.meta).reflectionQuestions),
   };
 }
 
@@ -583,6 +619,7 @@ function buildCuratorReportScope({
           stateId: entry?.state_id || null,
           answered: Boolean(entry),
           comment: trimText(entry?.comment),
+          reflectionAnswers: normalizeReflectionAnswers(normalizeJson(entry?.meta).reflectionAnswers),
           respondedAt: entry?.responded_at || null,
         };
       }),
@@ -706,8 +743,9 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
 
   const groupResult = await query(
     `
-      select g.*, u.full_name as curator_name
+      select g.*, u.full_name as curator_name, s.settings as session_settings
       from groups g
+      join sessions s on s.id = g.session_id
       left join users u on u.id = g.curator_id
       where g.id = $1 and g.session_id = $2
       limit 1
@@ -842,6 +880,10 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
       : null,
     days: participation.days,
     reportScopes,
+    llmCommentAnalysis: {
+      promptSettings: normalizeLlmPromptSettings(group.session_settings?.llmCommentAnalysis),
+      defaults: DEFAULT_LLM_PROMPT_SETTINGS,
+    },
     ...allScope,
     alerts,
   };

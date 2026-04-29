@@ -246,7 +246,7 @@ async function getAnsweredEntries(sessionId, eventIds, groupId = null) {
 
   const result = await query(
     `
-      select de.user_id, de.event_id, de.day_id, de.state_id, de.state_level, de.comment, de.responded_at
+      select de.user_id, de.event_id, de.day_id, de.state_id, de.state_level, de.comment, de.meta, de.responded_at
       from diary_entries de
       join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
       where de.session_id = $1

@@ -37,6 +37,11 @@ const {
   updateParticipantReflection,
 } = require("./db/repositories/diaryStore.cjs");
 const {
+  DEFAULT_LLM_PROMPT_SETTINGS,
+  analyzeCuratorCommentsWithOllama,
+  normalizeLlmPromptSettings,
+} = require("./llm/commentAnalysis.cjs");
+const {
   createSession,
   listPublicEvents,
   listSessions,
@@ -1247,6 +1252,68 @@ app.get(
         groupId: req.params.groupId,
       }),
     );
+  }),
+);
+
+app.post(
+  "/api/prototype/llm/sessions/:sessionId/groups/:groupId/comment-analysis",
+  asyncHandler(async (req, res) => {
+    const dashboard = await getCuratorDashboard({
+      viewerId: getViewerId(req),
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+    });
+
+    res.json(
+      await analyzeCuratorCommentsWithOllama(dashboard, {
+        scopeId: req.body?.scopeId,
+        dayId: req.body?.dayId,
+        mode: req.body?.mode,
+        eventId: req.body?.eventId,
+        model: req.body?.model,
+        promptSettings: req.body?.promptSettings,
+        previewOnly: Boolean(req.body?.previewOnly || req.body?.dryRun),
+      }),
+    );
+  }),
+);
+
+app.patch(
+  "/api/prototype/llm/sessions/:sessionId/groups/:groupId/settings",
+  asyncHandler(async (req, res) => {
+    await getCuratorDashboard({
+      viewerId: getViewerId(req),
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+    });
+
+    const promptSettings = normalizeLlmPromptSettings(req.body?.promptSettings || req.body || {});
+    const result = await query(
+      `
+        update sessions
+        set settings = jsonb_set(
+              coalesce(settings, '{}'::jsonb),
+              '{llmCommentAnalysis}',
+              $2::jsonb,
+              true
+            ),
+            updated_at = now()
+        where id = $1
+        returning settings
+      `,
+      [req.params.sessionId, JSON.stringify(promptSettings)],
+    );
+
+    if (!result.rows[0]) {
+      throw createHttpError(404, "Сессия не найдена");
+    }
+
+    res.json({
+      llmCommentAnalysis: {
+        promptSettings: normalizeLlmPromptSettings(result.rows[0].settings?.llmCommentAnalysis),
+        defaults: DEFAULT_LLM_PROMPT_SETTINGS,
+      },
+    });
   }),
 );
 

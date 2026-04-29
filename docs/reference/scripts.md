@@ -39,3 +39,9 @@
 | `docs:build` | `vitepress build docs` | Собирает статический docs-site. |
 | `docs:preview` | `vitepress preview docs` | Показывает локально собранный docs-site. |
 | `docs:check` | `node scripts/docs/generateReference.cjs --check` | Проверяет, что generated docs не устарели относительно исходников. |
+
+## LLM prototypes
+
+| Script | Команда | Назначение |
+| --- | --- | --- |
+| `llm:pull:qwen25` | `ollama pull qwen2.5:3b-instruct-q4_K_M` | Скачивает локальную модель qwen2.5:3b-instruct-q4_K_M для Ollama-прототипа. |

@@ -118,6 +118,22 @@ export const jsonApi = {
     });
   },
 
+  analyzeCuratorComments(viewerId, sessionId, groupId, payload = {}) {
+    return requestJson(`/api/prototype/llm/sessions/${sessionId}/groups/${groupId}/comment-analysis`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  updateCuratorLlmSettings(viewerId, sessionId, groupId, payload = {}) {
+    return requestJson(`/api/prototype/llm/sessions/${sessionId}/groups/${groupId}/settings`, {
+      method: "PATCH",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
   getOrganizerWorkspace(viewerId, sessionId) {
     return requestJson(`/api/organizer/sessions/${sessionId}/workspace`, {
       headers: viewerHeaders(viewerId),

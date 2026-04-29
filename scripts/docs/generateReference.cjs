@@ -24,6 +24,11 @@ const ENV_METADATA = {
   PGUSER: "Пользователь PostgreSQL.",
   PGPASSWORD: "Пароль пользователя PostgreSQL.",
   PGSSL: "Использовать ли SSL при подключении к PostgreSQL.",
+  OLLAMA_BASE_URL: "Локальный endpoint Ollama для прототипа анализа комментариев на ветке llm-test.",
+  OLLAMA_MODEL: "Ollama model tag для прототипа LLM-анализа комментариев.",
+  OLLAMA_TIMEOUT_MS: "Таймаут запроса к Ollama в миллисекундах.",
+  OLLAMA_NUM_CTX: "Размер контекста Ollama для LLM-сводки комментариев.",
+  OLLAMA_NUM_PREDICT: "Лимит токенов ответа Ollama для LLM-сводки комментариев.",
   APP_IMAGE: "Docker image, который будет pulled на сервере. Для релизов рекомендуем pin на точный tag.",
   APP_PORT: "Внешний порт сервиса app на сервере.",
   POSTGRES_DB: "Имя production-базы внутри docker compose.",
@@ -50,6 +55,7 @@ const SCRIPT_METADATA = {
   "docs:build": "Собирает статический docs-site.",
   "docs:preview": "Показывает локально собранный docs-site.",
   "docs:check": "Проверяет, что generated docs не устарели относительно исходников.",
+  "llm:pull:qwen25": "Скачивает локальную модель qwen2.5:3b-instruct-q4_K_M для Ollama-прототипа.",
 };
 
 function readText(relativePath) {
@@ -137,6 +143,9 @@ function categorizeScript(name) {
   }
   if (name.startsWith("dev") || name === "start:server" || name === "preview") {
     return "Локальная разработка";
+  }
+  if (name.startsWith("llm:")) {
+    return "LLM prototypes";
   }
   return "Прочее";
 }

@@ -26,6 +26,11 @@
 | `PGUSER` | `postgres` | Пользователь PostgreSQL. |
 | `PGPASSWORD` | `1234` | Пароль пользователя PostgreSQL. |
 | `PGSSL` | `false` | Использовать ли SSL при подключении к PostgreSQL. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Локальный endpoint Ollama для прототипа анализа комментариев на ветке llm-test. |
+| `OLLAMA_MODEL` | `qwen2.5:3b-instruct-q4_K_M` | Ollama model tag для прототипа LLM-анализа комментариев. |
+| `OLLAMA_TIMEOUT_MS` | `420000` | Таймаут запроса к Ollama в миллисекундах. |
+| `OLLAMA_NUM_CTX` | `1024` | Размер контекста Ollama для LLM-сводки комментариев. |
+| `OLLAMA_NUM_PREDICT` | `192` | Лимит токенов ответа Ollama для LLM-сводки комментариев. |
 
 ## Ubuntu / Docker deploy
 

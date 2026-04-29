@@ -768,6 +768,87 @@ function AiSummaryZone({ eyebrow, title, metrics = [], children, variant = "" })
   );
 }
 
+function LlmPrototypePanel({ state, onRun }) {
+  const isLoading = state?.status === "loading";
+  const analysis = state?.result?.analysis || null;
+  const provider = state?.result?.provider || {};
+  const summary = analysis?.daySummary?.summary || analysis?.summary || "";
+  const eventSummaries = asArray(analysis?.eventSummaries).slice(0, 3);
+  const actions = asArray(analysis?.daySummary?.recommendedActions).slice(0, 4);
+
+  return (
+    <section className="curator-ai-zone curator-llm-prototype">
+      <div className="curator-ai-zone-head">
+        <div>
+          <p className="eyebrow">Ollama prototype</p>
+          <h4>Qwen2.5-3B анализ комментариев</h4>
+        </div>
+        <button
+          type="button"
+          className="ghost-button curator-llm-action"
+          disabled={!onRun || isLoading}
+          onClick={onRun}
+        >
+          {isLoading ? "Анализируем..." : "Запустить"}
+        </button>
+      </div>
+
+      <p className="curator-ai-placeholder">
+        {isLoading
+          ? "Идёт локальный расчёт. Qwen2.5-3B на CPU может отвечать несколько минут."
+          : `Локальный запуск через Ollama. Модель по умолчанию: ${provider.model || "qwen2.5:3b-instruct-q4_K_M"}.`}
+      </p>
+
+      {!onRun ? (
+        <p className="curator-empty-copy">Прототип доступен в routed-кабинете куратора.</p>
+      ) : null}
+
+      {state?.status === "error" ? (
+        <p className="curator-llm-error">{state.error}</p>
+      ) : null}
+
+      {state?.status === "ready" && analysis ? (
+        <div className="curator-llm-result">
+          {summary ? <p>{summary}</p> : null}
+          {eventSummaries.length ? (
+            <div className="curator-llm-list">
+              {eventSummaries.map((event) => (
+                <div key={event.eventId || event.title} className="curator-llm-item">
+                  <strong>{event.title || event.eventId}</strong>
+                  <span>{event.summary || "Сводка без текста"}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {actions.length ? (
+            <div className="curator-llm-list">
+              {actions.map((action) => (
+                <div key={action} className="curator-llm-item">
+                  <span>{action}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <details className="curator-llm-raw">
+            <summary>JSON ответа</summary>
+            <pre>{JSON.stringify(analysis, null, 2)}</pre>
+          </details>
+        </div>
+      ) : null}
+
+      {state?.status === "ready" && !analysis ? (
+        <div className="curator-llm-result">
+          <p>Модель ответила, но JSON не распарсился: {state.result?.parseError || "неизвестная ошибка"}.</p>
+          <details className="curator-llm-raw" open>
+            <summary>Raw output</summary>
+            <pre>{state.result?.rawText || ""}</pre>
+          </details>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function EventCommentsAndAiSection({
   events,
   eventPulse,
@@ -775,6 +856,8 @@ function EventCommentsAndAiSection({
   dayReflections,
   openRisks,
   dashboard,
+  llmAnalysis,
+  onRunLlmAnalysis,
 }) {
   const sections = buildEventCommentSections(events, eventPulse, participantRows);
   const commentsCount = sumMetrics(sections, (section) => section.comments.length);
@@ -914,20 +997,25 @@ function EventCommentsAndAiSection({
               { label: "ответов событий", value: `${getNumericMetric(progress.answeredEvents)}/${getNumericMetric(progress.totalEvents)}` },
             ]}
           />
+
+          <LlmPrototypePanel state={llmAnalysis} onRun={onRunLlmAnalysis} />
         </aside>
       </div>
     </article>
   );
 }
 
-function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }) {
+function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null, onAnalyzeComments = null }) {
   const [selectedScatterId, setSelectedScatterId] = useState(initialSelectedParticipantId);
   const reportScopes = asArray(dashboard.reportScopes);
-  const [selectedScopeId, setSelectedScopeId] = useState(reportScopes[0]?.scopeId || "all");
+  const [selectedScopeId, setSelectedScopeId] = useState(
+    reportScopes.find((scope) => scope.dayId)?.scopeId || reportScopes[0]?.scopeId || "all",
+  );
+  const [llmAnalysis, setLlmAnalysis] = useState({ status: "idle", result: null, error: "" });
 
   useEffect(() => {
     if (reportScopes.length && !reportScopes.some((scope) => scope.scopeId === selectedScopeId)) {
-      setSelectedScopeId(reportScopes[0].scopeId);
+      setSelectedScopeId(reportScopes.find((scope) => scope.dayId)?.scopeId || reportScopes[0].scopeId);
     }
   }, [reportScopes, selectedScopeId]);
 
@@ -957,6 +1045,29 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
       dashboard: scopedDashboard,
     });
   const selectedParticipant = participantRows.find((participant) => participant.id === selectedScatterId) || null;
+  const runLlmAnalysis = onAnalyzeComments
+    ? async () => {
+        setLlmAnalysis({ status: "loading", result: null, error: "" });
+
+        try {
+          const result = await onAnalyzeComments({
+            scopeId: scopedDashboard.scopeId,
+            dayId: scopedDashboard.dayId || null,
+          });
+          setLlmAnalysis({ status: "ready", result, error: "" });
+        } catch (error) {
+          setLlmAnalysis({
+            status: "error",
+            result: null,
+            error: error.message || "Не удалось выполнить LLM-анализ",
+          });
+        }
+      }
+    : null;
+
+  useEffect(() => {
+    setLlmAnalysis({ status: "idle", result: null, error: "" });
+  }, [selectedScopeId]);
 
   return (
     <section className="role-view curator-workspace">
@@ -1033,6 +1144,8 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
         dayReflections={dayReflections}
         openRisks={openRisks}
         dashboard={scopedDashboard}
+        llmAnalysis={llmAnalysis}
+        onRunLlmAnalysis={runLlmAnalysis}
       />
 
       <RiskScatterChart

@@ -229,14 +229,23 @@ export function useParticipantDiary(sessionId) {
 
 export function useCuratorDashboard(sessionId, groupId) {
   const { currentUser } = useAuth();
-
-  return useAsyncResource(
+  const resource = useAsyncResource(
     useCallback(
       () => jsonApi.getCuratorDashboard(currentUser.id, sessionId, groupId),
       [currentUser?.id, groupId, sessionId],
     ),
     Boolean(currentUser?.id && sessionId && groupId),
   );
+
+  const analyzeComments = useCallback(
+    (payload) => jsonApi.analyzeCuratorComments(currentUser.id, sessionId, groupId, payload),
+    [currentUser?.id, groupId, sessionId],
+  );
+
+  return {
+    ...resource,
+    analyzeComments,
+  };
 }
 
 export function useOrganizerWorkspace(sessionId) {

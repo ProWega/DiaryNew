@@ -4213,6 +4213,71 @@ textarea {
   line-height: 1.4;
 }
 
+.curator-llm-prototype {
+  border-color: rgba(107, 31, 42, 0.18);
+  background: rgba(255, 246, 246, 0.74);
+}
+
+.curator-llm-action {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.curator-llm-error {
+  margin: 0;
+  color: var(--curator-red);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.curator-llm-result,
+.curator-llm-list {
+  display: grid;
+  gap: 10px;
+}
+
+.curator-llm-result p,
+.curator-llm-item span {
+  margin: 0;
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+.curator-llm-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(107, 31, 42, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.curator-llm-item strong {
+  color: var(--curator-ink);
+}
+
+.curator-llm-raw {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.curator-llm-raw pre {
+  max-height: 260px;
+  margin: 10px 0 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(36, 49, 58, 0.92);
+  color: #fff8ef;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .curator-chart-empty {
   display: grid;
   place-items: center;
