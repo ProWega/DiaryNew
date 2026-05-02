@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /B d:\\\\web\\\\NewDiary)",
+      "Bash(findstr /V /I \"node_modules\")",
+      "PowerShell(Get-ChildItem -Path d:\\\\web\\\\NewDiary -Force | Where-Object { $_.Name -ne 'node_modules' } | Select-Object Mode, Name)",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\web\\\\NewDiary' -Force | Where-Object { $_.Name -ne 'node_modules' } | ForEach-Object { $_.Name })",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'D:\\\\web\\\\NewDiary\\\\src\\\\data' -File | Select-Object Name\")",
+      "Bash(powershell -Command \"if \\(Test-Path 'D:\\\\web\\\\NewDiary\\\\.github\\\\workflows'\\) { Get-ChildItem 'D:\\\\web\\\\NewDiary\\\\.github\\\\workflows' | Select-Object Name } else { Write-Output 'No CI config found' }\")",
+      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\web\\\\NewDiary\\\\src\\\\components\\\\admin\\\\AdminComponents.jsx' | Select-String -Pattern 'useState' | Measure-Object -Line\\).Lines\")",
+      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\web\\\\NewDiary\\\\src\\\\components\\\\organizer\\\\OrganizerComponents.jsx' | Select-String -Pattern 'useState|useCallback|useEffect' | Measure-Object -Line\\).Lines\")",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\web\\\\NewDiary\\\\.github' -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName -replace [regex]::Escape\\('d:\\\\web\\\\NewDiary\\\\'\\),'' })",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\web\\\\NewDiary\\\\.storybook' -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }; Write-Output '---husky?---'; if \\(Test-Path 'd:\\\\web\\\\NewDiary\\\\.husky'\\) { 'exists' } else { 'no' })",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\({dev:p.devDependencies},null,2\\)\\)\")",
+      "Bash(git config *)",
+      "PowerShell(Get-ChildItem 'd:\\\\web\\\\NewDiary\\\\.husky' -Force | ForEach-Object { $_.Name })",
+      "Bash(npm run *)",
+      "Bash(grep -E \"^[A-Z]:\\\\\\\\\\\\\\\\\")",
+      "Bash(npx prettier *)"
+    ]
+  }
+}

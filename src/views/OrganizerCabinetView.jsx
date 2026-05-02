@@ -267,7 +267,6 @@ function normalizeOrganizerWorkspace(workspace) {
     registration: asObject(rawWorkspace.registration),
     summary: {
       activeEventLabel: rawWorkspace.summary?.activeEventLabel || "Нет текущего мероприятия",
-      programsCount: rawWorkspace.summary?.programsCount ?? programWorkspace.programs.length,
       speakersCount: rawWorkspace.summary?.speakersCount ?? programWorkspace.speakersCatalog.length,
       ...asObject(rawWorkspace.summary),
       programsCount: programWorkspace.programs.length,
@@ -380,17 +379,18 @@ function OrganizerCabinetView({
   }, [initialTab]);
 
   useEffect(() => {
-    const currentSession =
-      safeWorkspace.sessionCatalog?.find((session) => session.id === safeWorkspace.sessionId) || {
-        id: safeWorkspace.sessionId,
-        name: safeWorkspace.sessionLabel,
-        registrationStatus: safeWorkspace.registration?.status,
-        registrationStartsAt: safeWorkspace.registration?.startsAt,
-        registrationEndsAt: safeWorkspace.registration?.endsAt,
-        registrationCapacity: safeWorkspace.registration?.capacity,
-        registrationPolicy: safeWorkspace.registration?.policy,
-        participantsCount: safeWorkspace.registration?.participantsCount,
-      };
+    const currentSession = safeWorkspace.sessionCatalog?.find(
+      (session) => session.id === safeWorkspace.sessionId,
+    ) || {
+      id: safeWorkspace.sessionId,
+      name: safeWorkspace.sessionLabel,
+      registrationStatus: safeWorkspace.registration?.status,
+      registrationStartsAt: safeWorkspace.registration?.startsAt,
+      registrationEndsAt: safeWorkspace.registration?.endsAt,
+      registrationCapacity: safeWorkspace.registration?.capacity,
+      registrationPolicy: safeWorkspace.registration?.policy,
+      participantsCount: safeWorkspace.registration?.participantsCount,
+    };
     if (!isCreatingSession) {
       setSessionDraft(currentSession);
     }
@@ -426,14 +426,18 @@ function OrganizerCabinetView({
     asArray(currentProgram?.days).find((day) => day.id === selectedDayId) ||
     asArray(currentProgram?.days)[0] ||
     null;
-  const [dayReflectionQuestions, setDayReflectionQuestions] = useState(
-    () => asArray(currentDay?.reflectionQuestions),
+  const [dayReflectionQuestions, setDayReflectionQuestions] = useState(() =>
+    asArray(currentDay?.reflectionQuestions),
   );
   const currentFlowColumns = useMemo(() => getDayFlowColumns(currentDay), [currentDay]);
 
   const selectedScheduleEvent =
     asArray(currentDay?.events).find((event) => event.id === selectedScheduleEventId) || null;
-  const scheduleInspectorMode = scheduleDraftEvent ? "create" : selectedScheduleEvent ? "edit" : "empty";
+  const scheduleInspectorMode = scheduleDraftEvent
+    ? "create"
+    : selectedScheduleEvent
+      ? "edit"
+      : "empty";
 
   useEffect(() => {
     setSelectedScheduleEventId(null);
@@ -457,9 +461,15 @@ function OrganizerCabinetView({
         selectedGroupId === "all" ? true : participant.groupId === selectedGroupId;
       const matchesQuery =
         !normalizedQuery ||
-        String(participant.fullName || "").toLowerCase().includes(normalizedQuery) ||
-        String(participant.emotionalProfile || "").toLowerCase().includes(normalizedQuery) ||
-        String(participant.identityStatus || "").toLowerCase().includes(normalizedQuery);
+        String(participant.fullName || "")
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        String(participant.emotionalProfile || "")
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        String(participant.identityStatus || "")
+          .toLowerCase()
+          .includes(normalizedQuery);
 
       return matchesGroup && matchesQuery;
     });
@@ -546,7 +556,9 @@ function OrganizerCabinetView({
       return;
     }
 
-    const nextProgram = normalizeProgramWorkspace(nextWorkspace).programs.find((item) => item.id === programId);
+    const nextProgram = normalizeProgramWorkspace(nextWorkspace).programs.find(
+      (item) => item.id === programId,
+    );
     setSelectedDayId(nextProgram?.days[0]?.id || null);
   }
 
@@ -599,7 +611,10 @@ function OrganizerCabinetView({
     }
 
     const previousDays = asArray(currentProgram.days);
-    const deletedIndex = Math.max(previousDays.findIndex((day) => day.id === dayId), 0);
+    const deletedIndex = Math.max(
+      previousDays.findIndex((day) => day.id === dayId),
+      0,
+    );
     const nextWorkspace = await onDeleteProgramDay(currentProgram.id, dayId);
     if (!nextWorkspace) {
       return null;
@@ -716,7 +731,11 @@ function OrganizerCabinetView({
       return onUpdateProgramDayFlows(currentProgram.id, dayId, safeFlows);
     }
 
-    return onUpdateProgramDayFlowOrder(currentProgram.id, dayId, safeFlows.map((flow) => flow.id));
+    return onUpdateProgramDayFlowOrder(
+      currentProgram.id,
+      dayId,
+      safeFlows.map((flow) => flow.id),
+    );
   }
 
   async function handleFlowOrderChange(dayId, flowOrder) {
@@ -810,7 +829,12 @@ function OrganizerCabinetView({
 
     if (["update-event", "inline-edit-event"].includes(action.type)) {
       const patch = direction === "undo" ? action.before : action.after;
-      const nextWorkspace = await onUpdateEvent(action.programId, action.dayId, action.eventId, patch);
+      const nextWorkspace = await onUpdateEvent(
+        action.programId,
+        action.dayId,
+        action.eventId,
+        patch,
+      );
       if (!nextWorkspace) {
         return null;
       }
@@ -936,7 +960,12 @@ function OrganizerCabinetView({
     }
 
     function handleKeyDown(keyEvent) {
-      if (!keyEvent.ctrlKey || keyEvent.altKey || keyEvent.metaKey || isEditableKeyboardTarget(keyEvent.target)) {
+      if (
+        !keyEvent.ctrlKey ||
+        keyEvent.altKey ||
+        keyEvent.metaKey ||
+        isEditableKeyboardTarget(keyEvent.target)
+      ) {
         return;
       }
 
@@ -997,11 +1026,18 @@ function OrganizerCabinetView({
       </div>
 
       <div className="scope-strip organizer-toolbar">
-        <Tabs items={TAB_OPTIONS} activeId={activeTab} onChange={setActiveTab} ariaLabel="Разделы организатора" />
+        <Tabs
+          items={TAB_OPTIONS}
+          activeId={activeTab}
+          onChange={setActiveTab}
+          ariaLabel="Разделы организатора"
+        />
 
         <div className="pill-grid">
           <SoftPill>Storage: {safeWorkspace.meta?.storageMode || "memory"}</SoftPill>
-          <SoftPill outline>Обновлено: {formatPublicationDate(safeWorkspace.meta?.updatedAt)}</SoftPill>
+          <SoftPill outline>
+            Обновлено: {formatPublicationDate(safeWorkspace.meta?.updatedAt)}
+          </SoftPill>
         </div>
       </div>
 
@@ -1029,8 +1065,10 @@ function OrganizerCabinetView({
               onSelectDay={setSelectedDayId}
               onCreateDay={() => void handleProgramDayCreate()}
               onDeleteDay={(dayId) => void handleProgramDayDelete(dayId)}
-              onPublishProgram={() => currentProgram?.id ? onPublishProgram(currentProgram.id) : null}
-              onDraftProgram={() => currentProgram?.id ? onDraftProgram(currentProgram.id) : null}
+              onPublishProgram={() =>
+                currentProgram?.id ? onPublishProgram(currentProgram.id) : null
+              }
+              onDraftProgram={() => (currentProgram?.id ? onDraftProgram(currentProgram.id) : null)}
             />
 
             <article className="panel-card organizer-program-access-card">
@@ -1038,12 +1076,14 @@ function OrganizerCabinetView({
                 <p className="eyebrow">Доступ участников</p>
                 <h3>Доступны только прошедшие события</h3>
                 <p className="subtle">
-                  Когда режим включён, участник может поставить состояние только после начала события по дате и времени программы.
-                  Будущие события останутся в списке с замком.
+                  Когда режим включён, участник может поставить состояние только после начала
+                  события по дате и времени программы. Будущие события останутся в списке с замком.
                 </p>
               </div>
               <AccessToggle
-                checked={safeWorkspace.sessionSettings.participantEventAccessMode === "from_start_time"}
+                checked={
+                  safeWorkspace.sessionSettings.participantEventAccessMode === "from_start_time"
+                }
                 disabled={saving}
                 onLabel="Включено"
                 offLabel="Выключено"
@@ -1057,7 +1097,8 @@ function OrganizerCabinetView({
                   <p className="eyebrow">Рефлексия дня</p>
                   <h3>Вопросы для итогов выбранного дня</h3>
                   <p className="subtle">
-                    Эти вопросы появятся в participant view в блоке «Итог дня». Если список пустой, используется стандартный набор.
+                    Эти вопросы появятся в participant view в блоке «Итог дня». Если список пустой,
+                    используется стандартный набор.
                   </p>
                 </div>
                 <div className="organizer-day-reflection-editor">
@@ -1118,7 +1159,9 @@ function OrganizerCabinetView({
                 onRenameFlow={handleRenameFlow}
                 onUpdateFlows={(dayId, flows) => persistProgramDayFlows(dayId, flows)}
                 onActivateEvent={(dayId, eventId) =>
-                  currentProgram?.id ? void onActivateEvent(currentProgram.id, dayId, eventId) : null
+                  currentProgram?.id
+                    ? void onActivateEvent(currentProgram.id, dayId, eventId)
+                    : null
                 }
                 onUpdateEvent={handleScheduleUpdate}
               />
@@ -1137,7 +1180,9 @@ function OrganizerCabinetView({
                     allowNewParallelGroup
                     saving={saving}
                     minDurationMinutes={scheduleSlotMinutes}
-                    onSaveEvent={(eventId, payload) => handleScheduleUpdate(currentDay?.id, eventId, payload)}
+                    onSaveEvent={(eventId, payload) =>
+                      handleScheduleUpdate(currentDay?.id, eventId, payload)
+                    }
                     onCreateEvent={handleScheduleCreate}
                     onCancel={() => {
                       setSelectedScheduleEventId(null);
@@ -1145,10 +1190,7 @@ function OrganizerCabinetView({
                     }}
                   />
                 ) : (
-                  <ProgramCreateCard
-                    saving={saving}
-                    onCreate={handleCreateProgram}
-                  />
+                  <ProgramCreateCard saving={saving} onCreate={handleCreateProgram} />
                 )}
               </div>
             </div>
@@ -1164,7 +1206,9 @@ function OrganizerCabinetView({
             query={sessionQuery}
             onQueryChange={setSessionQuery}
             onSelectSession={(sessionId) => {
-              const selected = safeWorkspace.sessionCatalog?.find((session) => session.id === sessionId);
+              const selected = safeWorkspace.sessionCatalog?.find(
+                (session) => session.id === sessionId,
+              );
               if (selected) {
                 onSessionCreated?.(selected);
               }
@@ -1195,7 +1239,9 @@ function OrganizerCabinetView({
             {createSessionError ? (
               <AlertCard
                 title="Не удалось создать заезд"
-                detail={createSessionError.message || "Проверьте заполнение формы и доступ организатора."}
+                detail={
+                  createSessionError.message || "Проверьте заполнение формы и доступ организатора."
+                }
                 tone="severity-high"
               />
             ) : null}

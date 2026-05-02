@@ -1,0 +1,11 @@
+node_modules
+dist
+storybook-static
+coverage
+docs/.vitepress/cache
+docs/.vitepress/dist
+
+package-lock.json
+*.log
+
+.git

@@ -184,7 +184,14 @@ function parseTimeToMinutes(value) {
 
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
     return null;
   }
 
@@ -237,7 +244,9 @@ function normalizeColumnOrder(value = []) {
   return Array.from(
     new Set(
       safeArray(value)
-        .map((item) => (typeof item === "string" ? item : item?.id || item?.value || item?.parallelGroup || ""))
+        .map((item) =>
+          typeof item === "string" ? item : item?.id || item?.value || item?.parallelGroup || "",
+        )
         .map((item) => String(item).trim())
         .filter(Boolean),
     ),
@@ -295,7 +304,11 @@ function getStableParallelColumns(events = [], columns = [], columnOrder = []) {
 }
 
 function getNextFlowId(columns = []) {
-  const usedIds = new Set(safeArray(columns).map((column) => String(column?.id || column || "").trim()).filter(Boolean));
+  const usedIds = new Set(
+    safeArray(columns)
+      .map((column) => String(column?.id || column || "").trim())
+      .filter(Boolean),
+  );
   let maxIndex = 0;
   for (const id of usedIds) {
     const match = id.match(/^P(\d+)$/i);
@@ -314,13 +327,19 @@ function getNextFlowId(columns = []) {
 }
 
 function isDuplicateFlowLabel(columns = [], label = "", excludeId = "") {
-  const normalizedLabel = String(label || "").trim().toLowerCase();
+  const normalizedLabel = String(label || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedLabel) {
     return false;
   }
 
   return safeArray(columns).some(
-    (column) => column.id !== excludeId && String(column.label || column.id || "").trim().toLowerCase() === normalizedLabel,
+    (column) =>
+      column.id !== excludeId &&
+      String(column.label || column.id || "")
+        .trim()
+        .toLowerCase() === normalizedLabel,
   );
 }
 
@@ -354,12 +373,15 @@ function normalizeEventFormValue(event = {}, eventTypes = []) {
 }
 
 function normalizeEventPayload(form, speakersCatalog = []) {
-  const speakerName = safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
+  const speakerName =
+    safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
   return {
     ...form,
     speakerName,
     tags: normalizeList(form.tags),
-    reflectionQuestions: normalizeReflectionQuestions(form.reflectionQuestions).filter((question) => question.text.trim()),
+    reflectionQuestions: normalizeReflectionQuestions(form.reflectionQuestions).filter((question) =>
+      question.text.trim(),
+    ),
   };
 }
 
@@ -418,7 +440,9 @@ export function ReflectionQuestionEditor({
                   type="checkbox"
                   checked={question.required}
                   disabled={disabled}
-                  onChange={(event) => updateQuestion(question.id, { required: event.target.checked })}
+                  onChange={(event) =>
+                    updateQuestion(question.id, { required: event.target.checked })
+                  }
                 />
                 Обязательный
               </label>
@@ -438,7 +462,13 @@ export function ReflectionQuestionEditor({
   );
 }
 
-function createScheduleEventDraft({ start, parallelGroup, track, eventTypes, defaultDurationMinutes }) {
+function createScheduleEventDraft({
+  start,
+  parallelGroup,
+  track,
+  eventTypes,
+  defaultDurationMinutes,
+}) {
   const startMinutes = parseTimeToMinutes(start) ?? 9 * 60;
   const safeEventTypes = safeArray(eventTypes);
 
@@ -477,7 +507,12 @@ function rangesOverlap(firstStart, firstEnd, secondStart, secondEnd) {
   return firstStart < secondEnd && secondStart < firstEnd;
 }
 
-function validateScheduleCandidate(candidate, events = [], excludedEventId = null, minDurationMinutes = 15) {
+function validateScheduleCandidate(
+  candidate,
+  events = [],
+  excludedEventId = null,
+  minDurationMinutes = 15,
+) {
   const start = parseTimeToMinutes(candidate?.start);
   const end = parseTimeToMinutes(candidate?.end);
 
@@ -494,13 +529,20 @@ function validateScheduleCandidate(candidate, events = [], excludedEventId = nul
   }
 
   const candidateGroup = candidate.parallelGroup || "A";
-  const normalizedEvents = safeArray(events).map((event, index) => normalizeScheduleEvent(event, index));
+  const normalizedEvents = safeArray(events).map((event, index) =>
+    normalizeScheduleEvent(event, index),
+  );
   const conflict = normalizedEvents.find((event) => {
     if (event.id === excludedEventId || (event.parallelGroup || "A") !== candidateGroup) {
       return false;
     }
 
-    return rangesOverlap(start, end, getEventStartMinutes(event), getEventEndMinutes(event, minDurationMinutes));
+    return rangesOverlap(
+      start,
+      end,
+      getEventStartMinutes(event),
+      getEventEndMinutes(event, minDurationMinutes),
+    );
   });
 
   if (conflict) {
@@ -537,7 +579,9 @@ export function ProgramEventForm({
   const typeOptions = Array.from(new Set([...safeArray(eventTypes), form.type].filter(Boolean)));
   const normalizedStatusOptions = normalizeStatusOptions(statusOptions);
   const flowOptions = sortColumnsByOrder(
-    safeArray(parallelGroupOptions).map((column, index) => normalizeColumnDefinition(column, index)),
+    safeArray(parallelGroupOptions).map((column, index) =>
+      normalizeColumnDefinition(column, index),
+    ),
     safeArray(parallelGroupOptions).map((column) =>
       typeof column === "string" ? column : column?.id || column?.value || column?.parallelGroup,
     ),
@@ -630,11 +674,16 @@ export function ProgramEventForm({
               disabled={disabled || saving}
               onChange={(eventTarget) => {
                 if (eventTarget.target.value === "__new__") {
-                  updateField("parallelGroup", form.parallelGroup && !currentFlowExists ? form.parallelGroup : "");
+                  updateField(
+                    "parallelGroup",
+                    form.parallelGroup && !currentFlowExists ? form.parallelGroup : "",
+                  );
                   return;
                 }
 
-                const nextOption = flowOptions.find((option) => option.id === eventTarget.target.value);
+                const nextOption = flowOptions.find(
+                  (option) => option.id === eventTarget.target.value,
+                );
                 onChange?.({
                   ...form,
                   parallelGroup: eventTarget.target.value,
@@ -647,7 +696,9 @@ export function ProgramEventForm({
                   {option.label}
                 </option>
               ))}
-              {allowNewParallelGroup ? <option value="__new__">{newParallelGroupLabel}</option> : null}
+              {allowNewParallelGroup ? (
+                <option value="__new__">{newParallelGroupLabel}</option>
+              ) : null}
             </select>
           ) : null}
           {allowNewParallelGroup && (!flowOptions.length || flowSelectValue === "__new__") ? (
@@ -725,7 +776,9 @@ export function ProgramEventDialog({
   onClose,
   onSubmit,
 }) {
-  const [form, setForm] = useState(() => normalizeEventFormValue(event || initialValue, eventTypes));
+  const [form, setForm] = useState(() =>
+    normalizeEventFormValue(event || initialValue, eventTypes),
+  );
 
   useEffect(() => {
     if (open) {
@@ -772,13 +825,20 @@ export function ProgramEventDialog({
       <section className="program-dialog" role="dialog" aria-modal="true" aria-label={dialogTitle}>
         <div className="program-dialog-head">
           <div>
-            <p className="eyebrow">{mode === "create" ? "Добавление в программу" : "Настройка события"}</p>
+            <p className="eyebrow">
+              {mode === "create" ? "Добавление в программу" : "Настройка события"}
+            </p>
             <h3>{dialogTitle}</h3>
             <p className="subtle">
               {form.start} - {form.end} · поток {form.parallelGroup || "A"}
             </p>
           </div>
-          <button type="button" className="ghost-button" disabled={saving} onClick={() => onClose?.()}>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={saving}
+            onClick={() => onClose?.()}
+          >
             Закрыть
           </button>
         </div>
@@ -873,7 +933,9 @@ export function ProgramScheduleInspector({
             <p className="eyebrow">Инспектор программы</p>
             <h3>{title || program?.title || "Программа не выбрана"}</h3>
             <p className="subtle">
-              {day ? `${day.label}${day.dateLabel ? ` · ${day.dateLabel}` : ""}` : "Выберите день программы"}
+              {day
+                ? `${day.label}${day.dateLabel ? ` · ${day.dateLabel}` : ""}`
+                : "Выберите день программы"}
             </p>
           </div>
           {showProgramBadge && program ? (
@@ -891,7 +953,8 @@ export function ProgramScheduleInspector({
     );
   }
 
-  const inspectorTitle = title || (effectiveMode === "create" ? "Новое мероприятие" : "Редактирование мероприятия");
+  const inspectorTitle =
+    title || (effectiveMode === "create" ? "Новое мероприятие" : "Редактирование мероприятия");
   const submitLabel =
     effectiveMode === "create"
       ? submitLabels.create || "Добавить мероприятие"
@@ -901,18 +964,27 @@ export function ProgramScheduleInspector({
     <article className="panel-card program-inspector-card">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">{effectiveMode === "create" ? "Новый слот" : "Выбранное мероприятие"}</p>
+          <p className="eyebrow">
+            {effectiveMode === "create" ? "Новый слот" : "Выбранное мероприятие"}
+          </p>
           <h3>{inspectorTitle}</h3>
           <p className="subtle">
             {form.start} - {form.end} · поток {form.parallelGroup || "A"}
           </p>
         </div>
-        <button type="button" className="ghost-button" disabled={saving} onClick={() => onCancel?.()}>
+        <button
+          type="button"
+          className="ghost-button"
+          disabled={saving}
+          onClick={() => onCancel?.()}
+        >
           Снять выбор
         </button>
       </div>
 
-      {validationError ? <AlertCard title="Не удалось сохранить" detail={validationError} tone="severity-high" /> : null}
+      {validationError ? (
+        <AlertCard title="Не удалось сохранить" detail={validationError} tone="severity-high" />
+      ) : null}
 
       <ProgramEventForm
         value={form}
@@ -945,7 +1017,13 @@ export function ProgramDayTabs({
   const safeDays = safeArray(days);
   if (!safeDays.length) {
     return (
-      <div className={compact ? "feedback-card program-empty-note is-compact" : "feedback-card program-empty-note"}>
+      <div
+        className={
+          compact
+            ? "feedback-card program-empty-note is-compact"
+            : "feedback-card program-empty-note"
+        }
+      >
         <h2>{emptyTitle}</h2>
         <p>{emptyDescription}</p>
       </div>
@@ -956,7 +1034,9 @@ export function ProgramDayTabs({
     <Tabs
       items={safeDays.map((day) => ({
         id: day.id,
-        label: getDayLabel ? getDayLabel(day) : [day.label, day.dateLabel].filter(Boolean).join(" · "),
+        label: getDayLabel
+          ? getDayLabel(day)
+          : [day.label, day.dateLabel].filter(Boolean).join(" · "),
       }))}
       activeId={currentDayId}
       disabled={disabled}
@@ -991,7 +1071,9 @@ export function ProgramScheduleToolbar({
   onPublishProgram,
   onDraftProgram,
 }) {
-  const safePrograms = safeArray(programs).map((program, index) => normalizeComponentProgram(program, index));
+  const safePrograms = safeArray(programs).map((program, index) =>
+    normalizeComponentProgram(program, index),
+  );
   const safeCurrentProgram = currentProgram ? normalizeComponentProgram(currentProgram) : null;
   const safeCurrentDay = safeObject(currentDay);
   const programStatus = safeCurrentProgram?.status || "draft";
@@ -1006,13 +1088,20 @@ export function ProgramScheduleToolbar({
       : "Архивная программа скрыта от участников.";
 
   return (
-    <article className={compact ? "panel-card program-schedule-toolbar is-compact" : "panel-card program-schedule-toolbar"}>
+    <article
+      className={
+        compact
+          ? "panel-card program-schedule-toolbar is-compact"
+          : "panel-card program-schedule-toolbar"
+      }
+    >
       <div className="panel-head">
         <div>
           <p className="eyebrow">Конструктор программы</p>
           <h3>{title || safeCurrentProgram?.title || "Программа не выбрана"}</h3>
           <p className="subtle">
-            {safeCurrentProgram?.eventContext?.title || "Выберите программу"} · шаг сетки {slotMinutes} мин.
+            {safeCurrentProgram?.eventContext?.title || "Выберите программу"} · шаг сетки{" "}
+            {slotMinutes} мин.
           </p>
         </div>
       </div>
@@ -1020,26 +1109,28 @@ export function ProgramScheduleToolbar({
       <div className="program-toolbar-controls">
         <Field label={programLabel}>
           {safePrograms.length > 1 ? (
-          <select
-            value={safeCurrentProgram?.id || ""}
-            disabled={disabled || saving || !safePrograms.length}
-            onChange={(eventTarget) => onSelectProgram?.(eventTarget.target.value)}
-          >
-            {safePrograms.length ? null : <option value="">{emptyProgramOption}</option>}
-            {safePrograms.map((program) => (
-              <option
-                key={program.id}
-                value={program.id}
-                label={getProgramLabel ? getProgramLabel(program) : undefined}
-              >
-                {program.title} · {getProgramStatusLabel(program.status)}
-              </option>
-            ))}
-          </select>
+            <select
+              value={safeCurrentProgram?.id || ""}
+              disabled={disabled || saving || !safePrograms.length}
+              onChange={(eventTarget) => onSelectProgram?.(eventTarget.target.value)}
+            >
+              {safePrograms.length ? null : <option value="">{emptyProgramOption}</option>}
+              {safePrograms.map((program) => (
+                <option
+                  key={program.id}
+                  value={program.id}
+                  label={getProgramLabel ? getProgramLabel(program) : undefined}
+                >
+                  {program.title} · {getProgramStatusLabel(program.status)}
+                </option>
+              ))}
+            </select>
           ) : (
             <div className="program-single-summary">
               <strong>{safeCurrentProgram?.title || emptyProgramOption}</strong>
-              {safeCurrentProgram ? <span>{getProgramStatusLabel(safeCurrentProgram.status)}</span> : null}
+              {safeCurrentProgram ? (
+                <span>{getProgramStatusLabel(safeCurrentProgram.status)}</span>
+              ) : null}
             </div>
           )}
         </Field>
@@ -1108,7 +1199,11 @@ export function ProgramScheduleToolbar({
               </button>
             ) : null}
           </div>
-          <p>{safeCurrentProgram ? publicationNote : "Выберите программу, чтобы управлять публикацией."}</p>
+          <p>
+            {safeCurrentProgram
+              ? publicationNote
+              : "Выберите программу, чтобы управлять публикацией."}
+          </p>
         </div>
       </div>
     </article>
@@ -1178,19 +1273,25 @@ export function ProgramScheduleTable({
         .sort(
           (first, second) =>
             getEventStartMinutes(first) - getEventStartMinutes(second) ||
-            (first.parallelGroup || "").localeCompare(second.parallelGroup || "", "ru", { numeric: true }),
+            (first.parallelGroup || "").localeCompare(second.parallelGroup || "", "ru", {
+              numeric: true,
+            }),
         ),
     [day],
   );
   const scheduleColumns = useMemo(() => {
     const sourceColumns = safeArray(flows !== undefined ? flows : columns);
     const columnsWithDraft =
-      draftFlow && !sourceColumns.some((column) => normalizeColumnDefinition(column).id === draftFlow.id)
+      draftFlow &&
+      !sourceColumns.some((column) => normalizeColumnDefinition(column).id === draftFlow.id)
         ? [...sourceColumns, draftFlow]
         : sourceColumns;
     return getStableParallelColumns(events, columnsWithDraft, columnPreviewOrder || columnOrder);
   }, [columnOrder, columnPreviewOrder, columns, draftFlow, events, flows]);
-  const editableFields = useMemo(() => normalizeInlineEditableFields(inlineEditableFields), [inlineEditableFields]);
+  const editableFields = useMemo(
+    () => normalizeInlineEditableFields(inlineEditableFields),
+    [inlineEditableFields],
+  );
   const safeSlotMinutes = getSafeSlotMinutes(slotMinutes);
   const safeRowHeight = getSafeRowHeight(rowHeight);
   const safeMinDuration = getSafeSlotMinutes(minDurationMinutes || safeSlotMinutes);
@@ -1199,7 +1300,9 @@ export function ProgramScheduleTable({
   const columnCount = Math.max(scheduleColumns.length, 1);
   const columnWidth = 100 / columnCount;
   const gridMinWidth = columnCount * safeColumnMinWidth;
-  const createFlowColumnWidth = allowCreateFlow ? Math.max(150, Math.min(safeColumnMinWidth, 190)) : 0;
+  const createFlowColumnWidth = allowCreateFlow
+    ? Math.max(150, Math.min(safeColumnMinWidth, 190))
+    : 0;
   const scheduleAreaMinWidth = gridMinWidth + createFlowColumnWidth;
   const calendarMinWidth = scheduleAreaMinWidth + (showTimeRail ? safeTimeColumnWidth : 0);
   const calendarGridTemplateColumns = showTimeRail
@@ -1258,7 +1361,11 @@ export function ProgramScheduleTable({
 
     const relativeX = clamp(pointerEvent.clientX - rect.left, 0, Math.max(rect.width - 1, 0));
     const relativeY = clamp(pointerEvent.clientY - rect.top, 0, Math.max(rect.height - 1, 0));
-    const columnIndex = clamp(Math.floor(relativeX / (rect.width / columnCount)), 0, columnCount - 1);
+    const columnIndex = clamp(
+      Math.floor(relativeX / (rect.width / columnCount)),
+      0,
+      columnCount - 1,
+    );
     const slotIndex = clamp(Math.floor(relativeY / safeRowHeight), 0, slots.length - 1);
     const start = range.start + slotIndex * safeSlotMinutes;
     const column = scheduleColumns[columnIndex] || scheduleColumns[0] || { id: "A", track: "" };
@@ -1313,18 +1420,36 @@ export function ProgramScheduleTable({
     let nextColumnIndex = currentInteraction.originalColumnIndex;
 
     if (currentInteraction.mode === "drag") {
-      const nextColumnDelta = Math.round((clientX - currentInteraction.startX) / (rect.width / columnCount));
-      nextColumnIndex = clamp(currentInteraction.originalColumnIndex + nextColumnDelta, 0, columnCount - 1);
-      nextStart = clamp(currentInteraction.originalStart + deltaMinutes, range.start, range.end - originalDuration);
+      const nextColumnDelta = Math.round(
+        (clientX - currentInteraction.startX) / (rect.width / columnCount),
+      );
+      nextColumnIndex = clamp(
+        currentInteraction.originalColumnIndex + nextColumnDelta,
+        0,
+        columnCount - 1,
+      );
+      nextStart = clamp(
+        currentInteraction.originalStart + deltaMinutes,
+        range.start,
+        range.end - originalDuration,
+      );
       nextEnd = nextStart + originalDuration;
     }
 
     if (currentInteraction.mode === "resize-start") {
-      nextStart = clamp(currentInteraction.originalStart + deltaMinutes, range.start, currentInteraction.originalEnd - safeMinDuration);
+      nextStart = clamp(
+        currentInteraction.originalStart + deltaMinutes,
+        range.start,
+        currentInteraction.originalEnd - safeMinDuration,
+      );
     }
 
     if (currentInteraction.mode === "resize-end") {
-      nextEnd = clamp(currentInteraction.originalEnd + deltaMinutes, currentInteraction.originalStart + safeMinDuration, range.end);
+      nextEnd = clamp(
+        currentInteraction.originalEnd + deltaMinutes,
+        currentInteraction.originalStart + safeMinDuration,
+        range.end,
+      );
     }
 
     const column = scheduleColumns[nextColumnIndex] || scheduleColumns[0];
@@ -1396,13 +1521,18 @@ export function ProgramScheduleTable({
         moved = true;
       }
 
-      latestPreview = getPreviewFromPointer(pointerEvent.clientX, pointerEvent.clientY, interaction);
+      latestPreview = getPreviewFromPointer(
+        pointerEvent.clientX,
+        pointerEvent.clientY,
+        interaction,
+      );
       setInteractionPreview(latestPreview);
     }
 
     async function handlePointerUp(pointerEvent) {
       const nextPreview =
-        latestPreview || getPreviewFromPointer(pointerEvent.clientX, pointerEvent.clientY, interaction);
+        latestPreview ||
+        getPreviewFromPointer(pointerEvent.clientX, pointerEvent.clientY, interaction);
 
       setInteraction(null);
       setInteractionPreview(null);
@@ -1432,23 +1562,28 @@ export function ProgramScheduleTable({
       }
 
       setCalendarError("");
-      await onUpdateEvent?.(day.id, interaction.event.id, {
-        start: candidate.start,
-        end: candidate.end,
-        parallelGroup: candidate.parallelGroup,
-      }, {
-        type: "update-event",
-        before: {
-          start: formatMinutesAsTime(interaction.originalStart),
-          end: formatMinutesAsTime(interaction.originalEnd),
-          parallelGroup: interaction.event.parallelGroup || "A",
-        },
-        after: {
+      await onUpdateEvent?.(
+        day.id,
+        interaction.event.id,
+        {
           start: candidate.start,
           end: candidate.end,
           parallelGroup: candidate.parallelGroup,
         },
-      });
+        {
+          type: "update-event",
+          before: {
+            start: formatMinutesAsTime(interaction.originalStart),
+            end: formatMinutesAsTime(interaction.originalEnd),
+            parallelGroup: interaction.event.parallelGroup || "A",
+          },
+          after: {
+            start: candidate.start,
+            end: candidate.end,
+            parallelGroup: candidate.parallelGroup,
+          },
+        },
+      );
     }
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -1648,7 +1783,9 @@ export function ProgramScheduleTable({
         if (!onRenameFlow && onUpdateFlows) {
           await onUpdateFlows(
             day.id,
-            scheduleColumns.map((column) => (column.id === nextFlow.id ? { ...column, ...nextFlow } : column)),
+            scheduleColumns.map((column) =>
+              column.id === nextFlow.id ? { ...column, ...nextFlow } : column,
+            ),
           );
         }
       }
@@ -1697,14 +1834,20 @@ export function ProgramScheduleTable({
 
     if (field === "speakerName") {
       const matchedSpeaker = safeArray(speakersCatalog).find(
-        (speaker) => String(speaker.name || "").trim().toLowerCase() === value.toLowerCase(),
+        (speaker) =>
+          String(speaker.name || "")
+            .trim()
+            .toLowerCase() === value.toLowerCase(),
       );
       patch.speakerId = matchedSpeaker?.id || "";
       before.speakerId = event.speakerId || "";
       after.speakerId = matchedSpeaker?.id || "";
     }
 
-    if (value === previousValue && (field !== "speakerName" || patch.speakerId === (event.speakerId || ""))) {
+    if (
+      value === previousValue &&
+      (field !== "speakerName" || patch.speakerId === (event.speakerId || ""))
+    ) {
       setInlineEdit(null);
       return;
     }
@@ -1733,7 +1876,9 @@ export function ProgramScheduleTable({
           disabled={disabled || saving}
           onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
           onClick={(clickEvent) => clickEvent.stopPropagation()}
-          onChange={(changeEvent) => setInlineEdit({ ...inlineEdit, value: changeEvent.target.value })}
+          onChange={(changeEvent) =>
+            setInlineEdit({ ...inlineEdit, value: changeEvent.target.value })
+          }
           onBlur={() => void commitInlineEdit()}
           onKeyDown={(keyEvent) => {
             if (keyEvent.key === "Enter") {
@@ -1834,10 +1979,19 @@ export function ProgramScheduleTable({
     const parallelGroup = preview?.parallelGroup || event.parallelGroup || "A";
     const columnIndex = getColumnIndex(parallelGroup);
     const top = ((start - range.start) / safeSlotMinutes) * safeRowHeight + 4;
-    const height = Math.max(((end - start) / safeSlotMinutes) * safeRowHeight - 8, safeRowHeight - 8);
+    const height = Math.max(
+      ((end - start) / safeSlotMinutes) * safeRowHeight - 8,
+      safeRowHeight - 8,
+    );
     const isSelected = selectedEventId === event.id;
     const sizeClass =
-      height <= 44 ? "is-micro" : height <= 72 ? "is-short" : height >= 160 ? "is-tall" : "is-regular";
+      height <= 44
+        ? "is-micro"
+        : height <= 72
+          ? "is-short"
+          : height >= 160
+            ? "is-tall"
+            : "is-regular";
     const timeLabel = `${formatMinutesAsTime(start)} - ${formatMinutesAsTime(end)}`;
     const trackLabel = event.track || event.type || "Трек не указан";
     const metaLabel = `${event.speakerName || "Без спикера"} · ${event.location || "Без локации"}`;
@@ -1913,7 +2067,12 @@ export function ProgramScheduleTable({
               {renderInlineValue(event, "track", trackLabel, "is-track")}
             </span>
             <small className="schedule-event-meta">
-              {renderInlineValue(event, "speakerName", event.speakerName || "Без спикера", "is-speaker")}
+              {renderInlineValue(
+                event,
+                "speakerName",
+                event.speakerName || "Без спикера",
+                "is-speaker",
+              )}
               <span aria-hidden="true"> · </span>
               {renderInlineValue(event, "location", event.location || "Без локации", "is-location")}
             </small>
@@ -1937,7 +2096,8 @@ export function ProgramScheduleTable({
           <p className="eyebrow">Табличный вид</p>
           <h3>{day.label}</h3>
           <p className="subtle">
-            {day.dateLabel || "Дата не указана"} · {formatMinutesAsTime(range.start)} - {formatMinutesAsTime(range.end)}
+            {day.dateLabel || "Дата не указана"} · {formatMinutesAsTime(range.start)} -{" "}
+            {formatMinutesAsTime(range.end)}
           </p>
         </div>
         <div className="pill-grid">
@@ -1946,7 +2106,9 @@ export function ProgramScheduleTable({
         </div>
       </div>
 
-      {calendarError ? <AlertCard title="Конфликт расписания" detail={calendarError} tone="severity-high" /> : null}
+      {calendarError ? (
+        <AlertCard title="Конфликт расписания" detail={calendarError} tone="severity-high" />
+      ) : null}
 
       <div
         className={[
@@ -1957,11 +2119,16 @@ export function ProgramScheduleTable({
           .join(" ")}
         style={{
           maxHeight: calendarMaxHeight,
-          minHeight: typeof calendarMinHeight === "number" ? `${calendarMinHeight}px` : calendarMinHeight,
+          minHeight:
+            typeof calendarMinHeight === "number" ? `${calendarMinHeight}px` : calendarMinHeight,
         }}
       >
         <div
-          className={showTimeRail ? "schedule-calendar-header" : "schedule-calendar-header is-without-time-rail"}
+          className={
+            showTimeRail
+              ? "schedule-calendar-header"
+              : "schedule-calendar-header is-without-time-rail"
+          }
           style={{
             gridTemplateColumns: calendarGridTemplateColumns,
             minWidth: `${calendarMinWidth}px`,
@@ -1976,90 +2143,103 @@ export function ProgramScheduleTable({
                 : `minmax(${gridMinWidth}px, 1fr)`,
             }}
           >
-          <div
-            ref={headerColumnsRef}
-            className="schedule-calendar-columns"
-            style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(${safeColumnMinWidth}px, 1fr))` }}
-          >
-            {scheduleColumns.map((column, index) => (
-              <div
-                key={column.id}
-                className={[
-                  "schedule-flow-heading",
-                  columnInteraction?.columnId === column.id ? "is-reordering" : "",
-                  allowColumnReorder && scheduleColumns.length > 1 ? "is-reorderable" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <button
-                  type="button"
-                  className="schedule-flow-drag-handle"
-                  aria-label={`Изменить порядок потока ${column.label}`}
-                  disabled={!allowColumnReorder || disabled || saving || scheduleColumns.length <= 1}
-                  onPointerDown={(pointerEvent) => startColumnReorder(pointerEvent, column, index)}
-                >
-                  ⋮⋮
-                </button>
-                {editingFlow?.flowId === column.id ? (
-                  <div
-                    className="schedule-flow-editor"
-                    onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
-                    onClick={(clickEvent) => clickEvent.stopPropagation()}
-                    onBlur={handleFlowEditorBlur}
-                    onKeyDown={handleFlowEditorKeyDown}
-                  >
-                    <input
-                      className="schedule-flow-title-input"
-                      value={editingFlow.label}
-                      autoFocus
-                      disabled={disabled || saving}
-                      placeholder={column.id}
-                      onChange={(changeEvent) =>
-                        setEditingFlow({ ...editingFlow, label: changeEvent.target.value })
-                      }
-                    />
-                    <input
-                      className="schedule-flow-title-input is-subtitle"
-                      value={editingFlow.track}
-                      disabled={disabled || saving}
-                      placeholder="Подзаголовок потока"
-                      onChange={(changeEvent) =>
-                        setEditingFlow({ ...editingFlow, track: changeEvent.target.value })
-                      }
-                    />
-                  </div>
-                ) : (
-                  <span className="schedule-flow-title" onDoubleClick={(event) => startFlowRename(event, column)}>
-                    {column.label}
-                  </span>
-                )}
-                {editingFlow?.flowId === column.id ? null : (
-                  <small
-                    className={column.track ? "schedule-flow-subtitle" : "schedule-flow-subtitle is-empty"}
-                    onDoubleClick={(event) => startFlowRename(event, column)}
-                  >
-                    {column.track || "Подзаголовок потока"}
-                  </small>
-                )}
-              </div>
-            ))}
-          </div>
-          {allowCreateFlow ? (
-            <button
-              type="button"
-              className="schedule-flow-create-ghost"
-              disabled={disabled || saving}
-              onClick={startCreateFlow}
+            <div
+              ref={headerColumnsRef}
+              className="schedule-calendar-columns"
+              style={{
+                gridTemplateColumns: `repeat(${columnCount}, minmax(${safeColumnMinWidth}px, 1fr))`,
+              }}
             >
-              + Поток
-            </button>
-          ) : null}
+              {scheduleColumns.map((column, index) => (
+                <div
+                  key={column.id}
+                  className={[
+                    "schedule-flow-heading",
+                    columnInteraction?.columnId === column.id ? "is-reordering" : "",
+                    allowColumnReorder && scheduleColumns.length > 1 ? "is-reorderable" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <button
+                    type="button"
+                    className="schedule-flow-drag-handle"
+                    aria-label={`Изменить порядок потока ${column.label}`}
+                    disabled={
+                      !allowColumnReorder || disabled || saving || scheduleColumns.length <= 1
+                    }
+                    onPointerDown={(pointerEvent) =>
+                      startColumnReorder(pointerEvent, column, index)
+                    }
+                  >
+                    ⋮⋮
+                  </button>
+                  {editingFlow?.flowId === column.id ? (
+                    <div
+                      className="schedule-flow-editor"
+                      onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+                      onClick={(clickEvent) => clickEvent.stopPropagation()}
+                      onBlur={handleFlowEditorBlur}
+                      onKeyDown={handleFlowEditorKeyDown}
+                    >
+                      <input
+                        className="schedule-flow-title-input"
+                        value={editingFlow.label}
+                        autoFocus
+                        disabled={disabled || saving}
+                        placeholder={column.id}
+                        onChange={(changeEvent) =>
+                          setEditingFlow({ ...editingFlow, label: changeEvent.target.value })
+                        }
+                      />
+                      <input
+                        className="schedule-flow-title-input is-subtitle"
+                        value={editingFlow.track}
+                        disabled={disabled || saving}
+                        placeholder="Подзаголовок потока"
+                        onChange={(changeEvent) =>
+                          setEditingFlow({ ...editingFlow, track: changeEvent.target.value })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <span
+                      className="schedule-flow-title"
+                      onDoubleClick={(event) => startFlowRename(event, column)}
+                    >
+                      {column.label}
+                    </span>
+                  )}
+                  {editingFlow?.flowId === column.id ? null : (
+                    <small
+                      className={
+                        column.track ? "schedule-flow-subtitle" : "schedule-flow-subtitle is-empty"
+                      }
+                      onDoubleClick={(event) => startFlowRename(event, column)}
+                    >
+                      {column.track || "Подзаголовок потока"}
+                    </small>
+                  )}
+                </div>
+              ))}
+            </div>
+            {allowCreateFlow ? (
+              <button
+                type="button"
+                className="schedule-flow-create-ghost"
+                disabled={disabled || saving}
+                onClick={startCreateFlow}
+              >
+                + Поток
+              </button>
+            ) : null}
           </div>
         </div>
 
         <div
-          className={showTimeRail ? "schedule-calendar-body" : "schedule-calendar-body is-without-time-rail"}
+          className={
+            showTimeRail ? "schedule-calendar-body" : "schedule-calendar-body is-without-time-rail"
+          }
           style={{
             gridTemplateColumns: calendarGridTemplateColumns,
             minWidth: `${calendarMinWidth}px`,
@@ -2085,84 +2265,85 @@ export function ProgramScheduleTable({
                 : `minmax(${gridMinWidth}px, 1fr)`,
             }}
           >
-          <div
-            ref={gridRef}
-            className={[
-              "schedule-calendar-grid",
-              disabled || saving ? "is-readonly" : "",
-              !showAddButtons ? "is-add-hidden" : "",
-              columnInteraction ? "is-reordering-columns" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            style={{
-              height: `${gridHeight}px`,
-              minWidth: `${gridMinWidth}px`,
-              backgroundSize: `100% ${safeRowHeight}px`,
-            }}
-            onClick={handleGridClick}
-            onDoubleClick={() => onClearSelection?.()}
-          >
-            {scheduleColumns.map((column, index) => (
-              <div
-                key={column.id}
-                className="schedule-calendar-column"
-                style={{
-                  left: `${index * columnWidth}%`,
-                  width: `${columnWidth}%`,
-                }}
-              >
-                <button
-                  type="button"
-                  className="schedule-column-add"
-                  disabled={disabled || saving}
-                  aria-label={`Добавить мероприятие в поток ${column.label}`}
-                  onClick={(clickEvent) => {
-                    clickEvent.stopPropagation();
-                    const draft = createScheduleEventDraft({
-                      start: formatMinutesAsTime(range.start),
-                      parallelGroup: column.id,
-                      track: column.track,
-                      eventTypes,
-                      defaultDurationMinutes,
-                    });
-                    if (onSelectEmptySlot) {
-                      onSelectEmptySlot(day.id, draft);
-                      return;
-                    }
-
-                    onCreateEvent?.(day.id, draft);
+            <div
+              ref={gridRef}
+              className={[
+                "schedule-calendar-grid",
+                disabled || saving ? "is-readonly" : "",
+                !showAddButtons ? "is-add-hidden" : "",
+                columnInteraction ? "is-reordering-columns" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={{
+                height: `${gridHeight}px`,
+                minWidth: `${gridMinWidth}px`,
+                backgroundSize: `100% ${safeRowHeight}px`,
+              }}
+              onClick={handleGridClick}
+              onDoubleClick={() => onClearSelection?.()}
+            >
+              {scheduleColumns.map((column, index) => (
+                <div
+                  key={column.id}
+                  className="schedule-calendar-column"
+                  style={{
+                    left: `${index * columnWidth}%`,
+                    width: `${columnWidth}%`,
                   }}
                 >
-                  +
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    className="schedule-column-add"
+                    disabled={disabled || saving}
+                    aria-label={`Добавить мероприятие в поток ${column.label}`}
+                    onClick={(clickEvent) => {
+                      clickEvent.stopPropagation();
+                      const draft = createScheduleEventDraft({
+                        start: formatMinutesAsTime(range.start),
+                        parallelGroup: column.id,
+                        track: column.track,
+                        eventTypes,
+                        defaultDurationMinutes,
+                      });
+                      if (onSelectEmptySlot) {
+                        onSelectEmptySlot(day.id, draft);
+                        return;
+                      }
 
-            {draftEvent ? (
-              <div
-                className="schedule-draft-marker"
-                style={{
-                  top: `${((getEventStartMinutes(draftEvent) - range.start) / safeSlotMinutes) * safeRowHeight + 4}px`,
-                  height: `${Math.max(
-                    ((getEventEndMinutes(draftEvent, defaultDurationMinutes) - getEventStartMinutes(draftEvent)) /
-                      safeSlotMinutes) *
-                      safeRowHeight -
-                      8,
-                    safeRowHeight - 8,
-                  )}px`,
-                  left: `calc(${getColumnIndex(draftEvent.parallelGroup) * columnWidth}% + 6px)`,
-                  width: `calc(${columnWidth}% - 12px)`,
-                }}
-              >
-                Черновик
-              </div>
-            ) : null}
+                      onCreateEvent?.(day.id, draft);
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              ))}
 
-            {events.map(renderCalendarEvent)}
+              {draftEvent ? (
+                <div
+                  className="schedule-draft-marker"
+                  style={{
+                    top: `${((getEventStartMinutes(draftEvent) - range.start) / safeSlotMinutes) * safeRowHeight + 4}px`,
+                    height: `${Math.max(
+                      ((getEventEndMinutes(draftEvent, defaultDurationMinutes) -
+                        getEventStartMinutes(draftEvent)) /
+                        safeSlotMinutes) *
+                        safeRowHeight -
+                        8,
+                      safeRowHeight - 8,
+                    )}px`,
+                    left: `calc(${getColumnIndex(draftEvent.parallelGroup) * columnWidth}% + 6px)`,
+                    width: `calc(${columnWidth}% - 12px)`,
+                  }}
+                >
+                  Черновик
+                </div>
+              ) : null}
+
+              {events.map(renderCalendarEvent)}
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </article>
   );
@@ -2178,7 +2359,9 @@ export function ProgramSelector({
   onSelectDay,
   onActivateEvent,
 }) {
-  const safePrograms = safeArray(programs).map((program, index) => normalizeComponentProgram(program, index));
+  const safePrograms = safeArray(programs).map((program, index) =>
+    normalizeComponentProgram(program, index),
+  );
   const safeCurrentProgram = currentProgram ? normalizeComponentProgram(currentProgram) : null;
   const safeCurrentDay = currentDay ? safeObject(currentDay) : null;
   const safeDays = safeArray(safeCurrentProgram?.days);
@@ -2207,15 +2390,15 @@ export function ProgramSelector({
       </div>
 
       {safePrograms.length > 1 ? (
-      <Tabs
-        items={safePrograms.map((program) => ({
-          id: program.id,
-          label: `${program.title} · ${getProgramStatusLabel(program.status)}`,
-        }))}
-        activeId={safeCurrentProgram?.id}
-        disabled={saving}
-        onChange={onSelectProgram}
-      />
+        <Tabs
+          items={safePrograms.map((program) => ({
+            id: program.id,
+            label: `${program.title} · ${getProgramStatusLabel(program.status)}`,
+          }))}
+          activeId={safeCurrentProgram?.id}
+          disabled={saving}
+          onChange={onSelectProgram}
+        />
       ) : null}
 
       {safeCurrentProgram ? (
@@ -2223,7 +2406,9 @@ export function ProgramSelector({
           <div className="program-context-card">
             <div className="panel-head">
               <div>
-                <strong>{safeCurrentProgram.eventContext?.title || safeCurrentProgram.title}</strong>
+                <strong>
+                  {safeCurrentProgram.eventContext?.title || safeCurrentProgram.title}
+                </strong>
                 <p>
                   {safeCurrentProgram.eventContext?.eventType || "Событие"} ·{" "}
                   {safeCurrentProgram.eventContext?.venue || "Локация не указана"}
@@ -2247,33 +2432,6 @@ export function ProgramSelector({
             activeId={safeCurrentDay?.id}
             onChange={onSelectDay}
           />
-          {safeGroups.length ? (
-            <div className="field-grid organizer-participant-actions">
-              <Field label="Текущая группа">
-                <select value={draftGroupId} onChange={(eventTarget) => setDraftGroupId(eventTarget.target.value)}>
-                  <option value="">Без группы</option>
-                  {safeGroups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <div className="organizer-participant-cta">
-                <p className="subtle">
-                  Переназначение участника влияет на историческую групповую аналитику заезда.
-                </p>
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={saving || !draftGroupId || draftGroupId === participant.groupId}
-                  onClick={() => void handleAssignGroup()}
-                >
-                  Переназначить группу
-                </button>
-              </div>
-            </div>
-          ) : null}
         </>
       ) : null}
 
@@ -2408,50 +2566,91 @@ export function ProgramMetaEditor({
           </p>
         </div>
         <div className="pill-grid">
-          <StatusPill tone={getProgramStatusTone(safeProgram.status)}>{getProgramStatusLabel(safeProgram.status)}</StatusPill>
+          <StatusPill tone={getProgramStatusTone(safeProgram.status)}>
+            {getProgramStatusLabel(safeProgram.status)}
+          </StatusPill>
           <SoftPill>{safeProgram.days?.length || 0} дней</SoftPill>
         </div>
       </div>
 
       <div className="field-grid">
         <Field label="Название программы" wide>
-          <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+          <input
+            value={form.title}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
+          />
         </Field>
         <Field label="Событие" wide>
-          <input value={form.eventContext.title} onChange={(event) => updateEventContext("title", event.target.value)} />
+          <input
+            value={form.eventContext.title}
+            onChange={(event) => updateEventContext("title", event.target.value)}
+          />
         </Field>
         <Field label="Тип события">
-          <input value={form.eventContext.eventType} onChange={(event) => updateEventContext("eventType", event.target.value)} />
+          <input
+            value={form.eventContext.eventType}
+            onChange={(event) => updateEventContext("eventType", event.target.value)}
+          />
         </Field>
         <Field label="Площадка">
-          <input value={form.eventContext.venue} onChange={(event) => updateEventContext("venue", event.target.value)} />
+          <input
+            value={form.eventContext.venue}
+            onChange={(event) => updateEventContext("venue", event.target.value)}
+          />
         </Field>
         <Field label="Дата начала">
-          <input value={form.eventContext.startDate} placeholder="2026-04-24" onChange={(event) => updateEventContext("startDate", event.target.value)} />
+          <input
+            value={form.eventContext.startDate}
+            placeholder="2026-04-24"
+            onChange={(event) => updateEventContext("startDate", event.target.value)}
+          />
         </Field>
         <Field label="Дата окончания">
-          <input value={form.eventContext.endDate} placeholder="2026-04-26" onChange={(event) => updateEventContext("endDate", event.target.value)} />
+          <input
+            value={form.eventContext.endDate}
+            placeholder="2026-04-26"
+            onChange={(event) => updateEventContext("endDate", event.target.value)}
+          />
         </Field>
         <Field label="Участников">
-          <input value={form.eventContext.participantCount} onChange={(event) => updateEventContext("participantCount", event.target.value)} />
+          <input
+            value={form.eventContext.participantCount}
+            onChange={(event) => updateEventContext("participantCount", event.target.value)}
+          />
         </Field>
         <Field label="Статус программы">
-          <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+          <select
+            value={form.status}
+            onChange={(event) => setForm({ ...form, status: event.target.value })}
+          >
             <option value="draft">Черновик</option>
             <option value="published">Опубликована</option>
             <option value="archived">Архив</option>
           </select>
         </Field>
         <Field label="Описание программы" wide>
-          <textarea rows={3} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          <textarea
+            rows={3}
+            value={form.description}
+            onChange={(event) => setForm({ ...form, description: event.target.value })}
+          />
         </Field>
         <Field label="Описание события" wide>
-          <textarea rows={3} value={form.eventContext.description} onChange={(event) => updateEventContext("description", event.target.value)} />
+          <textarea
+            rows={3}
+            value={form.eventContext.description}
+            onChange={(event) => updateEventContext("description", event.target.value)}
+          />
         </Field>
       </div>
 
       <div className="card-actions">
-        <button type="button" className="primary-button" disabled={saving} onClick={() => void onSave?.(form)}>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void onSave?.(form)}
+        >
           Сохранить программу
         </button>
         {showPublishAction ? (
@@ -2461,7 +2660,11 @@ export function ProgramMetaEditor({
             disabled={saving || isPublished || !onPublish}
             onClick={() => void onPublish?.()}
           >
-            {saving && !isPublished ? publishSavingLabel : isPublished ? publishedLabel : publishLabel}
+            {saving && !isPublished
+              ? publishSavingLabel
+              : isPublished
+                ? publishedLabel
+                : publishLabel}
           </button>
         ) : null}
       </div>
@@ -2511,22 +2714,42 @@ export function ProgramCreateCard({ saving = false, onCreate }) {
           />
         </Field>
         <Field label="Тип события">
-          <input value={form.eventContext.eventType} onChange={(event) => updateEventContext("eventType", event.target.value)} />
+          <input
+            value={form.eventContext.eventType}
+            onChange={(event) => updateEventContext("eventType", event.target.value)}
+          />
         </Field>
         <Field label="Площадка">
-          <input value={form.eventContext.venue} onChange={(event) => updateEventContext("venue", event.target.value)} />
+          <input
+            value={form.eventContext.venue}
+            onChange={(event) => updateEventContext("venue", event.target.value)}
+          />
         </Field>
       </div>
 
-      <button type="button" className="primary-button" disabled={saving} onClick={() => void handleCreate()}>
+      <button
+        type="button"
+        className="primary-button"
+        disabled={saving}
+        onClick={() => void handleCreate()}
+      >
         Создать программу
       </button>
     </article>
   );
 }
 
-export function ProgramDayComposer({ program, currentDay, saving = false, onCreate, onUpdate, onDelete }) {
-  const [createForm, setCreateForm] = useState(() => createProgramDayFormModel(createProgramDayDraft(program)).form);
+export function ProgramDayComposer({
+  program,
+  currentDay,
+  saving = false,
+  onCreate,
+  onUpdate,
+  onDelete,
+}) {
+  const [createForm, setCreateForm] = useState(
+    () => createProgramDayFormModel(createProgramDayDraft(program)).form,
+  );
   const [isCreateDateLabelAuto, setIsCreateDateLabelAuto] = useState(
     () => createProgramDayFormModel(createProgramDayDraft(program)).isAutoDateLabel,
   );
@@ -2551,7 +2774,8 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
     const nextWorkspace = await onCreate?.(createForm);
     if (nextWorkspace) {
       const nextProgram =
-        nextWorkspace?.programWorkspace?.programs?.find((item) => item.id === program?.id) || program;
+        nextWorkspace?.programWorkspace?.programs?.find((item) => item.id === program?.id) ||
+        program;
       const nextModel = createProgramDayFormModel(createProgramDayDraft(nextProgram));
       setCreateForm(nextModel.form);
       setIsCreateDateLabelAuto(nextModel.isAutoDateLabel);
@@ -2559,11 +2783,15 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
   }
 
   function handleEditDateValueChange(nextDateValue) {
-    setEditForm((previous) => applyProgramDayDateValue(previous, nextDateValue, isEditDateLabelAuto));
+    setEditForm((previous) =>
+      applyProgramDayDateValue(previous, nextDateValue, isEditDateLabelAuto),
+    );
   }
 
   function handleCreateDateValueChange(nextDateValue) {
-    setCreateForm((previous) => applyProgramDayDateValue(previous, nextDateValue, isCreateDateLabelAuto));
+    setCreateForm((previous) =>
+      applyProgramDayDateValue(previous, nextDateValue, isCreateDateLabelAuto),
+    );
   }
 
   function handleEditDateLabelChange(nextDateLabel) {
@@ -2601,21 +2829,44 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
           <p className="subtle">Редактировать выбранный день</p>
           <div className="field-grid">
             <Field label="Название дня">
-              <input value={editForm.label} disabled={saving} onChange={(event) => setEditForm({ ...editForm, label: event.target.value })} />
+              <input
+                value={editForm.label}
+                disabled={saving}
+                onChange={(event) => setEditForm({ ...editForm, label: event.target.value })}
+              />
             </Field>
             <Field label="Подпись даты">
-              <input value={editForm.dateLabel} disabled={saving} onChange={(event) => handleEditDateLabelChange(event.target.value)} />
+              <input
+                value={editForm.dateLabel}
+                disabled={saving}
+                onChange={(event) => handleEditDateLabelChange(event.target.value)}
+              />
             </Field>
             <Field label="Дата">
-              <input type="date" value={editForm.dateValue || ""} disabled={saving} onChange={(event) => handleEditDateValueChange(event.target.value)} />
+              <input
+                type="date"
+                value={editForm.dateValue || ""}
+                disabled={saving}
+                onChange={(event) => handleEditDateValueChange(event.target.value)}
+              />
             </Field>
           </div>
           <div className="card-actions">
-            <button type="button" className="ghost-button" disabled={saving} onClick={() => void onUpdate?.(currentDay.id, editForm)}>
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={saving}
+              onClick={() => void onUpdate?.(currentDay.id, editForm)}
+            >
               Сохранить день
             </button>
             {onDelete ? (
-              <button type="button" className="ghost-button is-danger" disabled={saving} onClick={() => void onDelete?.(currentDay.id)}>
+              <button
+                type="button"
+                className="ghost-button is-danger"
+                disabled={saving}
+                onClick={() => void onDelete?.(currentDay.id)}
+              >
                 Удалить день
               </button>
             ) : null}
@@ -2625,16 +2876,34 @@ export function ProgramDayComposer({ program, currentDay, saving = false, onCrea
 
       <div className="field-grid">
         <Field label="Новый день">
-          <input value={createForm.label} disabled={saving} onChange={(event) => setCreateForm({ ...createForm, label: event.target.value })} />
+          <input
+            value={createForm.label}
+            disabled={saving}
+            onChange={(event) => setCreateForm({ ...createForm, label: event.target.value })}
+          />
         </Field>
         <Field label="Подпись даты">
-          <input value={createForm.dateLabel} disabled={saving} onChange={(event) => handleCreateDateLabelChange(event.target.value)} />
+          <input
+            value={createForm.dateLabel}
+            disabled={saving}
+            onChange={(event) => handleCreateDateLabelChange(event.target.value)}
+          />
         </Field>
         <Field label="Дата">
-          <input type="date" value={createForm.dateValue} disabled={saving} onChange={(event) => handleCreateDateValueChange(event.target.value)} />
+          <input
+            type="date"
+            value={createForm.dateValue}
+            disabled={saving}
+            onChange={(event) => handleCreateDateValueChange(event.target.value)}
+          />
         </Field>
       </div>
-      <button type="button" className="primary-button" disabled={saving} onClick={() => void handleCreate()}>
+      <button
+        type="button"
+        className="primary-button"
+        disabled={saving}
+        onClick={() => void handleCreate()}
+      >
         Добавить день
       </button>
     </article>
@@ -2686,7 +2955,8 @@ export function EventEditorCard({
   }
 
   function handleSave() {
-    const speakerName = safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
+    const speakerName =
+      safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
     return onSave?.({ ...form, speakerName, tags: normalizeList(form.tags) });
   }
 
@@ -2702,17 +2972,25 @@ export function EventEditorCard({
         </div>
 
         <div className="pill-grid">
-          <StatusPill tone={getEventStatusTone(safeEvent.status)}>{getEventStatusLabel(safeEvent.status)}</StatusPill>
+          <StatusPill tone={getEventStatusTone(safeEvent.status)}>
+            {getEventStatusLabel(safeEvent.status)}
+          </StatusPill>
           {isActive ? <SoftPill>Текущее</SoftPill> : null}
         </div>
       </div>
 
       <div className="field-grid">
         <Field label="Название" wide>
-          <input value={form.title} onChange={(eventTarget) => updateField("title", eventTarget.target.value)} />
+          <input
+            value={form.title}
+            onChange={(eventTarget) => updateField("title", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Тип мероприятия">
-          <select value={form.type} onChange={(eventTarget) => updateField("type", eventTarget.target.value)}>
+          <select
+            value={form.type}
+            onChange={(eventTarget) => updateField("type", eventTarget.target.value)}
+          >
             {safeArray(eventTypes).map((item) => (
               <option key={item} value={item}>
                 {item}
@@ -2721,7 +2999,10 @@ export function EventEditorCard({
           </select>
         </Field>
         <Field label="Спикер">
-          <select value={form.speakerId} onChange={(eventTarget) => updateField("speakerId", eventTarget.target.value)}>
+          <select
+            value={form.speakerId}
+            onChange={(eventTarget) => updateField("speakerId", eventTarget.target.value)}
+          >
             <option value="">Без спикера</option>
             {safeArray(speakersCatalog).map((speaker) => (
               <option key={speaker.id} value={speaker.id}>
@@ -2731,30 +3012,57 @@ export function EventEditorCard({
           </select>
         </Field>
         <Field label="Начало">
-          <input value={form.start} onChange={(eventTarget) => updateField("start", eventTarget.target.value)} />
+          <input
+            value={form.start}
+            onChange={(eventTarget) => updateField("start", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Окончание">
-          <input value={form.end} onChange={(eventTarget) => updateField("end", eventTarget.target.value)} />
+          <input
+            value={form.end}
+            onChange={(eventTarget) => updateField("end", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Локация">
-          <input value={form.location} onChange={(eventTarget) => updateField("location", eventTarget.target.value)} />
+          <input
+            value={form.location}
+            onChange={(eventTarget) => updateField("location", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Трек">
-          <input value={form.track} onChange={(eventTarget) => updateField("track", eventTarget.target.value)} />
+          <input
+            value={form.track}
+            onChange={(eventTarget) => updateField("track", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Параллель">
-          <input value={form.parallelGroup} onChange={(eventTarget) => updateField("parallelGroup", eventTarget.target.value)} />
+          <input
+            value={form.parallelGroup}
+            onChange={(eventTarget) => updateField("parallelGroup", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Теги" wide>
-          <input value={form.tags} onChange={(eventTarget) => updateField("tags", eventTarget.target.value)} />
+          <input
+            value={form.tags}
+            onChange={(eventTarget) => updateField("tags", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Описание" wide>
-          <textarea rows={3} value={form.description} onChange={(eventTarget) => updateField("description", eventTarget.target.value)} />
+          <textarea
+            rows={3}
+            value={form.description}
+            onChange={(eventTarget) => updateField("description", eventTarget.target.value)}
+          />
         </Field>
       </div>
 
       <div className="card-actions">
-        <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSave()}>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void handleSave()}
+        >
           Сохранить мероприятие
         </button>
         <button
@@ -2770,8 +3078,16 @@ export function EventEditorCard({
   );
 }
 
-export function ParallelEventComposer({ day, speakersCatalog = [], eventTypes = [], saving = false, onSubmit }) {
-  const [form, setForm] = useState(() => createParallelEventDraft(day, speakersCatalog, eventTypes));
+export function ParallelEventComposer({
+  day,
+  speakersCatalog = [],
+  eventTypes = [],
+  saving = false,
+  onSubmit,
+}) {
+  const [form, setForm] = useState(() =>
+    createParallelEventDraft(day, speakersCatalog, eventTypes),
+  );
 
   useEffect(() => {
     setForm(createParallelEventDraft(day, speakersCatalog, eventTypes));
@@ -2782,7 +3098,8 @@ export function ParallelEventComposer({ day, speakersCatalog = [], eventTypes = 
   }
 
   async function handleSubmit() {
-    const speakerName = safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
+    const speakerName =
+      safeArray(speakersCatalog).find((speaker) => speaker.id === form.speakerId)?.name || "";
     await onSubmit?.({ ...form, speakerName, tags: normalizeList(form.tags) });
     setForm(createParallelEventDraft(day, speakersCatalog, eventTypes));
   }
@@ -2806,7 +3123,10 @@ export function ParallelEventComposer({ day, speakersCatalog = [], eventTypes = 
           />
         </Field>
         <Field label="Тип мероприятия">
-          <select value={form.type} onChange={(eventTarget) => updateField("type", eventTarget.target.value)}>
+          <select
+            value={form.type}
+            onChange={(eventTarget) => updateField("type", eventTarget.target.value)}
+          >
             {safeArray(eventTypes).map((item) => (
               <option key={item} value={item}>
                 {item}
@@ -2815,7 +3135,10 @@ export function ParallelEventComposer({ day, speakersCatalog = [], eventTypes = 
           </select>
         </Field>
         <Field label="Спикер">
-          <select value={form.speakerId} onChange={(eventTarget) => updateField("speakerId", eventTarget.target.value)}>
+          <select
+            value={form.speakerId}
+            onChange={(eventTarget) => updateField("speakerId", eventTarget.target.value)}
+          >
             <option value="">Без спикера</option>
             {safeArray(speakersCatalog).map((speaker) => (
               <option key={speaker.id} value={speaker.id}>
@@ -2825,29 +3148,56 @@ export function ParallelEventComposer({ day, speakersCatalog = [], eventTypes = 
           </select>
         </Field>
         <Field label="Начало">
-          <input value={form.start} onChange={(eventTarget) => updateField("start", eventTarget.target.value)} />
+          <input
+            value={form.start}
+            onChange={(eventTarget) => updateField("start", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Окончание">
-          <input value={form.end} onChange={(eventTarget) => updateField("end", eventTarget.target.value)} />
+          <input
+            value={form.end}
+            onChange={(eventTarget) => updateField("end", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Локация">
-          <input value={form.location} onChange={(eventTarget) => updateField("location", eventTarget.target.value)} />
+          <input
+            value={form.location}
+            onChange={(eventTarget) => updateField("location", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Трек">
-          <input value={form.track} onChange={(eventTarget) => updateField("track", eventTarget.target.value)} />
+          <input
+            value={form.track}
+            onChange={(eventTarget) => updateField("track", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Параллель">
-          <input value={form.parallelGroup} onChange={(eventTarget) => updateField("parallelGroup", eventTarget.target.value)} />
+          <input
+            value={form.parallelGroup}
+            onChange={(eventTarget) => updateField("parallelGroup", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Теги" wide>
-          <input value={form.tags} onChange={(eventTarget) => updateField("tags", eventTarget.target.value)} />
+          <input
+            value={form.tags}
+            onChange={(eventTarget) => updateField("tags", eventTarget.target.value)}
+          />
         </Field>
         <Field label="Описание" wide>
-          <textarea rows={3} value={form.description} onChange={(eventTarget) => updateField("description", eventTarget.target.value)} />
+          <textarea
+            rows={3}
+            value={form.description}
+            onChange={(eventTarget) => updateField("description", eventTarget.target.value)}
+          />
         </Field>
       </div>
 
-      <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSubmit()}>
+      <button
+        type="button"
+        className="primary-button"
+        disabled={saving}
+        onClick={() => void handleSubmit()}
+      >
         Добавить мероприятие
       </button>
     </article>
@@ -2861,7 +3211,8 @@ const ORGANIZER_DATA_STATE_COPY = {
   },
   published_empty: {
     title: "В опубликованной программе пока нет событий",
-    description: "Сначала нужен календарь событий, потом аналитика сможет собрать рабочую картину по заезду.",
+    description:
+      "Сначала нужен календарь событий, потом аналитика сможет собрать рабочую картину по заезду.",
   },
   no_members: {
     title: "В заезде пока нет участников",
@@ -2869,7 +3220,8 @@ const ORGANIZER_DATA_STATE_COPY = {
   },
   no_responses: {
     title: "Ответов участников пока нет",
-    description: "Графики останутся честно пустыми, пока в дневниках и рефлексии не появятся первые записи.",
+    description:
+      "Графики останутся честно пустыми, пока в дневниках и рефлексии не появятся первые записи.",
   },
 };
 
@@ -2907,7 +3259,9 @@ function buildGroupTrendSeries(groupPulse = [], eventPulse = []) {
     data: safeEvents.map((event, eventIndex) => ({
       id: `${group.id}:${event.id}`,
       label: `${eventIndex + 1}`,
-      value: Number.isFinite(Number(group.trajectory?.[eventIndex])) ? Number(group.trajectory[eventIndex]) : 0,
+      value: Number.isFinite(Number(group.trajectory?.[eventIndex]))
+        ? Number(group.trajectory[eventIndex])
+        : 0,
       meta: {
         flag: Number.isFinite(Number(group.trajectory?.[eventIndex])) ? "" : "·",
       },
@@ -2935,12 +3289,7 @@ function buildGroupDistributionRows(groupPulse = []) {
       total,
       segments: ORGANIZER_STATE_SEGMENTS.map((segment) => ({
         ...segment,
-        value:
-          segment.id === "low"
-            ? low
-            : segment.id === "mid"
-              ? mid
-              : high,
+        value: segment.id === "low" ? low : segment.id === "mid" ? mid : high,
       })).filter((segment) => segment.value > 0),
     };
   });
@@ -2979,14 +3328,20 @@ function buildOrganizerScatterData(participantScatter = [], groups = []) {
 }
 
 function buildRoster(items = [], selectedGroupId = "all", query = "") {
-  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const normalizedQuery = String(query || "")
+    .trim()
+    .toLowerCase();
 
   return safeArray(items).filter((participant) => {
     const matchesGroup = selectedGroupId === "all" || participant.groupId === selectedGroupId;
     const matchesQuery =
       !normalizedQuery ||
-      String(participant.fullName || "").toLowerCase().includes(normalizedQuery) ||
-      String(participant.groupLabel || "").toLowerCase().includes(normalizedQuery);
+      String(participant.fullName || "")
+        .toLowerCase()
+        .includes(normalizedQuery) ||
+      String(participant.groupLabel || "")
+        .toLowerCase()
+        .includes(normalizedQuery);
 
     return matchesGroup && matchesQuery;
   });
@@ -3049,11 +3404,15 @@ export function GroupsSummary({
   const groupsWithProfiles = useMemo(
     () =>
       safeGroups.map((group) => {
-        const groupParticipants = safeAudiencePool.filter((participant) => participant.groupId === group.id);
+        const groupParticipants = safeAudiencePool.filter(
+          (participant) => participant.groupId === group.id,
+        );
         return {
           ...group,
           topProfiles: Array.from(
-            new Set(groupParticipants.map((participant) => participant.emotionalProfile).filter(Boolean)),
+            new Set(
+              groupParticipants.map((participant) => participant.emotionalProfile).filter(Boolean),
+            ),
           ).slice(0, 3),
           participantsList: groupParticipants.slice(0, 4),
         };
@@ -3138,7 +3497,9 @@ export function GroupsSummary({
   async function handleDelete(group) {
     const confirmed =
       typeof window === "undefined" ||
-      window.confirm(`Удалить группу "${group.name}"? Это действие доступно только для пустой группы без куратора.`);
+      window.confirm(
+        `Удалить группу "${group.name}"? Это действие доступно только для пустой группы без куратора.`,
+      );
     if (!confirmed) {
       return;
     }
@@ -3254,7 +3615,10 @@ export function GroupsSummary({
 
         <div className="field-grid">
           <Field label="Фильтр по текущей группе">
-            <select value={rosterGroupId} onChange={(eventTarget) => setRosterGroupId(eventTarget.target.value)}>
+            <select
+              value={rosterGroupId}
+              onChange={(eventTarget) => setRosterGroupId(eventTarget.target.value)}
+            >
               <option value="all">Все группы</option>
               {safeGroups.map((group) => (
                 <option key={group.id} value={group.id}>
@@ -3271,7 +3635,10 @@ export function GroupsSummary({
             />
           </Field>
           <Field label="Перенести в группу">
-            <select value={targetGroupId} onChange={(eventTarget) => setTargetGroupId(eventTarget.target.value)}>
+            <select
+              value={targetGroupId}
+              onChange={(eventTarget) => setTargetGroupId(eventTarget.target.value)}
+            >
               <option value="">Выберите группу</option>
               {safeGroups.map((group) => (
                 <option key={group.id} value={group.id}>
@@ -3283,19 +3650,28 @@ export function GroupsSummary({
         </div>
 
         <p className="subtle organizer-policy-note">
-          Перенос участника работает ретроактивно: историческая групповая аналитика пересчитывается по новой группе.
+          Перенос участника работает ретроактивно: историческая групповая аналитика пересчитывается
+          по новой группе.
         </p>
 
         <div className="organizer-roster-list">
           {roster.map((participant) => {
             const checked = selectedParticipantIds.includes(participant.id);
             return (
-              <label key={participant.id} className={checked ? "organizer-roster-row is-selected" : "organizer-roster-row"}>
-                <input type="checkbox" checked={checked} onChange={() => toggleParticipantSelection(participant.id)} />
+              <label
+                key={participant.id}
+                className={checked ? "organizer-roster-row is-selected" : "organizer-roster-row"}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleParticipantSelection(participant.id)}
+                />
                 <div>
                   <strong>{participant.fullName}</strong>
                   <span>
-                    {participant.groupLabel || "Без группы"} · {participant.progress?.completion ?? 0}% заполнения
+                    {participant.groupLabel || "Без группы"} ·{" "}
+                    {participant.progress?.completion ?? 0}% заполнения
                   </span>
                 </div>
               </label>
@@ -3328,7 +3704,9 @@ export function GroupsSummary({
             <input
               value={createDraft.name}
               placeholder="Например: Северный круг"
-              onChange={(eventTarget) => setCreateDraft((previous) => ({ ...previous, name: eventTarget.target.value }))}
+              onChange={(eventTarget) =>
+                setCreateDraft((previous) => ({ ...previous, name: eventTarget.target.value }))
+              }
             />
           </Field>
           <Field label="Фокус группы" wide>
@@ -3336,7 +3714,12 @@ export function GroupsSummary({
               rows={3}
               value={createDraft.description}
               placeholder="Коротко: чем отличается группа и на что смотреть в динамике."
-              onChange={(eventTarget) => setCreateDraft((previous) => ({ ...previous, description: eventTarget.target.value }))}
+              onChange={(eventTarget) =>
+                setCreateDraft((previous) => ({
+                  ...previous,
+                  description: eventTarget.target.value,
+                }))
+              }
             />
           </Field>
         </div>
@@ -3391,13 +3774,17 @@ export function GroupsSummary({
                 <Field label="Название группы">
                   <input
                     value={groupDrafts[group.id]?.name || group.name || ""}
-                    onChange={(eventTarget) => updateGroupDraft(group.id, { name: eventTarget.target.value })}
+                    onChange={(eventTarget) =>
+                      updateGroupDraft(group.id, { name: eventTarget.target.value })
+                    }
                   />
                 </Field>
                 <Field label="Куратор">
                   <select
                     value={groupDrafts[group.id]?.curatorId || ""}
-                    onChange={(eventTarget) => updateGroupDraft(group.id, { curatorId: eventTarget.target.value })}
+                    onChange={(eventTarget) =>
+                      updateGroupDraft(group.id, { curatorId: eventTarget.target.value })
+                    }
                   >
                     <option value="">Не назначен</option>
                     {safeCuratorCandidates.map((candidate) => (
@@ -3414,7 +3801,9 @@ export function GroupsSummary({
                   <textarea
                     rows={3}
                     value={groupDrafts[group.id]?.description || group.description || ""}
-                    onChange={(eventTarget) => updateGroupDraft(group.id, { description: eventTarget.target.value })}
+                    onChange={(eventTarget) =>
+                      updateGroupDraft(group.id, { description: eventTarget.target.value })
+                    }
                   />
                 </Field>
               </div>
@@ -3470,7 +3859,12 @@ export function GroupsSummary({
 
         <div className="alert-list">
           {safeAlerts.map((alert) => (
-            <AlertCard key={alert.id} title={alert.title} detail={alert.detail} tone={getSeverityTone(alert.severity)} />
+            <AlertCard
+              key={alert.id}
+              title={alert.title}
+              detail={alert.detail}
+              tone={getSeverityTone(alert.severity)}
+            />
           ))}
         </div>
       </article>
@@ -3502,7 +3896,10 @@ export function ParticipantSearchPanel({
 
       <div className="field-grid">
         <Field label="Группа">
-          <select value={selectedGroupId} onChange={(eventTarget) => onGroupChange?.(eventTarget.target.value)}>
+          <select
+            value={selectedGroupId}
+            onChange={(eventTarget) => onGroupChange?.(eventTarget.target.value)}
+          >
             <option value="all">Все группы</option>
             {safeGroups.map((group) => (
               <option key={group.id} value={group.id}>
@@ -3525,7 +3922,11 @@ export function ParticipantSearchPanel({
           <button
             key={participant.id}
             type="button"
-            className={selectedParticipantId === participant.id ? "participant-row is-active" : "participant-row"}
+            className={
+              selectedParticipantId === participant.id
+                ? "participant-row is-active"
+                : "participant-row"
+            }
             onClick={() => onSelectParticipant?.(participant.id)}
           >
             <strong>{participant.fullName}</strong>
@@ -3586,8 +3987,14 @@ export function ParticipantDetailsCard({
           </div>
 
           <div className="hero-stats">
-            <MetricBadge label="Эмоциональный профиль" value={participant.emotionalProfile || "Не рассчитан"} />
-            <MetricBadge label="Статус идентичности" value={participant.identityStatus || "Не пройден"} />
+            <MetricBadge
+              label="Эмоциональный профиль"
+              value={participant.emotionalProfile || "Не рассчитан"}
+            />
+            <MetricBadge
+              label="Статус идентичности"
+              value={participant.identityStatus || "Не пройден"}
+            />
             <MetricBadge label="Заполнено" value={`${participant.progress?.completion ?? 0}%`} />
             <MetricBadge label="Средняя активация" value={participant.avgActivation || "0.0"} />
           </div>
@@ -3595,11 +4002,16 @@ export function ParticipantDetailsCard({
           <div className="participant-detail-grid">
             <div className="theme-chip-card">
               <strong>Контекст участия</strong>
-              <p>Участник относится к конкретной группе и связан с мероприятиями выбранной программы.</p>
+              <p>
+                Участник относится к конкретной группе и связан с мероприятиями выбранной программы.
+              </p>
             </div>
             <div className="theme-chip-card">
               <strong>Что смотреть дальше</strong>
-              <p>Следующий шаг — связать карточку с реальными дневниковыми записями и посещёнными мероприятиями.</p>
+              <p>
+                Следующий шаг — связать карточку с реальными дневниковыми записями и посещёнными
+                мероприятиями.
+              </p>
             </div>
           </div>
         </>
