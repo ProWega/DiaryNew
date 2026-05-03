@@ -19,9 +19,20 @@ const ENV_METADATA = {
     "Whitelist origin'ов для CORS. Через запятую. Пусто в prod = все cross-origin запросы режутся.",
   AUTH_RATE_LIMIT_WINDOW_MIN: "Окно rate-limit на /api/auth/* в минутах.",
   AUTH_RATE_LIMIT_MAX: "Лимит запросов на /api/auth/* в окне.",
+  LOG_LEVEL:
+    "Уровень pino логов: trace | debug | info | warn | error | fatal | silent. Default: debug в dev, info в prod, silent в test.",
   SETUP_TOKEN: "Токен для первого администратора на /setup/admin.",
   MAGIC_LINK_TTL_MINUTES: "Срок жизни magic link в минутах.",
   ALLOW_DEMO_SEED: "Разрешение на seed демо-данных. В production должен оставаться false.",
+  OTEL_EXPORTER_OTLP_ENDPOINT:
+    "OTLP-endpoint для OpenTelemetry traces (например http://localhost:4318). Без значения OTel выключен.",
+  OTEL_SERVICE_NAME: "Имя сервиса в OTel-traces. Default: newdiary-api.",
+  VITE_USE_MOCK:
+    "Frontend: при true стартует MSW service worker и режет все /api/* запросы. Используется для dev/E2E.",
+  VITE_SENTRY_DSN:
+    "Frontend: DSN Sentry-проекта. Без значения Sentry-инициализация пропускается, captureException no-op.",
+  VITE_SENTRY_ENVIRONMENT:
+    "Frontend: имя окружения для Sentry-events (production / staging / preview). Default — import.meta.env.MODE.",
   DATABASE_URL: "Полная строка подключения к PostgreSQL. Альтернатива набору PG* переменных.",
   PGHOST: "Хост PostgreSQL.",
   PGPORT: "Порт PostgreSQL.",
@@ -52,6 +63,15 @@ const SCRIPT_METADATA = {
   "db:check": "Проверяет состояние таблиц и подключения.",
   "prod:init": "Production init перед стартом контейнера: запускает миграции (db:migrate).",
   typecheck: "Проверка TypeScript --noEmit. Запускается в pre-commit и CI.",
+  test: "Vitest run: unit-тесты фронта + supertest-интеграция бэка. NODE_ENV=test глушит pino и OTel.",
+  "test:watch": "Vitest в режиме watch — на время локальной разработки.",
+  "test:ui": "Vitest UI — браузерный runner с deep inspection падений.",
+  "test:storybook": "Storybook play-тесты против запущенного Storybook (по умолчанию :6006).",
+  "test:storybook:ci":
+    "Сборка статического Storybook + http-server + test-storybook. Используется в CI.",
+  "test:e2e": "Playwright E2E против MSW мок-режима, Vite авто-стартует на :5173.",
+  "test:e2e:ui": "Playwright в interactive UI mode для отладки сценариев.",
+  "test:e2e:debug": "Playwright в step-through дебаге (открывает inspector).",
   lint: "ESLint по всему проекту. Включает react-hooks и jsx-a11y правила.",
   "lint:fix": "ESLint с авто-фиксом исправимых правил.",
   format: "Prettier --write по всему проекту.",

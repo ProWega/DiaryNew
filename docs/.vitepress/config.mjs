@@ -6,6 +6,9 @@ export default defineConfig({
   description: "Продуктовая, эксплуатационная и QA-документация проекта NewDiary.",
   lastUpdated: true,
   cleanUrls: true,
+  // Architecture docs link to source files (../../src/..., ../../server/...).
+  // These are valid filesystem paths but VitePress can't render them as pages.
+  ignoreDeadLinks: [/(^|\/)\.\.\/\.\.\//, /\.(jsx?|tsx?|cjs|mjs)$/],
   themeConfig: {
     nav: [
       { text: "Обзор", link: "/" },
@@ -65,6 +68,7 @@ export default defineConfig({
           { text: "Frontend stack", link: "/architecture/frontend-stack" },
           { text: "Миграции БД", link: "/architecture/migrations" },
           { text: "Безопасность", link: "/architecture/security" },
+          { text: "Тестирование", link: "/architecture/testing" },
           { text: "Контур документации", link: "/architecture/documentation-workflow" },
         ],
       },

@@ -119,3 +119,45 @@ req.log.info({ userId }, "magic link issued");
 req.log.warn({ origin }, "CORS request rejected");
 req.log.error({ err }, "Unhandled error");
 ```
+
+## 9. Observability (opt-in)
+
+Без значений в env — оба слоя no-op'ятся, dev/test/CI не зависят от внешних сервисов.
+
+### Backend: OpenTelemetry
+
+[server/lib/telemetry.cjs](../../server/lib/telemetry.cjs) подключается **первой строкой** в [server/index.cjs](../../server/index.cjs) — auto-instrumentation должна успеть пропатчить express/pg до их загрузки.
+
+Активация:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+OTEL_SERVICE_NAME=newdiary-api
+```
+
+При наличии endpoint поднимается `NodeSDK` с `getNodeAutoInstrumentations` (Express, HTTP, pg). FS-инструментация выключена — слишком шумная.
+
+`NODE_ENV=test` пропускает инициализацию полностью — vitest и supertest не зависят от коллектора.
+
+Локальный сетап для отладки: поднимаем Jaeger / Tempo / OTel collector на :4318, в .env ставим endpoint, traces появляются автоматически.
+
+### Frontend: Sentry
+
+[src/lib/sentry.ts](../../src/lib/sentry.ts) экспортирует `initSentry()` — вызывается первой строкой в [src/main.jsx](../../src/main.jsx) до рендера.
+
+Активация:
+
+```bash
+VITE_SENTRY_DSN=https://...@sentry.io/...
+VITE_SENTRY_ENVIRONMENT=production
+```
+
+`tracesSampleRate: 0.1` — 10% запросов идут в trace. `browserTracingIntegration` собирает route-changes и navigation timings.
+
+[src/components/ErrorBoundary.jsx](../../src/components/ErrorBoundary.jsx) форвардит пойманные ошибки через `captureException` — без DSN это no-op.
+
+### Что НЕ включено
+
+- Метрики (только traces) — `MetricsExporter` подключается отдельно.
+- Sentry Replay — +~50KB bundle, прототипу не нужно.
+- Pino → Loki/Sentry — пока stdout JSON, агрегатор должен читать.
