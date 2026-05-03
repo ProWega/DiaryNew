@@ -1,11 +1,10 @@
 import { stateScale } from "../data/mockData";
+import { formatNumber } from "./format";
 
-export const stateById = Object.fromEntries(
-  stateScale.map((item) => [item.id, item]),
-);
+export const stateById = Object.fromEntries(stateScale.map((item) => [item.id, item]));
 
 export function formatAverage(value) {
-  return value.toFixed(1).replace(".", ",");
+  return formatNumber(value);
 }
 
 export function getStateInfo(stateId, fallbackId = "balance") {
@@ -26,7 +25,11 @@ function getAnsweredStateEvents(events = []) {
 }
 
 function getStateByLevel(level) {
-  return stateScale.find((state) => Number(state.level) === Number(level)) || stateById.balance || stateScale[0];
+  return (
+    stateScale.find((state) => Number(state.level) === Number(level)) ||
+    stateById.balance ||
+    stateScale[0]
+  );
 }
 
 function getStateLabelByLevel(level) {
@@ -116,7 +119,8 @@ export function calculateMetrics(events = [], progress) {
     peaks,
     drops,
     sharpTransitions,
-    completion: progress?.completion ?? Math.round((marked.length / Math.max(events.length, 1)) * 100),
+    completion:
+      progress?.completion ?? Math.round((marked.length / Math.max(events.length, 1)) * 100),
     distribution,
   };
 }
@@ -140,16 +144,14 @@ export function buildPortrait(events, metrics) {
     ];
   }
 
-  const highestEvent = marked.reduce((best, event) =>
-    getStateLevel(event.stateId) > getStateLevel(best.stateId)
-      ? event
-      : best,
-  marked[0]);
-  const lowestEvent = marked.reduce((worst, event) =>
-    getStateLevel(event.stateId) < getStateLevel(worst.stateId)
-      ? event
-      : worst,
-  marked[0]);
+  const highestEvent = marked.reduce(
+    (best, event) => (getStateLevel(event.stateId) > getStateLevel(best.stateId) ? event : best),
+    marked[0],
+  );
+  const lowestEvent = marked.reduce(
+    (worst, event) => (getStateLevel(event.stateId) < getStateLevel(worst.stateId) ? event : worst),
+    marked[0],
+  );
   const highestLevel = getStateLevel(highestEvent.stateId);
   const lowestLevel = getStateLevel(lowestEvent.stateId);
   const allStable = marked.every((event) => {
@@ -157,33 +159,45 @@ export function buildPortrait(events, metrics) {
     return level >= 2 && level <= 4;
   });
 
-  const bullets = [
-    `Средний ритм дня: ${formatAverageRhythm(metrics.average)}.`,
-  ];
+  const bullets = [`Средний ритм дня: ${formatAverageRhythm(metrics.average)}.`];
 
   if (highestLevel >= 5) {
-    bullets.push(`Точка перенапряжения: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`);
+    bullets.push(
+      `Точка перенапряжения: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`,
+    );
   } else if (highestLevel >= 4) {
-    bullets.push(`Самая включенная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`);
+    bullets.push(
+      `Самая включенная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`,
+    );
   } else if (highestLevel >= 2) {
-    bullets.push(`Самая ресурсная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`);
+    bullets.push(
+      `Самая ресурсная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`,
+    );
   } else {
-    bullets.push("По отметкам день скорее прошёл в зоне низкого ресурса, без выраженной ресурсной точки.");
+    bullets.push(
+      "По отметкам день скорее прошёл в зоне низкого ресурса, без выраженной ресурсной точки.",
+    );
   }
 
   if (allStable) {
     bullets.push("Критичных просадок или перенапряжения по отметкам не видно.");
   } else if (lowestLevel <= 1) {
-    bullets.push(`Точка низкого ресурса: «${lowestEvent.title}» (${getStateInfo(lowestEvent.stateId).label}).`);
+    bullets.push(
+      `Точка низкого ресурса: «${lowestEvent.title}» (${getStateInfo(lowestEvent.stateId).label}).`,
+    );
   } else if (highestLevel >= 5) {
-    bullets.push(`Самая напряженная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`);
+    bullets.push(
+      `Самая напряженная точка: «${highestEvent.title}» (${getStateInfo(highestEvent.stateId).label}).`,
+    );
   } else {
     bullets.push("Крайних зон по отметкам почти не видно, но ритм дня мог ощущаться неровным.");
   }
 
   if (metrics.sharpTransitions > 0) {
     const transitionWord = getTransitionWord(metrics.sharpTransitions);
-    bullets.push(`Есть ${metrics.sharpTransitions} заметных ${transitionWord}: возможно, день ощущался неровным.`);
+    bullets.push(
+      `Есть ${metrics.sharpTransitions} заметных ${transitionWord}: возможно, день ощущался неровным.`,
+    );
   } else {
     bullets.push("Траектория ровная: заметных скачков по дню почти нет.");
   }

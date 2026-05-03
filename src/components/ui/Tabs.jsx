@@ -1,3 +1,5 @@
+import clsx from "clsx";
+
 function Tabs({ items, activeId, onChange, disabled = false, ariaLabel = "Вкладки" }) {
   return (
     <div className="tab-row" role="tablist" aria-label={ariaLabel}>
@@ -7,7 +9,7 @@ function Tabs({ items, activeId, onChange, disabled = false, ariaLabel = "Вкл
           type="button"
           role="tab"
           aria-selected={activeId === item.id}
-          className={activeId === item.id ? "mini-tab is-active" : "mini-tab"}
+          className={clsx("mini-tab", activeId === item.id && "is-active")}
           disabled={disabled || item.disabled}
           onClick={() => onChange(item.id)}
         >

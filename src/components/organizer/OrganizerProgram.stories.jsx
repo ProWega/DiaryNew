@@ -5,7 +5,7 @@ import {
   ProgramDayComposer,
   ProgramScheduleTable,
   ProgramMetaEditor,
-} from "./OrganizerComponents";
+} from "./index";
 import { organizerWorkspaceFixture } from "../../stories/fixtures/organizerWorkspace";
 
 export default {
@@ -23,7 +23,15 @@ export function ProgramMeta() {
 }
 
 export function DayComposer() {
-  return <ProgramDayComposer program={program} currentDay={day} onCreate={noop} onUpdate={noop} onDelete={noop} />;
+  return (
+    <ProgramDayComposer
+      program={program}
+      currentDay={day}
+      onCreate={noop}
+      onUpdate={noop}
+      onDelete={noop}
+    />
+  );
 }
 
 export function EventEditor() {
@@ -40,7 +48,14 @@ export function EventEditor() {
 }
 
 export function ParallelComposer() {
-  return <ParallelEventComposer day={day} eventTypes={workspace.programWorkspace.reference.eventTypes} speakersCatalog={workspace.programWorkspace.speakersCatalog} onSubmit={noop} />;
+  return (
+    <ParallelEventComposer
+      day={day}
+      eventTypes={workspace.programWorkspace.reference.eventTypes}
+      speakersCatalog={workspace.programWorkspace.speakersCatalog}
+      onSubmit={noop}
+    />
+  );
 }
 
 export function TimelineEmpty() {

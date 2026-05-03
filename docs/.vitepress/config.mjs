@@ -61,6 +61,10 @@ export default defineConfig({
         text: "Архитектура",
         items: [
           { text: "Обзор архитектуры", link: "/architecture/overview" },
+          { text: "Backend и сервисы", link: "/architecture/backend-services" },
+          { text: "Frontend stack", link: "/architecture/frontend-stack" },
+          { text: "Миграции БД", link: "/architecture/migrations" },
+          { text: "Безопасность", link: "/architecture/security" },
           { text: "Контур документации", link: "/architecture/documentation-workflow" },
         ],
       },

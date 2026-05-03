@@ -14,6 +14,11 @@ const ENV_METADATA = {
   AUTH_COOKIE_NAME: "Имя auth-cookie.",
   AUTH_COOKIE_SECURE: "Флаг secure-cookie. Для production должен быть true под HTTPS.",
   AUTH_COOKIE_SAMESITE: "Политика SameSite для auth-cookie.",
+  AUTH_CSRF_COOKIE_NAME: "Имя CSRF cookie (Double Submit). По умолчанию newdiary_csrf.",
+  CORS_ALLOWED_ORIGINS:
+    "Whitelist origin'ов для CORS. Через запятую. Пусто в prod = все cross-origin запросы режутся.",
+  AUTH_RATE_LIMIT_WINDOW_MIN: "Окно rate-limit на /api/auth/* в минутах.",
+  AUTH_RATE_LIMIT_MAX: "Лимит запросов на /api/auth/* в окне.",
   SETUP_TOKEN: "Токен для первого администратора на /setup/admin.",
   MAGIC_LINK_TTL_MINUTES: "Срок жизни magic link в минутах.",
   ALLOW_DEMO_SEED: "Разрешение на seed демо-данных. В production должен оставаться false.",
@@ -24,7 +29,8 @@ const ENV_METADATA = {
   PGUSER: "Пользователь PostgreSQL.",
   PGPASSWORD: "Пароль пользователя PostgreSQL.",
   PGSSL: "Использовать ли SSL при подключении к PostgreSQL.",
-  APP_IMAGE: "Docker image, который будет pulled на сервере. Для релизов рекомендуем pin на точный tag.",
+  APP_IMAGE:
+    "Docker image, который будет pulled на сервере. Для релизов рекомендуем pin на точный tag.",
   APP_PORT: "Внешний порт сервиса app на сервере.",
   POSTGRES_DB: "Имя production-базы внутри docker compose.",
   POSTGRES_USER: "Пользователь production-базы внутри docker compose.",
@@ -36,11 +42,20 @@ const SCRIPT_METADATA = {
   "dev:client": "Стартует Vite dev server.",
   "dev:server": "Стартует Express через nodemon.",
   "start:server": "Запускает Express без nodemon.",
-  "db:schema": "Применяет server/sql/schema.sql к текущей PostgreSQL.",
+  "db:schema":
+    "Legacy: применяет server/sql/schema.sql напрямую. Используй db:migrate для новых установок.",
+  "db:migrate": "Применяет миграции (node-pg-migrate up). Основной путь обновления схемы.",
+  "db:migrate:down": "Откатывает последнюю миграцию (node-pg-migrate down).",
+  "db:migrate:create": "Создаёт новую пустую миграцию в server/migrations.",
   "db:seed": "Заполняет базу демо-данными.",
   "db:reset": "Сбрасывает схему базы и создаёт её заново.",
   "db:check": "Проверяет состояние таблиц и подключения.",
-  "prod:init": "Production init перед стартом контейнера: сейчас это применение схемы.",
+  "prod:init": "Production init перед стартом контейнера: запускает миграции (db:migrate).",
+  typecheck: "Проверка TypeScript --noEmit. Запускается в pre-commit и CI.",
+  lint: "ESLint по всему проекту. Включает react-hooks и jsx-a11y правила.",
+  "lint:fix": "ESLint с авто-фиксом исправимых правил.",
+  format: "Prettier --write по всему проекту.",
+  "format:check": "Prettier --check без правок (CI guard).",
   build: "Собирает production frontend через Vite.",
   storybook: "Запускает Storybook в dev-режиме.",
   "build-storybook": "Собирает статический Storybook.",
@@ -61,7 +76,9 @@ function normalizeText(value) {
 }
 
 function escapeCell(value) {
-  return String(value || "").replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+  return String(value || "")
+    .replace(/\|/g, "\\|")
+    .replace(/\n/g, "<br>");
 }
 
 function formatCode(value) {
@@ -200,7 +217,9 @@ function checkFiles(files) {
   for (const file of files) {
     const targetPath = path.join(rootDir, file.relativePath);
     const expected = `${normalizeText(file.content).trim()}\n`;
-    const actual = fs.existsSync(targetPath) ? normalizeText(fs.readFileSync(targetPath, "utf8")) : "";
+    const actual = fs.existsSync(targetPath)
+      ? normalizeText(fs.readFileSync(targetPath, "utf8"))
+      : "";
     if (actual !== expected) {
       staleFiles.push(file.relativePath);
     }

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { expect, userEvent, within } from "storybook/test";
 import FeedbackState from "../FeedbackState";
 import MetricBadge from "../MetricBadge";
 import Field from "./Field";
@@ -50,6 +52,45 @@ export function TabsStates() {
   );
 }
 
+function TabsInteractive() {
+  const [activeId, setActiveId] = useState("program");
+  return (
+    <div style={{ padding: 24 }}>
+      <Tabs
+        items={[
+          { id: "program", label: "Программа" },
+          { id: "groups", label: "Группы" },
+          { id: "participants", label: "Участники" },
+          { id: "disabled", label: "Недоступно", disabled: true },
+        ]}
+        activeId={activeId}
+        onChange={setActiveId}
+      />
+    </div>
+  );
+}
+
+export const TabsClickInteraction = {
+  render: () => <TabsInteractive />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Initial: "Программа" is selected
+    const programTab = canvas.getByRole("tab", { name: "Программа" });
+    await expect(programTab).toHaveAttribute("aria-selected", "true");
+
+    // Click "Участники" — selection moves
+    const participantsTab = canvas.getByRole("tab", { name: "Участники" });
+    await userEvent.click(participantsTab);
+    await expect(participantsTab).toHaveAttribute("aria-selected", "true");
+    await expect(programTab).toHaveAttribute("aria-selected", "false");
+
+    // Disabled tab cannot be clicked into
+    const disabledTab = canvas.getByRole("tab", { name: "Недоступно" });
+    await expect(disabledTab).toBeDisabled();
+  },
+};
+
 export function FieldsAndPills() {
   return (
     <div className="panel-card" style={{ margin: 24 }}>
@@ -74,8 +115,16 @@ export function FieldsAndPills() {
         <StatusPill tone="tone-watch">Завершено</StatusPill>
       </div>
       <div className="alert-list" style={{ marginTop: 16 }}>
-        <AlertCard title="Высокий риск" detail="Группа показывает два резких скачка." tone="severity-high" />
-        <AlertCard title="Средний риск" detail="Нужна пауза после практикума." tone="severity-medium" />
+        <AlertCard
+          title="Высокий риск"
+          detail="Группа показывает два резких скачка."
+          tone="severity-high"
+        />
+        <AlertCard
+          title="Средний риск"
+          detail="Нужна пауза после практикума."
+          tone="severity-medium"
+        />
       </div>
     </div>
   );
@@ -86,7 +135,9 @@ export function BrandSystemReview() {
     <div className="app-shell" style={{ minHeight: "auto" }}>
       <header className="topbar">
         <div className="brand-block">
-          <div className="brand-mark" aria-label="Истоки">И</div>
+          <div className="brand-mark" aria-label="Истоки">
+            И
+          </div>
           <div>
             <p className="eyebrow">Истоки · UI review</p>
             <h1>Система интерфейса</h1>
@@ -122,9 +173,15 @@ export function BrandSystemReview() {
             <span className="confidence-tag">review</span>
           </div>
           <div className="pill-grid" style={{ marginTop: 16 }}>
-            <button type="button" className="primary-button">Основное действие</button>
-            <button type="button" className="ghost-button">Вторичное</button>
-            <button type="button" className="primary-button" disabled>Недоступно</button>
+            <button type="button" className="primary-button">
+              Основное действие
+            </button>
+            <button type="button" className="ghost-button">
+              Вторичное
+            </button>
+            <button type="button" className="primary-button" disabled>
+              Недоступно
+            </button>
             <StatusPill tone="tone-ok">Стабильно</StatusPill>
             <StatusPill tone="tone-watch">Наблюдать</StatusPill>
             <StatusPill tone="tone-risk">Риск</StatusPill>

@@ -1,69 +1,58 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jsonApi } from "./jsonApi";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../components/ui/Toast";
 
-function useAsyncResource(loader, enabled = true) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(Boolean(enabled));
-  const [error, setError] = useState(null);
+// Query key factory — stable arrays used for caching and invalidation
+const qk = {
+  participantDiary: (userId, sessionId) => ["participant", "diary", userId, sessionId],
+  curatorDashboard: (userId, sessionId, groupId) => [
+    "curator",
+    "dashboard",
+    userId,
+    sessionId,
+    groupId,
+  ],
+  organizerWorkspace: (userId, sessionId) => ["organizer", "workspace", userId, sessionId],
+  adminDashboard: (userId) => ["admin", "dashboard", userId],
+  adminWorkspace: (userId) => ["admin", "workspace", userId],
+};
 
-  const refresh = useCallback(async () => {
-    if (!enabled) {
-      setLoading(false);
-      return null;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const nextData = await loader();
-      setData(nextData);
-      return nextData;
-    } catch (nextError) {
-      setError(nextError);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled, loader]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { data, loading, error, setData, setError, refresh };
-}
-
-function useMutation(setData) {
-  const [saving, setSaving] = useState(false);
-  const [mutationError, setMutationError] = useState(null);
+// Generic mutation helper: runs any async executor, shows toast, exposes saving/error state.
+// Callers do: mutation.runMutation(() => someApi.call(...))
+function useCommandMutation(messages = {}) {
+  const addToast = useToast();
+  const { mutateAsync, isPending, error } = useMutation({
+    mutationFn: (executor) => executor(),
+  });
 
   const runMutation = useCallback(
     async (executor) => {
-      setSaving(true);
-      setMutationError(null);
-
       try {
-        const nextData = await executor();
-        if (nextData) {
-          setData(nextData);
-        }
-        return nextData;
-      } catch (error) {
-        setMutationError(error);
+        const result = await mutateAsync(executor);
+        if (messages.success) addToast(messages.success, "success");
+        return result;
+      } catch {
+        if (messages.error) addToast(messages.error, "error");
         return null;
-      } finally {
-        setSaving(false);
       }
     },
-    [setData],
+    [mutateAsync, messages.success, messages.error, addToast],
   );
 
+  return { saving: isPending, mutationError: error, runMutation };
+}
+
+// Normalises a react-query result to the shape the views expect.
+function queryShape(query, queryKey, queryClient) {
   return {
-    saving,
-    mutationError,
-    runMutation,
+    data: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error,
+    refresh: query.refetch,
+    setData: (updater) => queryClient.setQueryData(queryKey, updater),
+    setError: () => {},
   };
 }
 
@@ -74,10 +63,7 @@ function mergeOrganizerAnalyticsSnapshot(previous, analytics) {
 
   return {
     ...previous,
-    meta: {
-      ...(previous.meta || {}),
-      ...(analytics.meta || {}),
-    },
+    meta: { ...(previous.meta || {}), ...(analytics.meta || {}) },
     summary: analytics.summary || previous.summary,
     groupsSummary: analytics.groupsSummary || previous.groupsSummary,
     sessionSummary: analytics.sessionSummary || previous.sessionSummary,
@@ -93,135 +79,118 @@ function mergeOrganizerAnalyticsSnapshot(previous, analytics) {
 
 export function useParticipantDiary(sessionId) {
   const { currentUser } = useAuth();
-  const enabled = Boolean(currentUser?.id && sessionId);
-  const resource = useAsyncResource(
-    useCallback(() => jsonApi.getParticipantDiary(currentUser.id, sessionId), [
-      currentUser?.id,
-      sessionId,
-    ]),
-    enabled,
-  );
+  const queryClient = useQueryClient();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+
+  const query = useQuery({
+    queryKey: qk.participantDiary(userId, sessionId),
+    queryFn: () => jsonApi.getParticipantDiary(userId, sessionId),
+    enabled: Boolean(userId && sessionId),
+  });
 
   const updateEntry = useCallback(
     async (dayId, entryId, patch) => {
-      if (!currentUser?.id) {
-        return null;
-      }
+      if (!userId) return null;
 
-      let rollbackData = null;
-      resource.setData((previous) =>
-        {
-          rollbackData = previous;
-          return previous
-            ? {
-                ...previous,
-                history: previous.history.map((day) =>
-                  day.id === dayId
-                    ? {
-                        ...day,
-                        events: day.events.map((entry) =>
-                          entry.id === entryId
-                            ? {
-                                ...entry,
-                                ...patch,
-                                reflectionAnswers: patch.reflectionAnswers || entry.reflectionAnswers,
-                                answered: true,
-                                respondedAt: new Date().toISOString(),
-                              }
-                            : entry,
-                        ),
-                      }
-                    : day,
-                ),
-              }
-            : previous;
-        },
-      );
+      const key = qk.participantDiary(userId, sessionId);
+      const previousData = queryClient.getQueryData(key);
+
+      queryClient.setQueryData(key, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          history: prev.history.map((day) =>
+            day.id === dayId
+              ? {
+                  ...day,
+                  events: day.events.map((entry) =>
+                    entry.id === entryId
+                      ? {
+                          ...entry,
+                          ...patch,
+                          reflectionAnswers: patch.reflectionAnswers || entry.reflectionAnswers,
+                          answered: true,
+                          respondedAt: new Date().toISOString(),
+                        }
+                      : entry,
+                  ),
+                }
+              : day,
+          ),
+        };
+      });
 
       try {
         const nextData = await jsonApi.updateParticipantEntry(
-          currentUser.id,
+          userId,
           sessionId,
           dayId,
           entryId,
           patch,
         );
-        resource.setData(nextData);
+        queryClient.setQueryData(key, nextData);
+        addToast("Сохранено", "success");
         return nextData;
       } catch (error) {
-        resource.setData(rollbackData);
+        queryClient.setQueryData(key, previousData);
+        addToast("Ошибка сохранения", "error");
         throw error;
       }
     },
-    [currentUser?.id, resource, sessionId],
+    [userId, sessionId, queryClient, addToast],
   );
 
   const updateReflection = useCallback(
     async (dayId, patch) => {
-      if (!currentUser?.id) {
-        return null;
-      }
+      if (!userId) return null;
 
-      let rollbackData = null;
-      resource.setData((previous) =>
-        {
-          rollbackData = previous;
-          return previous
-            ? {
-                ...previous,
-                history: previous.history.map((day) =>
-                  day.id === dayId
-                    ? (() => {
-                        const reflection = {
-                          ...day.reflection,
-                          ...patch,
-                          answers: {
-                            ...(day.reflection?.answers || {}),
-                            ...(patch.answers || {}),
-                          },
-                        };
-                        const answered =
-                          ["q1", "q2", "q3", "freeText"].some((field) =>
-                            String(reflection[field] || "").trim(),
-                          ) ||
-                          Object.values(reflection.answers || {}).some((value) =>
-                            String(value || "").trim(),
-                          );
-                        return {
-                          ...day,
-                          reflection: {
-                            ...reflection,
-                            answered,
-                            respondedAt: answered ? new Date().toISOString() : null,
-                          },
-                        };
-                      })()
-                    : day,
-                ),
-              }
-            : previous;
-        },
-      );
+      const key = qk.participantDiary(userId, sessionId);
+      const previousData = queryClient.getQueryData(key);
+
+      queryClient.setQueryData(key, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          history: prev.history.map((day) => {
+            if (day.id !== dayId) return day;
+            const reflection = {
+              ...day.reflection,
+              ...patch,
+              answers: { ...(day.reflection?.answers || {}), ...(patch.answers || {}) },
+            };
+            const answered =
+              ["q1", "q2", "q3", "freeText"].some((field) =>
+                String(reflection[field] || "").trim(),
+              ) || Object.values(reflection.answers || {}).some((v) => String(v || "").trim());
+            return {
+              ...day,
+              reflection: {
+                ...reflection,
+                answered,
+                respondedAt: answered ? new Date().toISOString() : null,
+              },
+            };
+          }),
+        };
+      });
 
       try {
-        const nextData = await jsonApi.updateParticipantReflection(
-          currentUser.id,
-          sessionId,
-          dayId,
-          patch,
-        );
-        resource.setData(nextData);
+        const nextData = await jsonApi.updateParticipantReflection(userId, sessionId, dayId, patch);
+        queryClient.setQueryData(key, nextData);
+        addToast("Сохранено", "success");
         return nextData;
       } catch (error) {
-        resource.setData(rollbackData);
+        queryClient.setQueryData(key, previousData);
+        addToast("Ошибка сохранения", "error");
         throw error;
       }
     },
-    [currentUser?.id, resource, sessionId],
+    [userId, sessionId, queryClient, addToast],
   );
 
   return {
-    ...resource,
+    ...queryShape(query, qk.participantDiary(userId, sessionId), queryClient),
     updateEntry,
     updateReflection,
   };
@@ -229,330 +198,125 @@ export function useParticipantDiary(sessionId) {
 
 export function useCuratorDashboard(sessionId, groupId) {
   const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.curatorDashboard(userId, sessionId, groupId);
 
-  return useAsyncResource(
-    useCallback(
-      () => jsonApi.getCuratorDashboard(currentUser.id, sessionId, groupId),
-      [currentUser?.id, groupId, sessionId],
-    ),
-    Boolean(currentUser?.id && sessionId && groupId),
-  );
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorDashboard(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
 }
 
 export function useOrganizerWorkspace(sessionId) {
   const { currentUser, refreshBootstrap, refreshUsers } = useAuth();
-  const resource = useAsyncResource(
-    useCallback(async () => {
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.organizerWorkspace(userId, sessionId);
+
+  const mutation = useCommandMutation({ success: "Сохранено", error: "Ошибка сохранения" });
+
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => {
       const [workspace, overview, analytics] = await Promise.all([
-        jsonApi.getOrganizerWorkspace(currentUser.id, sessionId),
-        jsonApi.getOrganizerSessionOverview(currentUser.id),
-        jsonApi.getOrganizerAnalytics(currentUser.id, sessionId),
+        jsonApi.getOrganizerWorkspace(userId, sessionId),
+        jsonApi.getOrganizerSessionOverview(userId),
+        jsonApi.getOrganizerAnalytics(userId, sessionId),
       ]);
-      return mergeOrganizerAnalyticsSnapshot({
-        ...workspace,
-        sessionCatalog: overview.sessions || [],
-      }, analytics);
-    }, [currentUser?.id, sessionId]),
-    Boolean(currentUser?.id && sessionId),
-  );
-  const mutation = useMutation(resource.setData);
-
-  const refreshAnalytics = useCallback(async () => {
-    if (!currentUser?.id || !sessionId) {
-      return null;
-    }
-
-    const analytics = await jsonApi.getOrganizerAnalytics(currentUser.id, sessionId);
-    resource.setData((previous) => mergeOrganizerAnalyticsSnapshot(previous, analytics));
-    return analytics;
-  }, [currentUser?.id, resource.setData, sessionId]);
-
-  useEffect(() => {
-    if (!currentUser?.id || !sessionId || mutation.saving) {
-      return undefined;
-    }
-
-    const timerId = window.setInterval(() => {
-      refreshAnalytics().catch(() => {});
-    }, 30000);
-
-    return () => window.clearInterval(timerId);
-  }, [currentUser?.id, mutation.saving, refreshAnalytics, sessionId]);
+      return mergeOrganizerAnalyticsSnapshot(
+        { ...workspace, sessionCatalog: overview.sessions || [] },
+        analytics,
+      );
+    },
+    enabled: Boolean(userId && sessionId),
+    refetchInterval: mutation.saving ? false : 30000,
+  });
 
   const createSession = useCallback(
     async (payload) => {
-      const session = await jsonApi.createOrganizerSession(currentUser.id, payload);
+      const session = await jsonApi.createOrganizerSession(userId, payload);
       await refreshUsers?.();
       await refreshBootstrap?.();
-      await resource.refresh();
+      await query.refetch();
       return session;
     },
-    [currentUser?.id, refreshBootstrap, refreshUsers, resource.refresh],
+    [userId, refreshBootstrap, refreshUsers, query.refetch],
   );
 
-  const updateSession = useCallback(
-    (payload) =>
-      mutation.runMutation(async () => {
-        await jsonApi.updateOrganizerSession(currentUser.id, sessionId, payload);
-        return resource.refresh();
-      }),
-    [currentUser?.id, mutation, resource, sessionId],
-  );
+  const withRefetch = (executor) =>
+    mutation.runMutation(async () => {
+      await executor();
+      return query.refetch();
+    });
 
-  const updateRegistration = useCallback(
-    (payload) =>
-      mutation.runMutation(async () => {
-        await jsonApi.updateOrganizerRegistration(currentUser.id, sessionId, payload);
-        return resource.refresh();
-      }),
-    [currentUser?.id, mutation, resource, sessionId],
-  );
-
-  const updateSessionSettings = useCallback(
-    (payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerSessionSettings(currentUser.id, sessionId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const createProgram = useCallback(
-    (payload) =>
-      mutation.runMutation(() => jsonApi.createOrganizerProgram(currentUser.id, sessionId, payload)),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateProgram = useCallback(
-    (programId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerProgram(currentUser.id, sessionId, programId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const publishProgram = useCallback(
-    (programId) =>
-      mutation.runMutation(() =>
-        jsonApi.publishOrganizerProgram(currentUser.id, sessionId, programId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const draftProgram = useCallback(
-    (programId) =>
-      mutation.runMutation(() =>
-        jsonApi.draftOrganizerProgram(currentUser.id, sessionId, programId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const selectProgram = useCallback(
-    (programId) =>
-      mutation.runMutation(() =>
-        jsonApi.selectOrganizerProgram(currentUser.id, sessionId, programId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const createProgramDay = useCallback(
-    (programId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.createOrganizerProgramDay(currentUser.id, sessionId, programId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateProgramDay = useCallback(
-    (programId, dayId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerProgramDay(currentUser.id, sessionId, programId, dayId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const deleteProgramDay = useCallback(
-    (programId, dayId) =>
-      mutation.runMutation(() =>
-        jsonApi.deleteOrganizerProgramDay(currentUser.id, sessionId, programId, dayId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateProgramDayFlowOrder = useCallback(
-    (programId, dayId, flowOrder) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerProgramDayFlowOrder(
-          currentUser.id,
-          sessionId,
-          programId,
-          dayId,
-          flowOrder,
-        ),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateProgramDayFlows = useCallback(
-    (programId, dayId, flows) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerProgramDayFlows(currentUser.id, sessionId, programId, dayId, flows),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateEvent = useCallback(
-    (programId, dayId, eventId, patch) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId, patch),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const addParallelEvent = useCallback(
-    (programId, dayId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.addOrganizerParallelEvent(currentUser.id, sessionId, programId, dayId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const deleteEvent = useCallback(
-    (programId, dayId, eventId) =>
-      mutation.runMutation(() =>
-        jsonApi.deleteOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const activateEvent = useCallback(
-    (programId, dayId, eventId) =>
-      mutation.runMutation(() =>
-        jsonApi.activateOrganizerEvent(currentUser.id, sessionId, programId, dayId, eventId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const createGroup = useCallback(
-    (payload) =>
-      mutation.runMutation(() =>
-        jsonApi.createOrganizerGroup(currentUser.id, sessionId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateGroup = useCallback(
-    (groupId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerGroup(currentUser.id, sessionId, groupId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const deleteGroup = useCallback(
-    (groupId) =>
-      mutation.runMutation(() =>
-        jsonApi.deleteOrganizerGroup(currentUser.id, sessionId, groupId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const assignGroupCurator = useCallback(
-    (groupId, curatorId) =>
-      mutation.runMutation(() =>
-        jsonApi.assignOrganizerGroupCurator(currentUser.id, sessionId, groupId, curatorId),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const assignGroupParticipants = useCallback(
-    (groupId, participantIds) =>
-      mutation.runMutation(() =>
-        jsonApi.assignOrganizerGroupParticipants(
-          currentUser.id,
-          sessionId,
-          groupId,
-          participantIds,
-        ),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const createSurvey = useCallback(
-    (payload) =>
-      mutation.runMutation(() => jsonApi.createOrganizerSurvey(currentUser.id, sessionId, payload)),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateSurvey = useCallback(
-    (surveyId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerSurvey(currentUser.id, sessionId, surveyId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const addSurveyQuestion = useCallback(
-    (surveyId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.addOrganizerSurveyQuestion(currentUser.id, sessionId, surveyId, payload),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const updateSurveyQuestion = useCallback(
-    (surveyId, questionId, payload) =>
-      mutation.runMutation(() =>
-        jsonApi.updateOrganizerSurveyQuestion(
-          currentUser.id,
-          sessionId,
-          surveyId,
-          questionId,
-          payload,
-        ),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
-
-  const publishSurvey = useCallback(
-    (surveyId, filters) =>
-      mutation.runMutation(() =>
-        jsonApi.publishOrganizerSurvey(currentUser.id, sessionId, surveyId, filters),
-      ),
-    [currentUser?.id, mutation, sessionId],
-  );
+  const run = (executor) => mutation.runMutation(executor);
 
   return {
-    ...resource,
+    ...queryShape(query, queryKey, queryClient),
     saving: mutation.saving,
     mutationError: mutation.mutationError,
     createSession,
-    updateSession,
-    updateRegistration,
-    updateSessionSettings,
-    createProgram,
-    updateProgram,
-    publishProgram,
-    draftProgram,
-    selectProgram,
-    createProgramDay,
-    updateProgramDay,
-    deleteProgramDay,
-    updateProgramDayFlowOrder,
-    updateProgramDayFlows,
-    updateEvent,
-    addParallelEvent,
-    deleteEvent,
-    activateEvent,
-    createGroup,
-    updateGroup,
-    deleteGroup,
-    assignGroupCurator,
-    assignGroupParticipants,
-    createSurvey,
-    updateSurvey,
-    addSurveyQuestion,
-    updateSurveyQuestion,
-    publishSurvey,
+    updateSession: (payload) =>
+      withRefetch(() => jsonApi.updateOrganizerSession(userId, sessionId, payload)),
+    updateRegistration: (payload) =>
+      withRefetch(() => jsonApi.updateOrganizerRegistration(userId, sessionId, payload)),
+    updateSessionSettings: (payload) =>
+      run(() => jsonApi.updateOrganizerSessionSettings(userId, sessionId, payload)),
+    createProgram: (payload) =>
+      run(() => jsonApi.createOrganizerProgram(userId, sessionId, payload)),
+    updateProgram: (programId, payload) =>
+      run(() => jsonApi.updateOrganizerProgram(userId, sessionId, programId, payload)),
+    publishProgram: (programId) =>
+      run(() => jsonApi.publishOrganizerProgram(userId, sessionId, programId)),
+    draftProgram: (programId) =>
+      run(() => jsonApi.draftOrganizerProgram(userId, sessionId, programId)),
+    selectProgram: (programId) =>
+      run(() => jsonApi.selectOrganizerProgram(userId, sessionId, programId)),
+    createProgramDay: (programId, payload) =>
+      run(() => jsonApi.createOrganizerProgramDay(userId, sessionId, programId, payload)),
+    updateProgramDay: (programId, dayId, payload) =>
+      run(() => jsonApi.updateOrganizerProgramDay(userId, sessionId, programId, dayId, payload)),
+    deleteProgramDay: (programId, dayId) =>
+      run(() => jsonApi.deleteOrganizerProgramDay(userId, sessionId, programId, dayId)),
+    updateProgramDayFlowOrder: (programId, dayId, flowOrder) =>
+      run(() =>
+        jsonApi.updateOrganizerProgramDayFlowOrder(userId, sessionId, programId, dayId, flowOrder),
+      ),
+    updateProgramDayFlows: (programId, dayId, flows) =>
+      run(() => jsonApi.updateOrganizerProgramDayFlows(userId, sessionId, programId, dayId, flows)),
+    updateEvent: (programId, dayId, eventId, patch) =>
+      run(() => jsonApi.updateOrganizerEvent(userId, sessionId, programId, dayId, eventId, patch)),
+    addParallelEvent: (programId, dayId, payload) =>
+      run(() => jsonApi.addOrganizerParallelEvent(userId, sessionId, programId, dayId, payload)),
+    deleteEvent: (programId, dayId, eventId) =>
+      run(() => jsonApi.deleteOrganizerEvent(userId, sessionId, programId, dayId, eventId)),
+    activateEvent: (programId, dayId, eventId) =>
+      run(() => jsonApi.activateOrganizerEvent(userId, sessionId, programId, dayId, eventId)),
+    createGroup: (payload) => run(() => jsonApi.createOrganizerGroup(userId, sessionId, payload)),
+    updateGroup: (groupId, payload) =>
+      run(() => jsonApi.updateOrganizerGroup(userId, sessionId, groupId, payload)),
+    deleteGroup: (groupId) => run(() => jsonApi.deleteOrganizerGroup(userId, sessionId, groupId)),
+    assignGroupCurator: (groupId, curatorId) =>
+      run(() => jsonApi.assignOrganizerGroupCurator(userId, sessionId, groupId, curatorId)),
+    assignGroupParticipants: (groupId, participantIds) =>
+      run(() =>
+        jsonApi.assignOrganizerGroupParticipants(userId, sessionId, groupId, participantIds),
+      ),
+    createSurvey: (payload) => run(() => jsonApi.createOrganizerSurvey(userId, sessionId, payload)),
+    updateSurvey: (surveyId, payload) =>
+      run(() => jsonApi.updateOrganizerSurvey(userId, sessionId, surveyId, payload)),
+    addSurveyQuestion: (surveyId, payload) =>
+      run(() => jsonApi.addOrganizerSurveyQuestion(userId, sessionId, surveyId, payload)),
+    updateSurveyQuestion: (surveyId, questionId, payload) =>
+      run(() =>
+        jsonApi.updateOrganizerSurveyQuestion(userId, sessionId, surveyId, questionId, payload),
+      ),
+    publishSurvey: (surveyId, filters) =>
+      run(() => jsonApi.publishOrganizerSurvey(userId, sessionId, surveyId, filters)),
   };
 }
 
@@ -562,41 +326,54 @@ export function useOrganizerDashboard(sessionId) {
 
 export function useAdminDashboard() {
   const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.adminDashboard(userId);
 
-  return useAsyncResource(
-    useCallback(() => jsonApi.getAdminDashboard(currentUser.id), [currentUser?.id]),
-    Boolean(currentUser?.id),
-  );
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getAdminDashboard(userId),
+    enabled: Boolean(userId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
 }
 
 export function useAdminWorkspace() {
   const { currentUser } = useAuth();
-  const resource = useAsyncResource(
-    useCallback(() => jsonApi.getAdminWorkspace(currentUser.id), [currentUser?.id]),
-    Boolean(currentUser?.id),
-  );
-  const mutation = useMutation(resource.setData);
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.adminWorkspace(userId);
 
-  const refreshAfter = useCallback(
-    (executor) =>
-      mutation.runMutation(async () => {
-        await executor();
-        return resource.refresh();
-      }),
-    [mutation, resource],
-  );
+  const mutation = useCommandMutation({ success: "Сохранено", error: "Ошибка сохранения" });
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getAdminWorkspace(userId),
+    enabled: Boolean(userId),
+  });
+
+  const refreshAfter = (executor) =>
+    mutation.runMutation(async () => {
+      await executor();
+      return queryClient.invalidateQueries({ queryKey });
+    });
 
   return {
-    ...resource,
+    ...queryShape(query, queryKey, queryClient),
     saving: mutation.saving,
     mutationError: mutation.mutationError,
-    createUser: (payload) => refreshAfter(() => jsonApi.createAdminUser(currentUser.id, payload)),
-    updateUser: (userId, payload) => refreshAfter(() => jsonApi.updateAdminUser(currentUser.id, userId, payload)),
-    updateUserStatus: (userId, status) => refreshAfter(() => jsonApi.updateAdminUserStatus(currentUser.id, userId, status)),
-    upsertAssignment: (userId, payload) => refreshAfter(() => jsonApi.upsertAdminAssignment(currentUser.id, userId, payload)),
-    createSession: (payload) => refreshAfter(() => jsonApi.createAdminSession(currentUser.id, payload)),
-    updateSession: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminSession(currentUser.id, sessionId, payload)),
-    updateRegistration: (sessionId, payload) => refreshAfter(() => jsonApi.updateAdminRegistration(currentUser.id, sessionId, payload)),
-    createMagicLink: (payload) => jsonApi.createMagicLink(currentUser.id, payload),
+    createUser: (payload) => refreshAfter(() => jsonApi.createAdminUser(userId, payload)),
+    updateUser: (uid, payload) => refreshAfter(() => jsonApi.updateAdminUser(userId, uid, payload)),
+    updateUserStatus: (uid, status) =>
+      refreshAfter(() => jsonApi.updateAdminUserStatus(userId, uid, status)),
+    upsertAssignment: (uid, payload) =>
+      refreshAfter(() => jsonApi.upsertAdminAssignment(userId, uid, payload)),
+    createSession: (payload) => refreshAfter(() => jsonApi.createAdminSession(userId, payload)),
+    updateSession: (sid, payload) =>
+      refreshAfter(() => jsonApi.updateAdminSession(userId, sid, payload)),
+    updateRegistration: (sid, payload) =>
+      refreshAfter(() => jsonApi.updateAdminRegistration(userId, sid, payload)),
+    createMagicLink: (payload) => jsonApi.createMagicLink(userId, payload),
   };
 }

@@ -8,11 +8,14 @@
     "dev:client": "vite --host 0.0.0.0",
     "dev:server": "nodemon server/index.cjs",
     "start:server": "node server/index.cjs",
+    "db:migrate": "node server/scripts/migrate.cjs up",
+    "db:migrate:down": "node server/scripts/migrate.cjs down",
+    "db:migrate:create": "node server/scripts/migrate.cjs create",
     "db:schema": "node server/scripts/applySchema.cjs",
     "db:seed": "node server/seed/seedDatabase.cjs",
     "db:reset": "node server/scripts/resetDatabase.cjs",
     "db:check": "node server/scripts/checkDatabase.cjs",
-    "prod:init": "npm run db:schema",
+    "prod:init": "npm run db:migrate",
     "build": "vite build",
     "storybook": "storybook dev -p 6006 --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry",
@@ -22,6 +25,12 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "docs:check": "node scripts/docs/generateReference.cjs --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:storybook": "test-storybook",
+    "test:storybook:ci": "concurrently -k -s first -n \"sb,test\" -c \"magenta,blue\" \"http-server storybook-static --port 6006 --silent\" \"wait-on tcp:6006 && test-storybook --url http://127.0.0.1:6006\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -29,7 +38,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{js,jsx,cjs,mjs}": [
+    "*.{js,jsx,ts,tsx,cjs,mjs}": [
       "eslint --fix",
       "prettier --write"
     ],
@@ -42,19 +51,35 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@tanstack/react-query": "^5.100.8",
+    "clsx": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0",
+    "node-pg-migrate": "^8.0.4",
     "pg": "^8.20.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.14.0"
+    "react-router-dom": "^7.14.0",
+    "zod": "^4.4.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@storybook/addon-a11y": "^10.3.5",
     "@storybook/react-vite": "^10.3.5",
+    "@storybook/test-runner": "^0.24.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/ui": "^4.1.5",
     "concurrently": "^9.2.1",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
@@ -63,12 +88,25 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-storybook": "^10.3.6",
     "globals": "^17.6.0",
+    "happy-dom": "^20.9.0",
+    "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
+    "msw": "^2.14.2",
     "nodemon": "^3.1.14",
     "prettier": "^3.8.3",
     "storybook": "^10.3.5",
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1",
     "vite": "^8.0.7",
-    "vitepress": "^1.6.4"
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.5",
+    "wait-on": "^9.0.5"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

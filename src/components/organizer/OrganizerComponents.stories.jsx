@@ -16,7 +16,7 @@ import {
   ProgramScheduleTable,
   ProgramScheduleToolbar,
   ProgramSelector,
-} from "./OrganizerComponents";
+} from "./index";
 import { organizerWorkspaceFixture } from "../../stories/fixtures/organizerWorkspace";
 
 export default {
@@ -390,7 +390,13 @@ function ProgramEventFormStory(args) {
 function ProgramScheduleTableStory(args) {
   const fixture = useMemo(
     () => (args.useFixtureControls ? buildControlledCalendarFixture(args) : null),
-    [args.eventDensity, args.flowCount, args.hasSpeakers, args.programStatus, args.useFixtureControls],
+    [
+      args.eventDensity,
+      args.flowCount,
+      args.hasSpeakers,
+      args.programStatus,
+      args.useFixtureControls,
+    ],
   );
   const scheduleProgram = fixture?.program || args.program;
   const scheduleDay = fixture?.day || args.day;
@@ -408,7 +414,14 @@ function ProgramScheduleTableStory(args) {
     setSelectedEventId(args.selectedEventId || null);
     setDraftEvent(args.draftEvent || null);
     setColumnOrder(args.columnOrder || scheduleDay?.flowOrder || []);
-  }, [args.columnOrder, args.day, args.draftEvent, args.selectedEventId, scheduleColumns, scheduleDay]);
+  }, [
+    args.columnOrder,
+    args.day,
+    args.draftEvent,
+    args.selectedEventId,
+    scheduleColumns,
+    scheduleDay,
+  ]);
 
   function updateStoryFlows(nextFlows) {
     setStoryFlows(nextFlows);
@@ -464,7 +477,9 @@ function ProgramScheduleTableStory(args) {
         return noopAsync("create-flow", dayId, flow);
       }}
       onRenameFlow={(dayId, flowId, patch) => {
-        const nextFlows = storyFlows.map((flow) => (flow.id === flowId ? { ...flow, ...patch } : flow));
+        const nextFlows = storyFlows.map((flow) =>
+          flow.id === flowId ? { ...flow, ...patch } : flow,
+        );
         updateStoryFlows(nextFlows);
         return noopAsync("rename-flow", dayId, flowId, patch);
       }}
@@ -493,7 +508,8 @@ function ProgramScheduleTableMultiCreateStory(args) {
   const [storyDay, setStoryDay] = useState({ ...args.day, events: args.day?.events || [] });
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [draftEvent, setDraftEvent] = useState(null);
-  const selectedEvent = (storyDay.events || []).find((event) => event.id === selectedEventId) || null;
+  const selectedEvent =
+    (storyDay.events || []).find((event) => event.id === selectedEventId) || null;
 
   function createEvent(payload) {
     const nextEvent = {
@@ -577,7 +593,9 @@ export const ProgramSelectorMultiple = {
       {...args}
       onSelectProgram={(id) => console.log("program", id)}
       onSelectDay={(id) => console.log("day", id)}
-      onActivateEvent={(programId, dayId, eventId) => console.log("activate", programId, dayId, eventId)}
+      onActivateEvent={(programId, dayId, eventId) =>
+        console.log("activate", programId, dayId, eventId)
+      }
     />
   ),
 };
@@ -1175,11 +1193,7 @@ export const EventEditorWithSpeaker = {
     saving: false,
   },
   render: (args) => (
-    <EventEditorCard
-      {...args}
-      onSave={noopAsync}
-      onActivate={() => console.log("activate")}
-    />
+    <EventEditorCard {...args} onSave={noopAsync} onActivate={() => console.log("activate")} />
   ),
 };
 
@@ -1192,11 +1206,7 @@ export const EventEditorWithoutSpeaker = {
     saving: false,
   },
   render: (args) => (
-    <EventEditorCard
-      {...args}
-      onSave={noopAsync}
-      onActivate={() => console.log("activate")}
-    />
+    <EventEditorCard {...args} onSave={noopAsync} onActivate={() => console.log("activate")} />
   ),
 };
 
@@ -1216,10 +1226,7 @@ export const Timeline = {
     activeEventId: workspace.programWorkspace.activeEventId,
   },
   render: (args) => (
-    <EventTimeline
-      {...args}
-      onActivate={(eventId) => console.log("activate", eventId)}
-    />
+    <EventTimeline {...args} onActivate={(eventId) => console.log("activate", eventId)} />
   ),
 };
 
@@ -1229,8 +1236,18 @@ export const GroupsSummaryDefault = {
     alerts: workspace.groupsSummary.alerts,
     audiencePool: workspace.audiencePool,
     curatorCandidates: [
-      { id: "curator-1", fullName: "Марина Чернова", assignedGroupId: "group-1", assignedGroupName: "Группа 1" },
-      { id: "curator-2", fullName: "Даниил Крылов", assignedGroupId: "group-2", assignedGroupName: "Группа 2" },
+      {
+        id: "curator-1",
+        fullName: "Марина Чернова",
+        assignedGroupId: "group-1",
+        assignedGroupName: "Группа 1",
+      },
+      {
+        id: "curator-2",
+        fullName: "Даниил Крылов",
+        assignedGroupId: "group-2",
+        assignedGroupName: "Группа 2",
+      },
       { id: "curator-3", fullName: "Елена Лисицына", assignedGroupId: "", assignedGroupName: "" },
     ],
     dataState: "ready",
@@ -1240,15 +1257,54 @@ export const GroupsSummaryDefault = {
       { id: "event-3", title: "Практикум", deltaFromPrevious: -1.6 },
     ],
     groupPulse: [
-      { id: "group-1", name: "Группа 1", trajectory: [3.1, 4.0, 2.8], stateDistribution: [{ level: 2, count: 2 }, { level: 3, count: 3 }, { level: 5, count: 2 }] },
-      { id: "group-2", name: "Группа 2", trajectory: [3.0, 3.5, 2.2], stateDistribution: [{ level: 1, count: 1 }, { level: 3, count: 4 }, { level: 4, count: 3 }] },
+      {
+        id: "group-1",
+        name: "Группа 1",
+        trajectory: [3.1, 4.0, 2.8],
+        stateDistribution: [
+          { level: 2, count: 2 },
+          { level: 3, count: 3 },
+          { level: 5, count: 2 },
+        ],
+      },
+      {
+        id: "group-2",
+        name: "Группа 2",
+        trajectory: [3.0, 3.5, 2.2],
+        stateDistribution: [
+          { level: 1, count: 1 },
+          { level: 3, count: 4 },
+          { level: 4, count: 3 },
+        ],
+      },
     ],
     participantScatter: [
-      { id: "participant-1", label: "Иван Попов", groupId: "group-1", avgActivation: 3.4, amplitude: 2.2, completion: 84, shortLabel: "ИП" },
-      { id: "participant-2", label: "Анна Сергеева", groupId: "group-2", avgActivation: 2.8, amplitude: 3.6, completion: 68, shortLabel: "АС" },
+      {
+        id: "participant-1",
+        label: "Иван Попов",
+        groupId: "group-1",
+        avgActivation: 3.4,
+        amplitude: 2.2,
+        completion: 84,
+        shortLabel: "ИП",
+      },
+      {
+        id: "participant-2",
+        label: "Анна Сергеева",
+        groupId: "group-2",
+        avgActivation: 2.8,
+        amplitude: 3.6,
+        completion: 68,
+        shortLabel: "АС",
+      },
     ],
     operationalBrief: [
-      { id: "brief-1", severity: "high", title: "Практикум перегружает группу 2", evidence: "Есть резкий спад и рост риска." },
+      {
+        id: "brief-1",
+        severity: "high",
+        title: "Практикум перегружает группу 2",
+        evidence: "Есть резкий спад и рост риска.",
+      },
     ],
   },
   render: (args) => (
@@ -1265,7 +1321,11 @@ export const GroupsSummaryDefault = {
 
 export const GroupsSummaryNoRisks = {
   args: {
-    groups: workspace.groupsSummary.groups.map((group) => ({ ...group, riskCases: 0, completion: 98 })),
+    groups: workspace.groupsSummary.groups.map((group) => ({
+      ...group,
+      riskCases: 0,
+      completion: 98,
+    })),
     alerts: [],
     audiencePool: workspace.audiencePool,
   },

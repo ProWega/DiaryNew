@@ -1,8 +1,11 @@
-import "../src/styles.css";
+import "../src/styles/index.css";
 
 const preview = {
   parameters: {
     a11y: {
+      // "todo" runs axe and surfaces results in the Storybook UI but does NOT
+      // fail the test runner. Pre-existing violations (mostly chart SVGs missing
+      // titles) are tracked separately. Switch back to "error" once fixed.
       test: "todo",
     },
     controls: {

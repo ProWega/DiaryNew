@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import tseslint from "typescript-eslint";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import jsxA11y from "eslint-plugin-jsx-a11y";
@@ -81,9 +82,64 @@ export default [
     },
   },
 
+  // Frontend TypeScript sources — same rules as JS + TS parser + TS-specific rules
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+      react,
+      "react-hooks": reactHooks,
+      "jsx-a11y": jsxA11y,
+    },
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: 2024,
+      sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+      globals: {
+        ...globals.browser,
+      },
+    },
+    settings: {
+      react: { version: "detect" },
+    },
+    rules: {
+      ...react.configs.flat.recommended.rules,
+      ...react.configs.flat["jsx-runtime"].rules,
+      ...reactHooks.configs["recommended-latest"].rules,
+      ...jsxA11y.flatConfigs.recommended.rules,
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "no-empty": ["error", { allowEmptyCatch: true }],
+      eqeqeq: ["error", "smart"],
+      "react/prop-types": "off",
+      "react/no-unknown-property": ["error", { ignore: ["css"] }],
+      "jsx-a11y/no-static-element-interactions": "warn",
+      "jsx-a11y/click-events-have-key-events": "warn",
+      "jsx-a11y/no-noninteractive-element-interactions": "warn",
+      "jsx-a11y/label-has-associated-control": "warn",
+      "jsx-a11y/no-autofocus": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/purity": "warn",
+    },
+  },
+
   // Storybook stories — same as frontend + storybook plugin, plus storybook globals
   {
-    files: ["src/**/*.stories.{js,jsx}"],
+    files: ["src/**/*.stories.{js,jsx,ts,tsx}"],
     plugins: { storybook },
     rules: {
       ...storybook.configs["flat/recommended"][0].rules,
@@ -110,6 +166,24 @@ export default [
       globals: { ...globals.node },
     },
     rules: baseRules,
+  },
+
+  // Test files — Vitest globals (describe, it, expect, vi)
+  {
+    files: ["src/**/*.test.{js,jsx,ts,tsx}", "server/**/*.test.{js,cjs}", "vitest.setup.ts"],
+    languageOptions: {
+      globals: {
+        describe: "readonly",
+        it: "readonly",
+        test: "readonly",
+        expect: "readonly",
+        beforeAll: "readonly",
+        afterAll: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+        vi: "readonly",
+      },
+    },
   },
 
   // Build/config scripts at project root

@@ -1,3 +1,4 @@
+const logger = require("../logger.cjs");
 const { createOrganizerWorkspaceSeed } = require("../seed/organizerWorkspaceSeed.cjs");
 const { ensureSchema, hasPostgresConfig } = require("./postgres.cjs");
 const {
@@ -17,10 +18,10 @@ function stampWorkspace(workspace, storageMode, { bumpRevision = false } = {}) {
   const previousMeta = nextWorkspace.meta || {};
 
   nextWorkspace.meta = {
-    revision: bumpRevision
-      ? (previousMeta.revision || 0) + 1
-      : previousMeta.revision || 1,
-    updatedAt: bumpRevision ? new Date().toISOString() : previousMeta.updatedAt || new Date().toISOString(),
+    revision: bumpRevision ? (previousMeta.revision || 0) + 1 : previousMeta.revision || 1,
+    updatedAt: bumpRevision
+      ? new Date().toISOString()
+      : previousMeta.updatedAt || new Date().toISOString(),
     storageMode,
   };
 
@@ -62,8 +63,7 @@ async function getWorkspace(sessionId) {
     try {
       return await readFromPostgres(sessionId);
     } catch (error) {
-      console.warn("[organizer-store] PostgreSQL unavailable, falling back to memory mode.");
-      console.warn(error.message);
+      logger.warn({ err: error, sessionId }, "PostgreSQL unavailable, falling back to memory mode");
     }
   }
 
@@ -81,12 +81,14 @@ async function saveWorkspace(sessionId, workspace) {
 
   if (storageMode === "postgres" && hasPostgresConfig()) {
     try {
-      return await persistWorkspace(sessionId, stampWorkspace(workspace, "postgres", {
-        bumpRevision: true,
-      }));
+      return await persistWorkspace(
+        sessionId,
+        stampWorkspace(workspace, "postgres", {
+          bumpRevision: true,
+        }),
+      );
     } catch (error) {
-      console.warn("[organizer-store] Save to PostgreSQL failed, storing in memory.");
-      console.warn(error.message);
+      logger.warn({ err: error, sessionId }, "Save to PostgreSQL failed, storing in memory");
     }
   }
 

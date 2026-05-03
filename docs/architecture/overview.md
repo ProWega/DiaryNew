@@ -1,25 +1,49 @@
 # Обзор архитектуры
 
+Глубже по слоям:
+
+- [Backend и сервисы](./backend-services.md) — структура `routes/` → `services/` → `repositories/`, audit log;
+- [Frontend stack](./frontend-stack.md) — TypeScript, React Query, MSW, тёмная тема, декомпозиция view;
+- [Миграции БД](./migrations.md) — workflow `node-pg-migrate`;
+- [Безопасность](./security.md) — helmet, CORS, rate-limit, zod-валидация, CSRF, audit log.
+
 ## Контуры приложения
 
 ### Frontend
 
-- `src/main.jsx` — точка входа
+- `src/main.jsx` — точка входа (QueryClientProvider, ToastProvider, AuthProvider, BrowserRouter, MSW boot)
 - `src/AppRouter.jsx` — routed-контур и page titles
 - `src/pages/` — routed pages
-- `src/views/` — screen-level представления
-- `src/components/` — переиспользуемые UI-компоненты
-- `src/api/` — jsonApi и hooks
+- `src/views/` — screen-level представления; крупные view декомпозированы в feature-папки (`OrganizerCabinet/`, `CuratorDashboard/`)
+- `src/components/` — переиспользуемые UI-компоненты; `components/ui/` — базовый kit (`Button`, `EmptyState`, `Modal`, `Toast`, `Tabs`, `Field`, `Pills`)
+- `src/components/organizer/` — 17 файлов программных компонентов + barrel `index.js`
+- `src/api/` — `jsonApi.ts`, `hooks.js` (React Query)
 - `src/auth/` — auth/bootstrap state
+- `src/lib/` — `format.ts`, `programDays.ts`, `csrfToken.ts`
+- `src/rbac/permissions.ts` — RBAC матрица
+- `src/types/domain.ts` — общие TS-типы домена
+- `src/styles/` — модульный CSS (tokens, base, layout, navigation, components, participant, organizer, curator, admin)
+- `src/mocks/` — MSW handlers + fixtures + in-memory db (`VITE_USE_MOCK=true`)
+- `src/hooks/useTheme.js` — переключение светлой/тёмной темы
 
 ### Backend
 
-- `server/index.cjs` — Express app и API routes
-- `server/config.cjs` — env и auth helpers
-- `server/db/postgres.cjs` — подключение и schema lifecycle
-- `server/db/repositories/` — domain-oriented data access
-- `server/sql/schema.sql` — PostgreSQL schema
-- `server/scripts/` — schema/reset/check utilities
+- `server/index.cjs` — Express app: middleware, монтирование роутеров, CSRF guard, error handler (~165 строк)
+- `server/config.cjs` — env-чтение, cookie/CORS/rate-limit конфиг
+- `server/lib/routeHelpers.cjs` — `asyncHandler`, cookie-хелперы, viewer resolution, `requireAdmin`/`requireOrganizer`
+- `server/lib/csrf.cjs` — Double Submit Cookie: token gen, cookie set/clear, `csrfGuard` middleware
+- `server/routes/` — тонкие хендлеры по доменам: `auth`, `public`, `participant`, `curator`, `organizer`, `admin`
+- `server/services/` — бизнес-логика: `auditLog`, `magicLinkService`, `programFlowService`, `programNormalizers`, `programWorkspaceService`, `surveyAudienceService`
+- `server/db/postgres.cjs` — подключение и legacy `ensureSchema`/`resetSchema`
+- `server/db/repositories/` — domain-oriented SQL data access (12 файлов)
+- `server/db/organizerWorkspaceStore.cjs` — workspace JSON storage
+- `server/migrations/` — `node-pg-migrate` миграции
+- `server/sql/schema.sql` — стартовая схема PostgreSQL (применяется initial-миграцией)
+- `server/validation/` — zod-схемы (`schemas.cjs`, `organizerSchemas.cjs`) + `validateBody` middleware
+- `server/auth/demoUsers.cjs` — dev-режим
+- `server/scripts/` — `migrate.cjs`, `applySchema.cjs` (legacy), `resetDatabase.cjs`, `checkDatabase.cjs`
+- `server/seed/` — демо-данные
+- `server/logger.cjs` — pino structured logging
 
 ## Границы runtime
 

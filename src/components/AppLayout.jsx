@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { getDefaultRoute } from "../rbac/permissions";
 import FeedbackState from "./FeedbackState";
+import { useTheme } from "../hooks/useTheme";
 
 function getInitials(fullName = "") {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -21,15 +22,15 @@ export function ParticipantTopbar({
   bootstrap,
   navigation = [],
   onLogout,
+  theme,
+  onToggleTheme,
 }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const accountRef = useRef(null);
   const sessionInfo = bootstrap?.sessionInfo || {};
-  const sessionMeta = [
-    sessionInfo.cycle,
-    sessionInfo.dateLabel,
-    sessionInfo.location,
-  ].filter(Boolean);
+  const sessionMeta = [sessionInfo.cycle, sessionInfo.dateLabel, sessionInfo.location].filter(
+    Boolean,
+  );
   const firstName = currentUser.fullName?.trim().split(/\s+/)[0] || "Аккаунт";
 
   useEffect(() => {
@@ -68,9 +69,7 @@ export function ParticipantTopbar({
       <div className="participant-topbar-context">
         <p className="eyebrow">Личный кабинет</p>
         <h1>{sessionInfo.name}</h1>
-        {sessionMeta.length ? (
-          <p className="subtle">{sessionMeta.join(" · ")}</p>
-        ) : null}
+        {sessionMeta.length ? <p className="subtle">{sessionMeta.join(" · ")}</p> : null}
       </div>
 
       <nav className="participant-nav" aria-label="Разделы участника">
@@ -90,7 +89,20 @@ export function ParticipantTopbar({
       <div className="participant-account" ref={accountRef}>
         <button
           type="button"
-          className={isAccountOpen ? "participant-account-button is-open" : "participant-account-button"}
+          className="ghost-button theme-toggle"
+          aria-label={
+            theme === "dark" ? "Переключить на светлую тему" : "Переключить на тёмную тему"
+          }
+          onClick={onToggleTheme}
+        >
+          {theme === "dark" ? "Светлая" : "Тёмная"}
+        </button>
+
+        <button
+          type="button"
+          className={
+            isAccountOpen ? "participant-account-button is-open" : "participant-account-button"
+          }
           aria-haspopup="menu"
           aria-expanded={isAccountOpen}
           onClick={() => setIsAccountOpen((value) => !value)}
@@ -120,14 +132,8 @@ export function ParticipantTopbar({
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    currentUser,
-    logout,
-    bootstrap,
-    loading,
-    usersError,
-    bootstrapError,
-  } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { currentUser, logout, bootstrap, loading, usersError, bootstrapError } = useAuth();
 
   useEffect(() => {
     if (currentUser && location.pathname === "/") {
@@ -163,8 +169,7 @@ function AppLayout() {
   }
 
   const isParticipantShell =
-    currentUser.role === "participant" &&
-    location.pathname.startsWith("/participant/");
+    currentUser.role === "participant" && location.pathname.startsWith("/participant/");
 
   return (
     <div className="app-shell">
@@ -177,17 +182,22 @@ function AppLayout() {
           bootstrap={bootstrap}
           navigation={bootstrap.navigation}
           onLogout={handleLogout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       ) : (
         <>
           <header className="topbar">
             <div className="brand-block">
-              <div className="brand-mark" aria-label="Истоки">И</div>
+              <div className="brand-mark" aria-label="Истоки">
+                И
+              </div>
               <div>
                 <p className="eyebrow">Истоки · цифровой кабинет</p>
                 <h1>{bootstrap.sessionInfo.name}</h1>
                 <p className="subtle">
-                  {bootstrap.sessionInfo.cycle} · {bootstrap.sessionInfo.dateLabel} · {bootstrap.sessionInfo.location}
+                  {bootstrap.sessionInfo.cycle} · {bootstrap.sessionInfo.dateLabel} ·{" "}
+                  {bootstrap.sessionInfo.location}
                 </p>
               </div>
             </div>
@@ -202,6 +212,16 @@ function AppLayout() {
                 <span className="role-pill is-active">
                   {currentUser.roleLabel}: {currentUser.fullName}
                 </span>
+                <button
+                  type="button"
+                  className="ghost-button theme-toggle"
+                  aria-label={
+                    theme === "dark" ? "Переключить на светлую тему" : "Переключить на тёмную тему"
+                  }
+                  onClick={toggleTheme}
+                >
+                  {theme === "dark" ? "Светлая" : "Тёмная"}
+                </button>
                 <button type="button" className="ghost-button" onClick={handleLogout}>
                   Новая регистрация
                 </button>
@@ -215,9 +235,7 @@ function AppLayout() {
                 <NavLink
                   key={item.id}
                   to={item.to}
-                  className={({ isActive }) =>
-                    isActive ? "subnav-pill is-active" : "subnav-pill"
-                  }
+                  className={({ isActive }) => (isActive ? "subnav-pill is-active" : "subnav-pill")}
                 >
                   {item.label}
                 </NavLink>
@@ -235,7 +253,7 @@ function AppLayout() {
         </>
       )}
 
-      <main className="page-grid">
+      <main id="main-content" className="page-grid">
         <Outlet />
       </main>
     </div>

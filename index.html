@@ -10,9 +10,28 @@
       name="description"
       content="Платформа дневника состояния, кураторской аналитики и управления программой заезда."
     />
+    <meta name="theme-color" content="#6d2117" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Истоки — Личный кабинет" />
+    <meta
+      property="og:description"
+      content="Платформа дневника состояния, кураторской аналитики и управления программой заезда."
+    />
+
     <title>Истоки</title>
   </head>
   <body>
+    <script>
+      (function () {
+        var s = localStorage.getItem("theme");
+        var t = s || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

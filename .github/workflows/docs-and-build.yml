@@ -26,11 +26,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
       - name: Build frontend
         run: npm run build
 
       - name: Build Storybook
         run: npm run build-storybook
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Storybook play tests
+        run: npm run test:storybook:ci
 
       - name: Check generated docs
         run: npm run docs:check

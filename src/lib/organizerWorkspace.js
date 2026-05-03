@@ -1,3 +1,5 @@
+import { formatDate } from "./format";
+
 export function normalizeList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean);
@@ -15,11 +17,19 @@ export function normalizeList(value) {
 
 export function countAudienceMatches(audiencePool, filters) {
   return audiencePool.filter((participant) => {
-    if (filters.ageMin !== null && filters.ageMin !== undefined && participant.age < filters.ageMin) {
+    if (
+      filters.ageMin !== null &&
+      filters.ageMin !== undefined &&
+      participant.age < filters.ageMin
+    ) {
       return false;
     }
 
-    if (filters.ageMax !== null && filters.ageMax !== undefined && participant.age > filters.ageMax) {
+    if (
+      filters.ageMax !== null &&
+      filters.ageMax !== undefined &&
+      participant.age > filters.ageMax
+    ) {
       return false;
     }
 
@@ -54,16 +64,7 @@ export function formatPublicationDate(value) {
     return "Не опубликовано";
   }
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDate(value);
 }
 
 export function getEventStatusLabel(status) {
