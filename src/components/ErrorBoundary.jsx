@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { captureException } from "../lib/sentry";
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -11,7 +12,10 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    // Centralized client-error capture point. Replace with Sentry SDK when ready.
+    // Forward to Sentry — if not initialized (no VITE_SENTRY_DSN), this no-ops.
+    captureException(error, {
+      contexts: { react: { componentStack: info?.componentStack } },
+    });
     if (typeof window !== "undefined" && window.console) {
       window.console.error("[ErrorBoundary]", error, info?.componentStack);
     }

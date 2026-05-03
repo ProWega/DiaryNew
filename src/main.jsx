@@ -6,7 +6,11 @@ import AppRouter from "./AppRouter";
 import { AuthProvider } from "./auth/AuthContext";
 import { ToastProvider } from "./components/ui/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { initSentry } from "./lib/sentry";
 import "./styles/index.css";
+
+// Initialize Sentry before anything renders. No-op when VITE_SENTRY_DSN is unset.
+initSentry();
 
 const queryClient = new QueryClient({
   defaultOptions: {

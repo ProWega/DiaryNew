@@ -1,5 +1,9 @@
 "use strict";
 
+// MUST be required FIRST — OpenTelemetry auto-instrumentation patches
+// modules at import time. Any require() before this line is invisible to OTel.
+require("./lib/telemetry.cjs");
+
 const cors = require("cors");
 const express = require("express");
 const helmet = require("helmet");
