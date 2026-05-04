@@ -11,10 +11,11 @@ if (!process.env.DATABASE_URL && !process.env.PGHOST) {
   process.exit(1);
 }
 
-// node-pg-migrate programmatic API
-const migrate = require("node-pg-migrate").default;
+// node-pg-migrate programmatic API. v8 exports a named `runner`; the old
+// `.default` shim was removed in v7 (see node-pg-migrate CHANGELOG).
+const { runner } = require("node-pg-migrate");
 
-migrate({
+runner({
   databaseUrl: process.env.DATABASE_URL || {
     host: process.env.PGHOST,
     port: process.env.PGPORT ? Number(process.env.PGPORT) : 5432,
