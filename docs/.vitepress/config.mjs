@@ -69,6 +69,7 @@ export default defineConfig({
           { text: "Миграции БД", link: "/architecture/migrations" },
           { text: "Безопасность", link: "/architecture/security" },
           { text: "Тестирование", link: "/architecture/testing" },
+          { text: "Methodology mapping", link: "/architecture/methodology-mapping" },
           { text: "Контур документации", link: "/architecture/documentation-workflow" },
         ],
       },
