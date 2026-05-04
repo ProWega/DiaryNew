@@ -107,6 +107,110 @@ export function useAdminRegion(code: string | null | undefined) {
   });
 }
 
+// ── Analytics (Phase E) ────────────────────────────────────────────
+
+export interface IstokiKpi {
+  days: number;
+  regionOpens: number;
+  uniqueVisitors: number;
+  listenedSecTotal: number;
+  podcastPlays: number;
+  storyViews: number;
+}
+
+export interface TopRegionRow {
+  regionCode: string;
+  name: string;
+  opens: number;
+  uniqueVisitors: number;
+}
+
+export interface TopPodcastRow {
+  id: string;
+  regionCode: string;
+  title: string;
+  completions: number;
+}
+
+export interface TopStoryRow {
+  id: string;
+  regionCode: string;
+  participantName: string;
+  views: number;
+}
+
+export interface TimeSeriesPoint {
+  day: string;
+  count: number;
+}
+
+const ANALYTICS_REFRESH_MS = 60_000;
+
+export function useIstokiAnalyticsKpi(days: number) {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "analytics", "kpi", days, viewerId],
+    queryFn: () => adminFetch<IstokiKpi>(`/analytics/kpi?days=${days}`, { viewerId }),
+    enabled: Boolean(viewerId),
+    refetchInterval: ANALYTICS_REFRESH_MS,
+  });
+}
+
+export function useIstokiTopRegions(days: number, limit = 5) {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "analytics", "top-regions", days, limit, viewerId],
+    queryFn: () =>
+      adminFetch<{ items: TopRegionRow[] }>(`/analytics/top-regions?days=${days}&limit=${limit}`, {
+        viewerId,
+      }),
+    enabled: Boolean(viewerId),
+    refetchInterval: ANALYTICS_REFRESH_MS,
+  });
+}
+
+export function useIstokiTopPodcasts(days: number, limit = 5) {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "analytics", "top-podcasts", days, limit, viewerId],
+    queryFn: () =>
+      adminFetch<{ items: TopPodcastRow[] }>(
+        `/analytics/top-podcasts?days=${days}&limit=${limit}`,
+        { viewerId },
+      ),
+    enabled: Boolean(viewerId),
+    refetchInterval: ANALYTICS_REFRESH_MS,
+  });
+}
+
+export function useIstokiTopStories(days: number, limit = 5) {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "analytics", "top-stories", days, limit, viewerId],
+    queryFn: () =>
+      adminFetch<{ items: TopStoryRow[] }>(`/analytics/top-stories?days=${days}&limit=${limit}`, {
+        viewerId,
+      }),
+    enabled: Boolean(viewerId),
+    refetchInterval: ANALYTICS_REFRESH_MS,
+  });
+}
+
+export function useIstokiTimeSeries(days: number, eventType?: string) {
+  const viewerId = useViewerId();
+  const qs = new URLSearchParams({ days: String(days) });
+  if (eventType) qs.set("eventType", eventType);
+  return useQuery({
+    queryKey: ["istoki", "admin", "analytics", "timeseries", days, eventType, viewerId],
+    queryFn: () =>
+      adminFetch<{ points: TimeSeriesPoint[] }>(`/analytics/timeseries?${qs.toString()}`, {
+        viewerId,
+      }),
+    enabled: Boolean(viewerId),
+    refetchInterval: ANALYTICS_REFRESH_MS,
+  });
+}
+
 // ── Mutations (return raw promises; callers wrap in useCommandMutation) ──
 
 export function useAdminMutations() {

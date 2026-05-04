@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PodcastPlayer from "./PodcastPlayer";
 import StoryCard from "./StoryCard";
 import ChronicleTimeline from "./ChronicleTimeline";
+import { useIstokiTracking } from "../useIstokiTracking";
 
 const TABS = [
   { id: "voice", label: "Голос региона" },
@@ -11,10 +12,21 @@ const TABS = [
 
 function RegionPortalDrawer({ region, onClose }) {
   const [activeTab, setActiveTab] = useState("voice");
+  const { track } = useIstokiTracking();
 
   useEffect(() => {
     setActiveTab("voice");
-  }, [region?.code]);
+    if (region?.code) {
+      track({ type: "region.opened", regionCode: region.code });
+    }
+  }, [region?.code, track]);
+
+  useEffect(() => {
+    if (!region?.code) return;
+    if (activeTab === "chronicle") {
+      track({ type: "chronicle.viewed", regionCode: region.code });
+    }
+  }, [activeTab, region?.code, track]);
 
   useEffect(() => {
     function handleKey(event) {
@@ -75,14 +87,18 @@ function RegionPortalDrawer({ region, onClose }) {
         <div className="istoki-drawer-body" role="tabpanel">
           {activeTab === "voice" &&
             (region.podcasts.length ? (
-              region.podcasts.map((podcast) => <PodcastPlayer key={podcast.id} podcast={podcast} />)
+              region.podcasts.map((podcast) => (
+                <PodcastPlayer key={podcast.id} podcast={podcast} regionCode={region.code} />
+              ))
             ) : (
               <div className="istoki-empty">Подкасты этого региона ещё в работе.</div>
             ))}
 
           {activeTab === "stories" &&
             (region.stories.length ? (
-              region.stories.map((story) => <StoryCard key={story.id} story={story} />)
+              region.stories.map((story) => (
+                <StoryCard key={story.id} story={story} regionCode={region.code} />
+              ))
             ) : (
               <div className="istoki-empty">Истории этого региона ещё собираются.</div>
             ))}

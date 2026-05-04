@@ -788,3 +788,199 @@
 .istoki-chronicle-insights li::marker {
   color: var(--istoki-gold);
 }
+
+/* ── Admin · Analytics dashboard (Phase E) ─────────────────── */
+
+.istoki-admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.istoki-admin-tab {
+  flex: 1;
+  border: 1px solid var(--istoki-card-border);
+  background: var(--istoki-card-bg);
+  color: var(--istoki-text-soft);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 160ms ease;
+  font-family: inherit;
+}
+
+.istoki-admin-tab:hover {
+  background: var(--istoki-card-bg-strong);
+  color: var(--istoki-sand);
+}
+
+.istoki-admin-tab[aria-selected="true"] {
+  background: linear-gradient(135deg, var(--istoki-burgundy), var(--istoki-cabernet));
+  color: var(--istoki-sand);
+  border-color: var(--istoki-gold);
+}
+
+.istoki-admin-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px clamp(20px, 4vw, 40px);
+}
+
+.istoki-admin-analytics-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.istoki-admin-page-title {
+  font-family: var(--font-display-decor);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--istoki-sand);
+  margin: 0 0 6px;
+}
+
+.istoki-admin-page-subtitle {
+  font-size: 13px;
+  color: var(--istoki-text-soft);
+  margin: 0;
+  max-width: 560px;
+  line-height: 1.5;
+}
+
+.istoki-admin-range-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.istoki-admin-range-tab {
+  border: none;
+  background: transparent;
+  color: var(--istoki-text-soft);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 160ms ease;
+  font-family: inherit;
+}
+
+.istoki-admin-range-tab[aria-selected="true"] {
+  background: var(--istoki-gold);
+  color: var(--istoki-burgundy-dark);
+}
+
+.istoki-admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.istoki-admin-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 12px;
+}
+
+.istoki-admin-kpi-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--istoki-text-mute);
+}
+
+.istoki-admin-kpi-value {
+  font-family: var(--font-display-decor);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--istoki-sand);
+  line-height: 1.1;
+}
+
+.istoki-admin-kpi-hint {
+  font-size: 11px;
+  color: var(--istoki-text-soft);
+}
+
+.istoki-admin-section {
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.istoki-admin-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.istoki-admin-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--istoki-sand);
+  margin: 0;
+}
+
+.istoki-admin-section-hint {
+  font-size: 11px;
+  color: var(--istoki-text-mute);
+  letter-spacing: 0.04em;
+}
+
+.istoki-admin-event-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.istoki-admin-event-pill {
+  border: 1px solid var(--istoki-card-border);
+  background: transparent;
+  color: var(--istoki-text-soft);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 160ms ease;
+  font-family: inherit;
+}
+
+.istoki-admin-event-pill:hover {
+  color: var(--istoki-sand);
+  border-color: var(--istoki-gold);
+}
+
+.istoki-admin-event-pill[aria-selected="true"] {
+  background: var(--istoki-card-bg-strong);
+  color: var(--istoki-gold);
+  border-color: var(--istoki-gold);
+}
+
+.istoki-admin-tops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}

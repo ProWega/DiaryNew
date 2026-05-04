@@ -753,6 +753,142 @@ const istokiHandlers = [
       { status: 201 },
     );
   }),
+
+  // Phase E — analytics ingestion + admin aggregates.
+  // The mock store keeps a tiny in-memory event log so that, when the
+  // dev/test environment uses MSW, the admin dashboard renders real
+  // counts driven by the user's own clicks rather than empty zeros.
+  ...(() => {
+    const events = [];
+    function inRange(event, days) {
+      const since = Date.now() - days * 24 * 60 * 60 * 1000;
+      return new Date(event.created_at).getTime() >= since;
+    }
+    return [
+      http.post("/api/public/istoki/events", async ({ request }) => {
+        await delay(MS);
+        const body = await request.json();
+        const ipHash = "mock-ip-hash";
+        for (const ev of body.events ?? []) {
+          events.push({
+            ...ev,
+            ipHash,
+            created_at: new Date().toISOString(),
+          });
+        }
+        return HttpResponse.json({ inserted: body.events?.length ?? 0 }, { status: 202 });
+      }),
+
+      http.get("/api/admin/istoki/analytics/kpi", async ({ request }) => {
+        await delay(MS);
+        const days = Number(new URL(request.url).searchParams.get("days") || 30);
+        const recent = events.filter((e) => inRange(e, days));
+        const opens = recent.filter((e) => e.type === "region.opened");
+        return ok({
+          days,
+          regionOpens: opens.length,
+          uniqueVisitors: new Set(opens.map((e) => e.ipHash)).size,
+          listenedSecTotal: recent
+            .filter((e) => e.type === "podcast.progress")
+            .reduce((sum, e) => sum + Number(e.payload?.listenedSec || 0), 0),
+          podcastPlays: recent.filter((e) => e.type === "podcast.played").length,
+          storyViews: recent.filter((e) => e.type === "story.viewed").length,
+        });
+      }),
+
+      http.get("/api/admin/istoki/analytics/top-regions", async ({ request }) => {
+        await delay(MS);
+        const url = new URL(request.url);
+        const days = Number(url.searchParams.get("days") || 30);
+        const limit = Number(url.searchParams.get("limit") || 5);
+        const counts = new Map();
+        for (const e of events.filter((x) => x.type === "region.opened" && inRange(x, days))) {
+          if (!e.regionCode) continue;
+          const row = counts.get(e.regionCode) || {
+            regionCode: e.regionCode,
+            name: istokiRegionsByCode.get(e.regionCode)?.name || e.regionCode,
+            opens: 0,
+            ips: new Set(),
+          };
+          row.opens += 1;
+          row.ips.add(e.ipHash);
+          counts.set(e.regionCode, row);
+        }
+        const items = Array.from(counts.values())
+          .map(({ ips, ...rest }) => ({ ...rest, uniqueVisitors: ips.size }))
+          .sort((a, b) => b.opens - a.opens)
+          .slice(0, limit);
+        return ok({ items });
+      }),
+
+      http.get("/api/admin/istoki/analytics/top-podcasts", async ({ request }) => {
+        await delay(MS);
+        const limit = Number(new URL(request.url).searchParams.get("limit") || 5);
+        const items = [];
+        for (const region of istokiRegionsByCode.values()) {
+          for (const p of region.podcasts ?? []) {
+            const completions = events.filter(
+              (e) =>
+                e.type === "podcast.progress" &&
+                e.entityId === p.id &&
+                Number(e.payload?.listenedSec || 0) >= 0.8 * (p.durationSec || 60),
+            ).length;
+            items.push({
+              id: p.id,
+              regionCode: region.code,
+              title: p.title,
+              completions,
+            });
+          }
+        }
+        return ok({
+          items: items.sort((a, b) => b.completions - a.completions).slice(0, limit),
+        });
+      }),
+
+      http.get("/api/admin/istoki/analytics/top-stories", async ({ request }) => {
+        await delay(MS);
+        const url = new URL(request.url);
+        const days = Number(url.searchParams.get("days") || 30);
+        const limit = Number(url.searchParams.get("limit") || 5);
+        const counts = new Map();
+        for (const e of events.filter((x) => x.type === "story.viewed" && inRange(x, days))) {
+          if (!e.entityId) continue;
+          counts.set(e.entityId, (counts.get(e.entityId) || 0) + 1);
+        }
+        const items = [];
+        for (const region of istokiRegionsByCode.values()) {
+          for (const s of region.stories ?? []) {
+            if (!counts.has(s.id)) continue;
+            items.push({
+              id: s.id,
+              regionCode: region.code,
+              participantName: s.participantName,
+              views: counts.get(s.id),
+            });
+          }
+        }
+        return ok({ items: items.sort((a, b) => b.views - a.views).slice(0, limit) });
+      }),
+
+      http.get("/api/admin/istoki/analytics/timeseries", async ({ request }) => {
+        await delay(MS);
+        const url = new URL(request.url);
+        const days = Number(url.searchParams.get("days") || 30);
+        const eventType = url.searchParams.get("eventType");
+        const buckets = new Map();
+        for (const e of events.filter((x) => inRange(x, days))) {
+          if (eventType && e.type !== eventType) continue;
+          const day = e.created_at.slice(0, 10);
+          buckets.set(day, (buckets.get(day) || 0) + 1);
+        }
+        const points = Array.from(buckets.entries())
+          .map(([day, count]) => ({ day, count }))
+          .sort((a, b) => a.day.localeCompare(b.day));
+        return ok({ points });
+      }),
+    ];
+  })(),
 ];
 
 // ─── Export ───────────────────────────────────────────────────────────────────

@@ -14,8 +14,26 @@ const {
   listRegions: listIstokiRegions,
   getRegionByCode: getIstokiRegionByCode,
 } = require("../db/repositories/istokiStore.cjs");
+const { insertEvents: insertIstokiEvents } = require("../db/repositories/istokiAnalyticsStore.cjs");
+const { hashIp } = require("../lib/ipHash.cjs");
+const rateLimit = require("express-rate-limit");
 const { validateBody } = require("../validation/middleware.cjs");
-const { registerParticipantSchema, setupAdminSchema } = require("../validation/schemas.cjs");
+const {
+  registerParticipantSchema,
+  setupAdminSchema,
+  istokiEventsBatchSchema,
+} = require("../validation/schemas.cjs");
+
+// 60 events POSTs per minute per IP. The frontend batches up to 50
+// events per call, so this comfortably covers normal interaction even
+// during rapid scroll-driven story.viewed bursts.
+const istokiEventsRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Слишком много событий. Попробуйте через минуту." },
+});
 const {
   asyncHandler,
   createHttpError,
@@ -147,6 +165,23 @@ router.get(
     }
 
     res.json(region);
+  }),
+);
+
+// POST /api/public/istoki/events — anonymous batched analytics ingestion
+router.post(
+  "/public/istoki/events",
+  istokiEventsRateLimit,
+  validateBody(istokiEventsBatchSchema),
+  asyncHandler(async (req, res) => {
+    const ipHash = hashIp(req.ip);
+    const userAgent = req.get("user-agent") || null;
+    const inserted = await insertIstokiEvents({
+      events: req.body.events,
+      ipHash,
+      userAgent,
+    });
+    res.status(202).json({ inserted });
   }),
 );
 

@@ -225,6 +225,29 @@ const upsertIstokiChronicleSchema = z
   })
   .strict();
 
+const ALLOWED_ISTOKI_EVENT_TYPES = [
+  "region.opened",
+  "podcast.played",
+  "podcast.progress",
+  "story.viewed",
+  "chronicle.viewed",
+];
+
+const istokiEventSchema = z
+  .object({
+    type: z.enum(ALLOWED_ISTOKI_EVENT_TYPES),
+    regionCode: trimmed(80).nullable().optional(),
+    entityId: trimmed(120).nullable().optional(),
+    payload: z.record(z.string(), z.any()).optional(),
+  })
+  .strict();
+
+const istokiEventsBatchSchema = z
+  .object({
+    events: z.array(istokiEventSchema).min(1).max(50),
+  })
+  .strict();
+
 module.exports = {
   GROUP_LAD_VALUES,
   MOOD_VALUES,
@@ -244,4 +267,6 @@ module.exports = {
   upsertIstokiPodcastSchema,
   upsertIstokiStorySchema,
   upsertIstokiChronicleSchema,
+  istokiEventSchema,
+  istokiEventsBatchSchema,
 };

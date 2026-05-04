@@ -521,3 +521,17 @@ create table if not exists istoki_chronicle (
 create index if not exists idx_istoki_podcasts_region  on istoki_podcasts(region_code);
 create index if not exists idx_istoki_stories_region   on istoki_stories(region_code);
 create index if not exists idx_istoki_chronicle_region on istoki_chronicle(region_code);
+
+create table if not exists istoki_events (
+  id           bigserial primary key,
+  event_type   text not null,
+  region_code  text references istoki_regions(code) on delete set null,
+  entity_id    text,
+  payload      jsonb not null default '{}'::jsonb,
+  ip_hash      text,
+  user_agent   text,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_istoki_events_type_date   on istoki_events(event_type, created_at desc);
+create index if not exists idx_istoki_events_region_date on istoki_events(region_code, created_at desc);

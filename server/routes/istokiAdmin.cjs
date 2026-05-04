@@ -30,6 +30,13 @@ const {
 const { asyncHandler, createHttpError, requireAdmin } = require("../lib/routeHelpers.cjs");
 const { logAuditEvent } = require("../services/auditLog.cjs");
 const { audioUploader, photoUploader, persistUpload } = require("../lib/uploads.cjs");
+const {
+  getKpi: getIstokiKpi,
+  getTopRegions: getIstokiTopRegions,
+  getTopPodcasts: getIstokiTopPodcasts,
+  getTopStories: getIstokiTopStories,
+  getDailyTimeSeries: getIstokiDailyTimeSeries,
+} = require("../db/repositories/istokiAnalyticsStore.cjs");
 
 const router = Router();
 
@@ -364,5 +371,74 @@ async function getRegionByCodeForChronicle(chronicleId) {
   ]);
   return result.rows[0] || null;
 }
+
+// ── Analytics (Phase E) ───────────────────────────────────────────
+
+function parseDays(value, fallback = 30) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.max(Math.floor(n), 1), 365);
+}
+
+function parseLimit(value, fallback = 5) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.max(Math.floor(n), 1), 50);
+}
+
+router.get(
+  "/analytics/kpi",
+  asyncHandler(async (req, res) => {
+    res.json(await getIstokiKpi({ days: parseDays(req.query.days) }));
+  }),
+);
+
+router.get(
+  "/analytics/top-regions",
+  asyncHandler(async (req, res) => {
+    res.json({
+      items: await getIstokiTopRegions({
+        days: parseDays(req.query.days),
+        limit: parseLimit(req.query.limit),
+      }),
+    });
+  }),
+);
+
+router.get(
+  "/analytics/top-podcasts",
+  asyncHandler(async (req, res) => {
+    res.json({
+      items: await getIstokiTopPodcasts({
+        days: parseDays(req.query.days),
+        limit: parseLimit(req.query.limit),
+      }),
+    });
+  }),
+);
+
+router.get(
+  "/analytics/top-stories",
+  asyncHandler(async (req, res) => {
+    res.json({
+      items: await getIstokiTopStories({
+        days: parseDays(req.query.days),
+        limit: parseLimit(req.query.limit),
+      }),
+    });
+  }),
+);
+
+router.get(
+  "/analytics/timeseries",
+  asyncHandler(async (req, res) => {
+    res.json({
+      points: await getIstokiDailyTimeSeries({
+        days: parseDays(req.query.days),
+        eventType: req.query.eventType ? String(req.query.eventType) : undefined,
+      }),
+    });
+  }),
+);
 
 module.exports = router;

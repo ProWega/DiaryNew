@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useAdminRegion, useAdminRegions } from "./api";
 import RegionEditor from "./RegionEditor";
+import AnalyticsDashboard from "./AnalyticsDashboard";
 
 function IstokiAdminPage() {
   const regionsQuery = useAdminRegions();
   const regions = regionsQuery.data?.regions ?? [];
   const [filter, setFilter] = useState("");
   const [activeCode, setActiveCode] = useState(null);
+  const [tab, setTab] = useState("regions");
 
   useEffect(() => {
     if (!activeCode && regions.length) {
@@ -22,6 +24,41 @@ function IstokiAdminPage() {
 
   const regionDetail = useAdminRegion(activeCode);
 
+  if (tab === "analytics") {
+    return (
+      <div className="istoki-admin-shell">
+        <aside className="istoki-admin-sidebar">
+          <div className="istoki-admin-sidebar-head">
+            <h1 className="istoki-admin-title">Истоки</h1>
+            <div className="istoki-admin-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={false}
+                className="istoki-admin-tab"
+                onClick={() => setTab("regions")}
+              >
+                Контент
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={true}
+                className="istoki-admin-tab"
+                onClick={() => setTab("analytics")}
+              >
+                Аналитика
+              </button>
+            </div>
+          </div>
+        </aside>
+        <main className="istoki-admin-main">
+          <AnalyticsDashboard />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="istoki-admin-shell">
       <aside className="istoki-admin-sidebar">
@@ -30,6 +67,26 @@ function IstokiAdminPage() {
           <p className="istoki-admin-subtitle">
             {regions.length} регионов · {regions.filter((r) => r.hasContent).length} с контентом
           </p>
+          <div className="istoki-admin-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={true}
+              className="istoki-admin-tab"
+              onClick={() => setTab("regions")}
+            >
+              Контент
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              className="istoki-admin-tab"
+              onClick={() => setTab("analytics")}
+            >
+              Аналитика
+            </button>
+          </div>
         </div>
 
         <input
