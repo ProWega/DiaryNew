@@ -1,101 +1,166 @@
-// Hardcoded coordinates for the decorative MVP map. Phase C will replace this
-// with a TopoJSON-driven full map of all 89 RF subjects.
-const REGION_COORDINATES = {
-  sevastopol: { cx: 200, cy: 380, labelDx: -8, labelDy: 22, fallbackName: "Севастополь" },
-  moscow: { cx: 248, cy: 244, labelDx: 14, labelDy: 4, fallbackName: "Москва" },
-  pskov: { cx: 178, cy: 200, labelDx: -10, labelDy: -14, fallbackName: "Псков" },
-  spb: { cx: 208, cy: 168, labelDx: 14, labelDy: -2, fallbackName: "Санкт-Петербург" },
-  ekaterinburg: { cx: 408, cy: 244, labelDx: 14, labelDy: 4, fallbackName: "Екатеринбург" },
-  vladivostok: { cx: 856, cy: 372, labelDx: -10, labelDy: 26, fallbackName: "Владивосток" },
-};
+import { useEffect, useState } from "react";
+import RF_REGISTRY from "../../../../server/seed/data/istoki-rf-subjects.json";
 
-const RUSSIA_OUTLINE =
-  "M 64 220 C 90 180 130 140 178 132 C 220 122 254 132 280 156 C 296 134 326 120 366 130 C 410 138 446 154 478 170 C 510 188 548 196 590 192 C 632 184 672 168 712 178 C 762 188 808 200 854 224 C 902 248 936 270 950 290 C 940 282 906 290 870 308 C 850 318 854 332 880 358 C 902 382 902 396 880 412 C 850 432 822 432 786 422 C 752 414 730 410 706 422 C 686 434 668 444 640 436 C 612 428 596 410 568 408 C 528 406 488 416 446 408 C 408 402 376 388 348 376 C 318 364 282 364 246 380 C 218 392 196 408 168 410 C 132 412 102 392 80 358 C 64 332 56 296 60 264 C 62 244 62 232 64 220 Z";
+const REGISTRY_BY_NAME = new Map(RF_REGISTRY.map((entry) => [entry.name, entry]));
+const TOTAL_SUBJECTS = RF_REGISTRY.length;
+const PATHS_URL = "/istoki/russia-paths.json";
+
+// Brand palette mirrors src/styles/tokens.css :154-183. Inlined so we don't
+// fight CSS specificity on the data-driven attributes used by Playwright.
+const FILL_DIM = "rgba(79, 87, 89, 0.32)";
+const STROKE_DIM = "rgba(79, 87, 89, 0.55)";
+const FILL_BASE = "rgba(229, 213, 184, 0.18)";
+const STROKE_BASE = "rgba(229, 213, 184, 0.35)";
+const FILL_HOVER = "#9a7a32"; // --istoki-gold
+const FILL_ACTIVE = "#c95c36"; // --istoki-terracotta
+const STROKE_HIGHLIGHT = "#e5d5b8"; // --istoki-sand
+
+function fillFor({ empty, isActive, hovered }) {
+  if (isActive) return FILL_ACTIVE;
+  if (empty) return FILL_DIM;
+  return hovered ? FILL_HOVER : FILL_BASE;
+}
+
+function strokeFor({ empty, isActive, hovered }) {
+  if (empty) return STROKE_DIM;
+  if (isActive || hovered) return STROKE_HIGHLIGHT;
+  return STROKE_BASE;
+}
 
 function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false }) {
-  const regionsByCode = new Map(regions.map((r) => [r.code, r]));
+  const [paths, setPaths] = useState(null);
+  const [pathsError, setPathsError] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+  const [hoveredKey, setHoveredKey] = useState(null);
 
-  const points = Object.entries(REGION_COORDINATES).map(([code, coords]) => {
-    const data = regionsByCode.get(code);
-    const empty = !data?.hasContent;
-    const name = data?.name || coords.fallbackName;
-    return { code, ...coords, empty, name };
-  });
+  useEffect(() => {
+    let cancelled = false;
+    fetch(PATHS_URL)
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled) setPaths(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPathsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  function handleClick(event) {
-    const target = event.target.closest("[data-region-code]");
-    if (!target) return;
-    if (target.dataset.empty === "true") return;
-    onRegionSelect(target.dataset.regionCode);
+  const regionsByCode = new Map(regions.map((region) => [region.code, region]));
+  const populatedCount = regions.filter((region) => region.hasContent).length;
+  const dimmedCount = Math.max(TOTAL_SUBJECTS - populatedCount, 0);
+
+  function attemptSelect(meta) {
+    if (!meta) return;
+    const region = regionsByCode.get(meta.code);
+    if (!region?.hasContent) return;
+    onRegionSelect(meta.code);
   }
 
-  function handleKey(event) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    const target = event.target.closest("[data-region-code]");
-    if (!target) return;
-    if (target.dataset.empty === "true") return;
-    event.preventDefault();
-    onRegionSelect(target.dataset.regionCode);
+  function handleMove(event) {
+    setTooltip((prev) => (prev ? { ...prev, x: event.clientX, y: event.clientY } : prev));
+  }
+
+  if (pathsError) {
+    return (
+      <div className="istoki-map-wrap">
+        <div className="istoki-empty" style={{ padding: "60px 16px" }}>
+          Не удалось загрузить геоданные карты. Попробуйте обновить страницу.
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="istoki-map-wrap" data-loading={isLoading ? "true" : "false"}>
+    <div
+      className="istoki-map-wrap"
+      data-loading={isLoading || !paths ? "true" : "false"}
+      onMouseMove={handleMove}
+    >
       <svg
         className="istoki-map"
-        viewBox="0 0 1000 500"
+        viewBox={`0 0 ${paths?.width ?? 1000} ${paths?.height ?? 500}`}
         role="img"
         aria-label="Карта регионов России"
-        onClick={handleClick}
-        onKeyDown={handleKey}
       >
-        <path
-          d={RUSSIA_OUTLINE}
-          fill="rgba(229, 213, 184, 0.04)"
-          stroke="rgba(229, 213, 184, 0.22)"
-          strokeWidth="1.5"
-        />
-
-        {points.map((region) => {
-          const isActive = region.code === activeCode;
-          const r = region.empty ? 7 : 9;
+        {paths?.features.map((feature, index) => {
+          const meta = REGISTRY_BY_NAME.get(feature.name);
+          const region = meta ? regionsByCode.get(meta.code) : null;
+          const empty = !region?.hasContent;
+          const isActive = Boolean(meta?.code) && meta.code === activeCode;
+          const key = `${feature.name}-${index}`;
+          const hovered = hoveredKey === key;
           return (
-            <g key={region.code}>
-              <path
-                d={`M ${region.cx - r} ${region.cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0`}
-                data-region-code={region.code}
-                data-region-name={region.name}
-                data-empty={region.empty ? "true" : "false"}
-                data-active={isActive ? "true" : "false"}
-                role={region.empty ? "img" : "button"}
-                tabIndex={region.empty ? -1 : 0}
-                aria-label={
-                  region.empty
-                    ? `${region.name} — портал ещё не открыт`
-                    : `${region.name} — открыть портал региона`
+            <path
+              key={key}
+              d={feature.d}
+              data-region-code={meta?.code || ""}
+              data-region-name={feature.name}
+              data-empty={empty ? "true" : "false"}
+              data-active={isActive ? "true" : "false"}
+              role={empty ? "img" : "button"}
+              tabIndex={empty ? -1 : 0}
+              aria-label={
+                empty
+                  ? `${feature.name} — портал ещё не открыт`
+                  : `${feature.name} — открыть портал региона`
+              }
+              aria-pressed={isActive}
+              fill={fillFor({ empty, isActive, hovered })}
+              stroke={strokeFor({ empty, isActive, hovered })}
+              strokeWidth={isActive ? 1.6 : hovered ? 1.4 : 0.9}
+              style={{
+                cursor: empty ? "default" : "pointer",
+                outline: "none",
+                transition: "fill 200ms ease, stroke 200ms ease",
+              }}
+              onClick={() => attemptSelect(meta)}
+              onMouseEnter={(event) => {
+                setHoveredKey(key);
+                setTooltip({
+                  x: event.clientX,
+                  y: event.clientY,
+                  name: feature.name,
+                  hasContent: !empty,
+                });
+              }}
+              onMouseLeave={() => {
+                setHoveredKey(null);
+                setTooltip(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  attemptSelect(meta);
                 }
-                aria-pressed={isActive}
-              />
-              <text
-                className={region.empty ? "istoki-map-pin istoki-map-pin-empty" : "istoki-map-pin"}
-                x={region.cx + region.labelDx}
-                y={region.cy + region.labelDy}
-                textAnchor={region.labelDx < 0 ? "end" : "start"}
-              >
-                {region.name}
-              </text>
-            </g>
+              }}
+            />
           );
         })}
       </svg>
 
+      {tooltip && (
+        <div className="istoki-map-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
+          <span className="istoki-map-tooltip-name">{tooltip.name}</span>
+          <span className="istoki-map-tooltip-status">
+            {tooltip.hasContent ? "Открыть портал" : "Архив в работе"}
+          </span>
+        </div>
+      )}
+
       <div className="istoki-map-legend">
         <span>
           <span className="istoki-map-legend-dot" data-kind="active" />
-          Регион с открытым порталом
+          {populatedCount} с контентом
         </span>
         <span>
           <span className="istoki-map-legend-dot" data-kind="empty" />
-          Архив в работе
+          {dimmedCount} в работе
         </span>
       </div>
     </div>

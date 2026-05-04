@@ -172,48 +172,38 @@
   filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.55));
 }
 
-.istoki-map path[data-region-code] {
-  fill: rgba(229, 213, 184, 0.18);
-  stroke: rgba(229, 213, 184, 0.35);
-  stroke-width: 1.4;
-  transition:
-    fill 220ms ease,
-    transform 220ms ease,
-    stroke 220ms ease;
-  cursor: pointer;
-  outline: none;
-}
-
-.istoki-map path[data-region-code]:hover,
 .istoki-map path[data-region-code]:focus-visible {
-  fill: var(--istoki-gold);
-  stroke: var(--istoki-sand);
+  outline: 2px solid var(--istoki-gold);
+  outline-offset: 1px;
 }
 
-.istoki-map path[data-region-code][data-active="true"] {
-  fill: var(--istoki-terracotta);
-  stroke: var(--istoki-sand);
-  stroke-width: 2;
-}
-
-.istoki-map path[data-region-code][data-empty="true"] {
-  fill: rgba(79, 87, 89, 0.32);
-  stroke: rgba(79, 87, 89, 0.5);
-  cursor: not-allowed;
+.istoki-map-tooltip {
+  position: fixed;
   pointer-events: none;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(20, 12, 14, 0.94);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 8px;
+  color: var(--istoki-sand);
+  font-size: 13px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  max-width: 280px;
 }
 
-.istoki-map-pin {
-  fill: var(--istoki-sand);
-  pointer-events: none;
-  font-family: "TT Norms", "Montserrat", system-ui, sans-serif;
+.istoki-map-tooltip-name {
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+
+.istoki-map-tooltip-status {
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-
-.istoki-map-pin-empty {
-  fill: rgba(229, 213, 184, 0.42);
+  color: var(--istoki-gold);
 }
 
 .istoki-map-legend {

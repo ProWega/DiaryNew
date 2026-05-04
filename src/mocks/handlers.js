@@ -561,56 +561,77 @@ const adminHandlers = [
 // ─── Истоки · публичная карта голосов регионов ───────────────────────────────
 
 import istokiSeed from "../../server/seed/data/istoki-regions-seed.json";
+import istokiRfSubjects from "../../server/seed/data/istoki-rf-subjects.json";
 
-const ISTOKI_ISO_BY_CODE = {
-  sevastopol: "RU-SEV",
-  pskov: "RU-PSK",
-  moscow: "RU-MOW",
-  spb: "RU-SPE",
-  ekaterinburg: "RU-SVE",
-  vladivostok: "RU-PRI",
-};
+// Mirror of seedIstoki.cjs logic for MSW: build the same merged region list
+// the real backend would return. Pass 1 — stub all 89 RF subjects; pass 2 —
+// overlay the featured regions (with content) on top by code.
+const istokiRegionsByCode = new Map();
+istokiRfSubjects.forEach((subject, index) =>
+  istokiRegionsByCode.set(subject.code, {
+    code: subject.code,
+    isoCode: subject.iso,
+    name: subject.name,
+    geographicHint: null,
+    orderIdx: 1000 + index,
+    isPublished: true,
+    podcasts: [],
+    stories: [],
+    chronicle: [],
+  }),
+);
+istokiSeed.forEach((region, index) => {
+  const existing = istokiRegionsByCode.get(region.code);
+  istokiRegionsByCode.set(region.code, {
+    ...existing,
+    code: region.code,
+    isoCode: existing?.isoCode ?? null,
+    name: region.name,
+    geographicHint: region.geographicHint ?? null,
+    orderIdx: index,
+    isPublished: true,
+    podcasts: region.podcasts ?? [],
+    stories: region.stories ?? [],
+    chronicle: region.chronicle ?? [],
+  });
+});
+
+function regionSummary(region) {
+  return {
+    code: region.code,
+    isoCode: region.isoCode,
+    name: region.name,
+    geographicHint: region.geographicHint,
+    orderIdx: region.orderIdx,
+    isPublished: region.isPublished,
+    hasContent:
+      Boolean(region.podcasts?.length) ||
+      Boolean(region.stories?.length) ||
+      Boolean(region.chronicle?.length),
+    counts: {
+      podcasts: region.podcasts?.length ?? 0,
+      stories: region.stories?.length ?? 0,
+      chronicle: region.chronicle?.length ?? 0,
+    },
+  };
+}
 
 const istokiHandlers = [
   http.get("/api/public/istoki/regions", async () => {
     await delay(MS);
-    const regions = istokiSeed.map((region, index) => ({
-      code: region.code,
-      isoCode: ISTOKI_ISO_BY_CODE[region.code] ?? null,
-      name: region.name,
-      geographicHint: region.geographicHint ?? null,
-      orderIdx: index,
-      isPublished: true,
-      hasContent:
-        Boolean(region.podcasts?.length) ||
-        Boolean(region.stories?.length) ||
-        Boolean(region.chronicle?.length),
-      counts: {
-        podcasts: region.podcasts?.length ?? 0,
-        stories: region.stories?.length ?? 0,
-        chronicle: region.chronicle?.length ?? 0,
-      },
-    }));
+    const regions = Array.from(istokiRegionsByCode.values())
+      .map(regionSummary)
+      .sort((a, b) => a.orderIdx - b.orderIdx || a.name.localeCompare(b.name, "ru"));
     return ok({ regions });
   }),
 
   http.get("/api/public/istoki/regions/:code", async ({ params }) => {
     await delay(MS);
-    const region = istokiSeed.find((r) => r.code === params.code);
+    const region = istokiRegionsByCode.get(params.code);
     if (!region) {
       return HttpResponse.json({ message: "Регион не найден" }, { status: 404 });
     }
-    return ok({
-      code: region.code,
-      isoCode: ISTOKI_ISO_BY_CODE[region.code] ?? null,
-      name: region.name,
-      geographicHint: region.geographicHint ?? null,
-      orderIdx: 0,
-      isPublished: true,
-      podcasts: region.podcasts ?? [],
-      stories: region.stories ?? [],
-      chronicle: region.chronicle ?? [],
-    });
+    return ok(region);
   }),
 ];
 

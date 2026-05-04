@@ -2,11 +2,17 @@
 
 /**
  * Idempotent seeder for the «Истоки · Голоса регионов» content store.
- * Reads server/seed/data/istoki-regions-seed.json and inserts into
- * istoki_regions / istoki_podcasts / istoki_stories / istoki_chronicle.
  *
- * Safe to run multiple times — uses ON CONFLICT DO UPDATE everywhere
- * so re-runs refresh the seed content without duplicating rows.
+ * Two-pass strategy (Phase C onward):
+ *   Pass 1: insert all RF subjects from istoki-rf-subjects.json as bare
+ *           regions (code + iso + display name, no content). This makes
+ *           the full map clickable in the public showcase.
+ *   Pass 2: read istoki-regions-seed.json and ON CONFLICT DO UPDATE
+ *           overwrite the matching regions with their featured display
+ *           name + cascade insert their podcasts/stories/chronicle.
+ *
+ * Both passes use upsert semantics, so re-runs refresh content without
+ * duplicating rows.
  */
 
 const path = require("node:path");
@@ -18,28 +24,36 @@ const {
   upsertChronicleEntry,
 } = require("../db/repositories/istokiStore.cjs");
 
-const ISO_BY_CODE = {
-  sevastopol: "RU-SEV",
-  pskov: "RU-PSK",
-  moscow: "RU-MOW",
-  spb: "RU-SPE",
-  ekaterinburg: "RU-SVE",
-  vladivostok: "RU-PRI",
-};
-
-function loadSeedData() {
-  const filePath = path.join(__dirname, "data", "istoki-regions-seed.json");
+function loadJson(filename) {
+  const filePath = path.join(__dirname, "data", filename);
   const raw = fs.readFileSync(filePath, "utf8");
   return JSON.parse(raw);
 }
 
-async function seedIstokiRegions() {
-  const regions = loadSeedData();
+async function seedRfSubjectStubs() {
+  const subjects = loadJson("istoki-rf-subjects.json");
+
+  for (const [index, subject] of subjects.entries()) {
+    await upsertRegion({
+      code: subject.code,
+      isoCode: subject.iso,
+      name: subject.name,
+      geographicHint: null,
+      orderIdx: 1000 + index,
+      isPublished: true,
+    });
+  }
+
+  return subjects.length;
+}
+
+async function seedFeaturedRegions() {
+  const regions = loadJson("istoki-regions-seed.json");
 
   for (const [index, region] of regions.entries()) {
     await upsertRegion({
       code: region.code,
-      isoCode: ISO_BY_CODE[region.code] ?? null,
+      isoCode: region.isoCode ?? null,
       name: region.name,
       geographicHint: region.geographicHint,
       orderIdx: index,
@@ -88,7 +102,15 @@ async function seedIstokiRegions() {
     }
   }
 
-  console.log(`[db:seed:istoki] Seeded ${regions.length} region(s).`);
+  return regions.length;
+}
+
+async function seedIstokiRegions() {
+  const stubsCount = await seedRfSubjectStubs();
+  const featuredCount = await seedFeaturedRegions();
+  console.log(
+    `[db:seed:istoki] Seeded ${stubsCount} RF subject stub(s) + ${featuredCount} featured region(s).`,
+  );
 }
 
 module.exports = { seedIstokiRegions };

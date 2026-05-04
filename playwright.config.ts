@@ -23,7 +23,7 @@ export default defineConfig({
     command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 180_000,
     env: {
       VITE_USE_MOCK: "true",
     },
