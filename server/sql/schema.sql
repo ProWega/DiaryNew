@@ -454,3 +454,12 @@ create index if not exists idx_typology_assignments_user on typology_assignments
 create index if not exists idx_comment_clusters_session on comment_clusters(session_id);
 create index if not exists idx_risk_signals_session_group on risk_signals(session_id, group_id);
 create index if not exists idx_ai_reports_session_scope on ai_reports(session_id, scope);
+
+-- ── Methodology «Дневник пути» Phase 2 (privacy + mood) ────────────
+-- See docs/architecture/methodology-mapping.md
+alter table diary_entries add column if not exists is_anonymous boolean not null default false;
+alter table diary_entries add column if not exists is_hidden_from_curator boolean not null default false;
+alter table diary_entries add column if not exists group_lad text;
+alter table daily_reflections add column if not exists is_anonymous boolean not null default false;
+alter table daily_reflections add column if not exists is_hidden_from_curator boolean not null default false;
+alter table session_users add column if not exists mood text;

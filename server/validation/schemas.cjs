@@ -6,6 +6,11 @@ const ASSIGNMENT_STATUSES = ["active", "disabled"];
 const MAGIC_PURPOSES = ["login", "invite"];
 const CONFIDENCE_VALUES = ["low", "high"];
 
+// Methodology «Дневник пути» — see docs/architecture/methodology-mapping.md
+const GROUP_LAD_VALUES = ["with_group", "alongside", "apart"];
+const MOOD_VALUES = ["crossroads", "support", "transmission", "silence"];
+const SUMMARY_AXIS_VALUES = ["mind", "heart", "will"];
+
 const trimmed = (max) =>
   z
     .string()
@@ -77,6 +82,10 @@ const updateDiaryEntrySchema = z
     confidence: z.enum(CONFIDENCE_VALUES).optional(),
     reflectionAnswers: z.record(z.string().max(64), z.string().max(2000)).optional(),
     allowIncompleteReflection: z.boolean().optional(),
+    // Methodology Phase 2 — see docs/architecture/methodology-mapping.md §2.3
+    groupLad: z.enum(GROUP_LAD_VALUES).optional().nullable(),
+    isAnonymous: z.boolean().optional(),
+    isHiddenFromCurator: z.boolean().optional(),
   })
   .strict();
 
@@ -84,10 +93,25 @@ const updateDiaryEntrySchema = z
 const updateReflectionSchema = z
   .object({
     answers: z.record(z.string().max(64), z.string().max(2000)).optional(),
+    // Legacy keys (q1/q2/q3) — kept for backwards compatibility during the migration.
     q1: optionalText(2000),
     q2: optionalText(2000),
     q3: optionalText(2000),
+    // Methodology axes (Ум/Сердце/Воля) — preferred shape for new clients.
+    mind: optionalText(2000),
+    heart: optionalText(2000),
+    will: optionalText(2000),
     freeText: optionalText(4000),
+    // Methodology Phase 2 — privacy flags
+    isAnonymous: z.boolean().optional(),
+    isHiddenFromCurator: z.boolean().optional(),
+  })
+  .strict();
+
+// PATCH /api/participant/sessions/:sessionId/mood — Phase 2 sets mood at session_user level.
+const updateMoodSchema = z
+  .object({
+    mood: z.enum(MOOD_VALUES).nullable(),
   })
   .strict();
 
@@ -139,10 +163,14 @@ const upsertUserAssignmentSchema = z
   .strict();
 
 module.exports = {
+  GROUP_LAD_VALUES,
+  MOOD_VALUES,
+  SUMMARY_AXIS_VALUES,
   consumeMagicLinkSchema,
   createMagicLinkSchema,
   createUserSchema,
   registerParticipantSchema,
+  updateMoodSchema,
   setupAdminSchema,
   updateDiaryEntrySchema,
   updateReflectionSchema,
