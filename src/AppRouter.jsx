@@ -14,6 +14,8 @@ import {
 } from "./pages/ParticipantPage";
 import RegistrationPage from "./pages/RegistrationPage";
 import SetupAdminPage from "./pages/SetupAdminPage";
+import IstokiMapPage from "./features/istoki/IstokiMapPage";
+import IstokiPublicLayout from "./features/istoki/IstokiPublicLayout";
 import { getDefaultRoute } from "./rbac/permissions";
 
 const APP_TITLE = "Истоки";
@@ -59,11 +61,28 @@ function AppRouter() {
           </PageTitle>
         }
       />
-
       <Route
-        path="/"
-        element={currentUser ? <AppLayout /> : <Navigate to="/register" replace />}
-      >
+        path="/istoki/map"
+        element={
+          <PageTitle title="Голоса регионов">
+            <IstokiPublicLayout>
+              <IstokiMapPage />
+            </IstokiPublicLayout>
+          </PageTitle>
+        }
+      />
+      <Route
+        path="/istoki/region/:regionCode"
+        element={
+          <PageTitle title="Голоса регионов">
+            <IstokiPublicLayout>
+              <IstokiMapPage deepLink />
+            </IstokiPublicLayout>
+          </PageTitle>
+        }
+      />
+
+      <Route path="/" element={currentUser ? <AppLayout /> : <Navigate to="/register" replace />}>
         <Route index element={<Navigate to={getDefaultRoute(currentUser)} replace />} />
 
         <Route
@@ -131,7 +150,13 @@ function AppRouter() {
 
       <Route
         path="*"
-        element={currentUser ? <Navigate to={getDefaultRoute(currentUser)} replace /> : <Navigate to="/register" replace />}
+        element={
+          currentUser ? (
+            <Navigate to={getDefaultRoute(currentUser)} replace />
+          ) : (
+            <Navigate to="/register" replace />
+          )
+        }
       />
     </Routes>
   );
