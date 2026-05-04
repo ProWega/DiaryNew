@@ -20,6 +20,7 @@ Thumbs.db
 
 .idea/
 .vscode/
+.claude/
 *.suo
 *.user
 *.userossc
