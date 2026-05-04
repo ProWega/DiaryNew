@@ -49,3 +49,7 @@ export interface NavigationItem {
   label: string;
   to: string;
 }
+
+// Methodology types — single source of truth lives in src/data/methodology.ts.
+// Re-exported here so view/component code can import all domain types from one place.
+export type { Mood, GroupLad, SummaryAxis, MethodologyState } from "../data/methodology";
