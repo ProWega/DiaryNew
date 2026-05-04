@@ -43,9 +43,18 @@ function IstokiAdminPage() {
         {regionsQuery.isLoading ? (
           <div className="istoki-admin-empty">Загрузка…</div>
         ) : regionsQuery.isError ? (
-          <div className="istoki-admin-empty">Не удалось загрузить регионы</div>
+          <div className="istoki-admin-empty">
+            Не удалось загрузить регионы
+            <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7 }}>
+              {regionsQuery.error?.message || "неизвестная ошибка"}
+            </div>
+          </div>
+        ) : regions.length === 0 ? (
+          <div className="istoki-admin-empty">
+            БД пуста. Запустите <code>npm&nbsp;run&nbsp;db:seed</code>, чтобы засеять 89 регионов.
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="istoki-admin-empty">Ничего не найдено</div>
+          <div className="istoki-admin-empty">Ничего не найдено по запросу</div>
         ) : (
           <ul className="istoki-admin-region-list">
             {filtered.map((region) => (
