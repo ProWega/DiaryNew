@@ -192,6 +192,11 @@ function getNavigationItems(user) {
       label: "Администрирование",
       to: "/admin/security",
     });
+    items.push({
+      id: "admin-istoki",
+      label: "Истоки · Контент",
+      to: "/admin/istoki",
+    });
   }
 
   return items;
@@ -394,7 +399,10 @@ async function updateUser({ actorId, userId, payload = {} }) {
 
 async function updateUserStatus({ actorId, userId, status }) {
   const nextStatus = status === "disabled" ? "disabled" : "active";
-  await query("update users set status = $2, updated_at = now() where id = $1", [userId, nextStatus]);
+  await query("update users set status = $2, updated_at = now() where id = $1", [
+    userId,
+    nextStatus,
+  ]);
   await query(
     `
       insert into audit_log (id, actor_id, action, entity_type, entity_id, payload)
@@ -427,13 +435,7 @@ async function upsertUserAssignment({ actorId, userId, payload = {} }) {
         status = excluded.status,
         updated_at = now()
     `,
-    [
-      payload.sessionId,
-      userId,
-      groupId,
-      role,
-      status,
-    ],
+    [payload.sessionId, userId, groupId, role, status],
   );
 
   if (role === "curator" && groupId && status === "active") {
