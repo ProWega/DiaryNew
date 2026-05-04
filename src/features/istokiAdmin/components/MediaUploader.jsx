@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { uploadFile } from "../api";
+import { useAuth } from "../../../auth/AuthContext";
 
 function MediaUploader({ kind, value, onChange, accept, helpText }) {
+  const { currentUser } = useAuth();
+  const viewerId = currentUser?.id ? String(currentUser.id) : null;
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -11,7 +14,7 @@ function MediaUploader({ kind, value, onChange, accept, helpText }) {
     setError(null);
     setUploading(true);
     try {
-      const result = await uploadFile(kind, file);
+      const result = await uploadFile(kind, file, viewerId);
       onChange(result.url);
     } catch (err) {
       setError(err?.message || "Ошибка загрузки");

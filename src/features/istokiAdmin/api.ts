@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCsrfToken } from "../../lib/csrfToken";
+import { useAuth } from "../../auth/AuthContext";
 import type { Region } from "../istoki/types";
 import type { RegionSummary } from "../istoki/api";
 
@@ -9,6 +10,7 @@ interface FetchOptions {
   method?: string;
   body?: unknown;
   signal?: AbortSignal;
+  viewerId?: string | number | null;
 }
 
 async function adminFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
@@ -16,6 +18,12 @@ async function adminFetch<T>(path: string, options: FetchOptions = {}): Promise<
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  // Project's dev-mode auth resolves the viewer from this header when no
+  // valid session cookie is present (server/lib/routeHelpers.cjs::getViewerId).
+  // Existing admin pages use the same convention via src/api/jsonApi.ts.
+  if (options.viewerId != null) {
+    headers["x-viewer-id"] = String(options.viewerId);
+  }
   if (method !== "GET" && method !== "HEAD") {
     headers["X-CSRF-Token"] = getCsrfToken() ?? "";
   }
@@ -48,12 +56,15 @@ async function adminFetch<T>(path: string, options: FetchOptions = {}): Promise<
 async function uploadFile(
   kind: "audio" | "photo",
   file: File,
+  viewerId: string | number | null,
 ): Promise<{ url: string; sizeBytes: number; mime: string }> {
   const formData = new FormData();
   formData.append("file", file);
+  const headers: Record<string, string> = { "X-CSRF-Token": getCsrfToken() ?? "" };
+  if (viewerId != null) headers["x-viewer-id"] = String(viewerId);
   const response = await fetch(`${ADMIN_BASE}/uploads/${kind}`, {
     method: "POST",
-    headers: { "X-CSRF-Token": getCsrfToken() ?? "" },
+    headers,
     credentials: "include",
     body: formData,
   });
@@ -70,26 +81,36 @@ async function uploadFile(
   return (await response.json()) as { url: string; sizeBytes: number; mime: string };
 }
 
+function useViewerId(): string | null {
+  // AuthContext is plain JS; cast to a minimal shape we rely on here.
+  const { currentUser } = useAuth() as { currentUser?: { id?: string | number } | null };
+  return currentUser?.id ? String(currentUser.id) : null;
+}
+
 // ── Queries ────────────────────────────────────────────────────────
 
 export function useAdminRegions() {
+  const viewerId = useViewerId();
   return useQuery({
-    queryKey: ["istoki", "admin", "regions"],
-    queryFn: () => adminFetch<{ regions: RegionSummary[] }>("/regions"),
+    queryKey: ["istoki", "admin", "regions", viewerId],
+    queryFn: () => adminFetch<{ regions: RegionSummary[] }>("/regions", { viewerId }),
+    enabled: Boolean(viewerId),
   });
 }
 
 export function useAdminRegion(code: string | null | undefined) {
+  const viewerId = useViewerId();
   return useQuery({
-    queryKey: ["istoki", "admin", "region", code],
-    queryFn: () => adminFetch<Region>(`/regions/${code}`),
-    enabled: Boolean(code),
+    queryKey: ["istoki", "admin", "region", code, viewerId],
+    queryFn: () => adminFetch<Region>(`/regions/${code}`, { viewerId }),
+    enabled: Boolean(code) && Boolean(viewerId),
   });
 }
 
 // ── Mutations (return raw promises; callers wrap in useCommandMutation) ──
 
 export function useAdminMutations() {
+  const viewerId = useViewerId();
   const queryClient = useQueryClient();
 
   function invalidateAll() {
@@ -108,16 +129,21 @@ export function useAdminMutations() {
   return {
     upsertRegion: useMutation({
       mutationFn: (payload: Partial<Region> & { code: string }) =>
-        adminFetch<{ code: string }>("/regions", { method: "POST", body: payload }),
+        adminFetch<{ code: string }>("/regions", { method: "POST", body: payload, viewerId }),
       onSuccess: (_data, variables) => invalidateRegion(variables.code),
     }),
     updateRegion: useMutation({
       mutationFn: (payload: Partial<Region> & { code: string }) =>
-        adminFetch<{ code: string }>(`/regions/${payload.code}`, { method: "PUT", body: payload }),
+        adminFetch<{ code: string }>(`/regions/${payload.code}`, {
+          method: "PUT",
+          body: payload,
+          viewerId,
+        }),
       onSuccess: (_data, variables) => invalidateRegion(variables.code),
     }),
     deleteRegion: useMutation({
-      mutationFn: (code: string) => adminFetch<void>(`/regions/${code}`, { method: "DELETE" }),
+      mutationFn: (code: string) =>
+        adminFetch<void>(`/regions/${code}`, { method: "DELETE", viewerId }),
       onSuccess: () => invalidateAll(),
     }),
 
@@ -126,6 +152,7 @@ export function useAdminMutations() {
         adminFetch<{ id: string }>(`/regions/${regionCode}/podcasts`, {
           method: "POST",
           body,
+          viewerId,
         }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
@@ -138,12 +165,17 @@ export function useAdminMutations() {
         id: string;
         regionCode: string;
         [k: string]: unknown;
-      }) => adminFetch<{ id: string }>(`/podcasts/${id}`, { method: "PUT", body: { ...body, id } }),
+      }) =>
+        adminFetch<{ id: string }>(`/podcasts/${id}`, {
+          method: "PUT",
+          body: { ...body, id },
+          viewerId,
+        }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
     deletePodcast: useMutation({
       mutationFn: ({ id }: { id: string; regionCode: string }) =>
-        adminFetch<void>(`/podcasts/${id}`, { method: "DELETE" }),
+        adminFetch<void>(`/podcasts/${id}`, { method: "DELETE", viewerId }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
 
@@ -152,6 +184,7 @@ export function useAdminMutations() {
         adminFetch<{ id: string }>(`/regions/${regionCode}/stories`, {
           method: "POST",
           body,
+          viewerId,
         }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
@@ -164,12 +197,17 @@ export function useAdminMutations() {
         id: string;
         regionCode: string;
         [k: string]: unknown;
-      }) => adminFetch<{ id: string }>(`/stories/${id}`, { method: "PUT", body: { ...body, id } }),
+      }) =>
+        adminFetch<{ id: string }>(`/stories/${id}`, {
+          method: "PUT",
+          body: { ...body, id },
+          viewerId,
+        }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
     deleteStory: useMutation({
       mutationFn: ({ id }: { id: string; regionCode: string }) =>
-        adminFetch<void>(`/stories/${id}`, { method: "DELETE" }),
+        adminFetch<void>(`/stories/${id}`, { method: "DELETE", viewerId }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
 
@@ -178,6 +216,7 @@ export function useAdminMutations() {
         adminFetch<{ id: string }>(`/regions/${regionCode}/chronicle`, {
           method: "POST",
           body,
+          viewerId,
         }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
@@ -191,12 +230,16 @@ export function useAdminMutations() {
         regionCode: string;
         [k: string]: unknown;
       }) =>
-        adminFetch<{ id: string }>(`/chronicle/${id}`, { method: "PUT", body: { ...body, id } }),
+        adminFetch<{ id: string }>(`/chronicle/${id}`, {
+          method: "PUT",
+          body: { ...body, id },
+          viewerId,
+        }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
     deleteChronicle: useMutation({
       mutationFn: ({ id }: { id: string; regionCode: string }) =>
-        adminFetch<void>(`/chronicle/${id}`, { method: "DELETE" }),
+        adminFetch<void>(`/chronicle/${id}`, { method: "DELETE", viewerId }),
       onSuccess: (_data, variables) => invalidateRegion(variables.regionCode),
     }),
   };
