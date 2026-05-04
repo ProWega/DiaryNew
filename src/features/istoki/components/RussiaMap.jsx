@@ -35,7 +35,13 @@ function pluralizeCount(count, [one, few, many]) {
   return `${count} ${many}`;
 }
 
-function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false }) {
+function RussiaMap({
+  activeCode,
+  highlightCode = null,
+  onRegionSelect,
+  regions = [],
+  isLoading = false,
+}) {
   const [paths, setPaths] = useState(null);
   const [pathsError, setPathsError] = useState(false);
   const [tooltip, setTooltip] = useState(null);
@@ -111,6 +117,7 @@ function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false
           const region = meta ? regionsByCode.get(meta.code) : null;
           const empty = !region?.hasContent;
           const isActive = Boolean(meta?.code) && meta.code === activeCode;
+          const isHighlight = Boolean(meta?.code) && meta.code === highlightCode;
           const key = `${feature.name}-${index}`;
           const hovered = hoveredKey === key;
           return (
@@ -121,6 +128,7 @@ function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false
               data-region-name={feature.name}
               data-empty={empty ? "true" : "false"}
               data-active={isActive ? "true" : "false"}
+              data-highlight={isHighlight ? "true" : "false"}
               role={empty ? "img" : "button"}
               tabIndex={empty ? -1 : 0}
               aria-label={

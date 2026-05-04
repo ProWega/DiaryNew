@@ -33,4 +33,21 @@ test.describe("Истоки · Голоса регионов", () => {
     await empty.click({ force: true });
     await expect(page.getByRole("dialog")).not.toBeVisible();
   });
+
+  test("поиск синхронизируется с URL и подсвечивает регион", async ({ page }) => {
+    await page.goto("/istoki/map");
+    const search = page.getByRole("searchbox", { name: "Поиск региона по названию" });
+    await search.fill("Псков");
+    await expect(page).toHaveURL(/q=%D0%9F%D1%81%D0%BA%D0%BE%D0%B2/);
+    await expect(page.locator('[data-region-code="pskov"]')).toHaveAttribute(
+      "data-highlight",
+      "true",
+    );
+  });
+
+  test("тоггл «только с контентом» сохраняется в URL", async ({ page }) => {
+    await page.goto("/istoki/map");
+    await page.getByRole("checkbox", { name: "Только с контентом" }).check();
+    await expect(page).toHaveURL(/filter=content/);
+  });
 });
