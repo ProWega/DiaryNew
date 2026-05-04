@@ -30,3 +30,6 @@ coverage/
 storybook-static/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+
+# User-uploaded media for the Истоки CMS (audio podcasts, story photos)
+server/uploads/

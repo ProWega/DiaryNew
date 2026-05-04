@@ -1,0 +1,430 @@
+/* ──────────────────────────────────────────────────────────────
+   Истоки · Контент-CMS — admin styling
+   Sits inside the regular AppLayout (not brand-locked); reuses the
+   admin token surface from src/styles/admin.css and tokens.css.
+   ────────────────────────────────────────────────────────────── */
+
+.istoki-admin-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .istoki-admin-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.istoki-admin-sidebar {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(248, 244, 236, 0.82)),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+
+.istoki-admin-sidebar-head {
+  display: grid;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.istoki-admin-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.istoki-admin-subtitle {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.istoki-admin-search {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 180ms ease;
+}
+
+.istoki-admin-search:focus {
+  border-color: var(--istoki-burgundy);
+}
+
+.istoki-admin-region-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.istoki-admin-region-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--text-main);
+  font-family: inherit;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.istoki-admin-region-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.istoki-admin-region-item[data-active="true"] {
+  background: linear-gradient(145deg, var(--istoki-burgundy), var(--istoki-cabernet));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 12px 22px rgba(107, 31, 42, 0.25);
+}
+
+.istoki-admin-region-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.istoki-admin-region-meta {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.istoki-admin-region-item[data-active="true"] .istoki-admin-region-meta {
+  color: rgba(255, 252, 244, 0.78);
+}
+
+.istoki-admin-region-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--istoki-graphite);
+  display: inline-block;
+}
+
+.istoki-admin-region-dot[data-kind="active"] {
+  background: var(--istoki-gold);
+}
+
+.istoki-admin-empty,
+.istoki-admin-empty-large {
+  text-align: center;
+  color: var(--text-soft);
+  padding: 24px 12px;
+  font-size: 14px;
+}
+
+.istoki-admin-empty-large {
+  padding: 80px 24px;
+  font-size: 16px;
+}
+
+/* ── Editor pane ───────────────────────────────────────────── */
+
+.istoki-admin-main {
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 244, 236, 0.88)),
+    rgba(255, 255, 255, 0.9);
+  padding: 24px clamp(16px, 3vw, 32px);
+  box-shadow: var(--shadow-soft);
+  min-height: 480px;
+}
+
+.istoki-admin-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.istoki-admin-editor-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--istoki-burgundy);
+  margin-bottom: 4px;
+}
+
+.istoki-admin-editor-title {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.istoki-admin-editor-hint {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.istoki-admin-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.istoki-admin-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.istoki-admin-tab[aria-selected="true"] {
+  background: var(--istoki-burgundy);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ── List + items ──────────────────────────────────────────── */
+
+.istoki-admin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.istoki-admin-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.istoki-admin-list-count {
+  font-size: 13px;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
+}
+
+.istoki-admin-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.istoki-admin-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line-soft);
+}
+
+.istoki-admin-list-item-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-strong);
+}
+
+.istoki-admin-list-item-meta {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+
+.istoki-admin-list-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+
+.istoki-admin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.istoki-admin-button:hover {
+  transform: translateY(-1px);
+}
+
+.istoki-admin-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.istoki-admin-button.is-primary {
+  background: linear-gradient(145deg, var(--istoki-burgundy), var(--istoki-cabernet));
+  color: #fff;
+  border-color: transparent;
+}
+
+.istoki-admin-button.is-danger {
+  color: #b62524;
+  border-color: rgba(182, 37, 36, 0.3);
+}
+
+.istoki-admin-button.is-danger:hover {
+  background: rgba(182, 37, 36, 0.08);
+}
+
+/* ── Forms ─────────────────────────────────────────────────── */
+
+.istoki-admin-form {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.istoki-admin-field {
+  display: grid;
+  gap: 6px;
+}
+
+.istoki-admin-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .istoki-admin-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.istoki-admin-field-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.istoki-admin-input,
+.istoki-admin-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 160ms ease;
+}
+
+.istoki-admin-input:focus,
+.istoki-admin-textarea:focus {
+  border-color: var(--istoki-burgundy);
+}
+
+.istoki-admin-input:disabled {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-soft);
+}
+
+.istoki-admin-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.istoki-admin-field-hint {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.istoki-admin-field-error {
+  font-size: 12px;
+  color: #b62524;
+}
+
+.istoki-admin-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.istoki-admin-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+/* ── Uploader ──────────────────────────────────────────────── */
+
+.istoki-admin-uploader {
+  display: grid;
+  gap: 8px;
+}
+
+.istoki-admin-uploader > .istoki-admin-input {
+  margin-bottom: 4px;
+}
+
+.istoki-admin-uploader-preview {
+  max-width: 240px;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+}
+
+.istoki-admin-uploader-audio {
+  width: 100%;
+  max-width: 480px;
+}

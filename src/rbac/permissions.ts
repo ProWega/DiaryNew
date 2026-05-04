@@ -124,6 +124,12 @@ export function can(
     case "security.read":
     case "security.manage":
       return false;
+
+    case "istoki.regions.read":
+    case "istoki.regions.manage":
+      // Admin-only is handled by the early return above. For all other
+      // roles the Истоки CMS is invisible.
+      return false;
   }
 }
 
@@ -205,6 +211,14 @@ export function getNavigationItems(user: CurrentUser | null | undefined): Naviga
       id: "admin-security",
       label: "Администрирование",
       to: "/admin/security",
+    });
+  }
+
+  if (can(user, "istoki.regions.manage")) {
+    items.push({
+      id: "admin-istoki",
+      label: "Истоки · Контент",
+      to: "/admin/istoki",
     });
   }
 

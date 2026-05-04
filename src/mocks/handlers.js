@@ -633,6 +633,126 @@ const istokiHandlers = [
     }
     return ok(region);
   }),
+
+  // Admin endpoints — same in-memory store as public.
+  http.get("/api/admin/istoki/regions", async () => {
+    await delay(MS);
+    const regions = Array.from(istokiRegionsByCode.values())
+      .map(regionSummary)
+      .sort((a, b) => a.orderIdx - b.orderIdx || a.name.localeCompare(b.name, "ru"));
+    return ok({ regions });
+  }),
+  http.get("/api/admin/istoki/regions/:code", async ({ params }) => {
+    await delay(MS);
+    const region = istokiRegionsByCode.get(params.code);
+    if (!region) {
+      return HttpResponse.json({ message: "Регион не найден" }, { status: 404 });
+    }
+    return ok(region);
+  }),
+  http.post("/api/admin/istoki/regions", async ({ request }) => {
+    await delay(MS);
+    const body = await request.json();
+    const existing = istokiRegionsByCode.get(body.code) || {
+      podcasts: [],
+      stories: [],
+      chronicle: [],
+    };
+    istokiRegionsByCode.set(body.code, {
+      ...existing,
+      code: body.code,
+      isoCode: body.isoCode ?? existing.isoCode ?? null,
+      name: body.name,
+      geographicHint: body.geographicHint ?? null,
+      orderIdx: body.orderIdx ?? 0,
+      isPublished: body.isPublished !== false,
+    });
+    return HttpResponse.json({ code: body.code }, { status: 201 });
+  }),
+  http.put("/api/admin/istoki/regions/:code", async ({ params, request }) => {
+    await delay(MS);
+    const body = await request.json();
+    const existing = istokiRegionsByCode.get(params.code);
+    if (!existing) {
+      return HttpResponse.json({ message: "Регион не найден" }, { status: 404 });
+    }
+    istokiRegionsByCode.set(params.code, {
+      ...existing,
+      name: body.name,
+      geographicHint: body.geographicHint ?? null,
+      orderIdx: body.orderIdx ?? 0,
+      isPublished: body.isPublished !== false,
+      isoCode: body.isoCode ?? existing.isoCode,
+    });
+    return ok({ code: params.code });
+  }),
+  http.delete("/api/admin/istoki/regions/:code", async ({ params }) => {
+    await delay(MS);
+    istokiRegionsByCode.delete(params.code);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  // Generic helper for nested CRUD: build closures per kind
+  ...["podcasts", "stories", "chronicle"].flatMap((kind) => {
+    const idPrefix = { podcasts: "pod", stories: "sty", chronicle: "chr" }[kind];
+    const childKey = { podcasts: "podcasts", stories: "stories", chronicle: "chronicle" }[kind];
+    const urlSegment = kind === "chronicle" ? "chronicle" : kind;
+    return [
+      http.post(`/api/admin/istoki/regions/:code/${urlSegment}`, async ({ params, request }) => {
+        await delay(MS);
+        const body = await request.json();
+        const region = istokiRegionsByCode.get(params.code);
+        if (!region) return HttpResponse.json({ message: "Регион не найден" }, { status: 404 });
+        const id = body.id || `${idPrefix}-${Math.random().toString(36).slice(2, 10)}`;
+        const next = [...(region[childKey] || []), { ...body, id }];
+        istokiRegionsByCode.set(params.code, { ...region, [childKey]: next });
+        return HttpResponse.json({ id }, { status: 201 });
+      }),
+      http.put(`/api/admin/istoki/${urlSegment}/:id`, async ({ params, request }) => {
+        await delay(MS);
+        const body = await request.json();
+        for (const [code, region] of istokiRegionsByCode.entries()) {
+          const list = region[childKey] || [];
+          const idx = list.findIndex((entry) => entry.id === params.id);
+          if (idx >= 0) {
+            const next = list.slice();
+            next[idx] = { ...next[idx], ...body, id: params.id };
+            istokiRegionsByCode.set(code, { ...region, [childKey]: next });
+            return ok({ id: params.id });
+          }
+        }
+        return HttpResponse.json({ message: "Не найдено" }, { status: 404 });
+      }),
+      http.delete(`/api/admin/istoki/${urlSegment}/:id`, async ({ params }) => {
+        await delay(MS);
+        for (const [code, region] of istokiRegionsByCode.entries()) {
+          const list = region[childKey] || [];
+          const next = list.filter((entry) => entry.id !== params.id);
+          if (next.length !== list.length) {
+            istokiRegionsByCode.set(code, { ...region, [childKey]: next });
+            return new HttpResponse(null, { status: 204 });
+          }
+        }
+        return HttpResponse.json({ message: "Не найдено" }, { status: 404 });
+      }),
+    ];
+  }),
+
+  // Uploads — return a fake URL (MSW can't actually persist files)
+  http.post("/api/admin/istoki/uploads/audio", async () => {
+    await delay(MS);
+    return HttpResponse.json(
+      { url: "/uploads/audio/mock.mp3", sizeBytes: 0, mime: "audio/mpeg" },
+      { status: 201 },
+    );
+  }),
+  http.post("/api/admin/istoki/uploads/photo", async () => {
+    await delay(MS);
+    return HttpResponse.json(
+      { url: "/uploads/photos/mock.jpg", sizeBytes: 0, mime: "image/jpeg" },
+      { status: 201 },
+    );
+  }),
 ];
 
 // ─── Export ───────────────────────────────────────────────────────────────────

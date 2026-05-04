@@ -16,7 +16,9 @@ export type Permission =
   | "ai.manage"
   | "typologies.manage"
   | "security.read"
-  | "security.manage";
+  | "security.manage"
+  | "istoki.regions.read"
+  | "istoki.regions.manage";
 
 export interface Assignment {
   sessionId: string | number;

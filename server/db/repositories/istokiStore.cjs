@@ -260,6 +260,26 @@ async function upsertChronicleEntry(input) {
   return id;
 }
 
+async function deleteRegion(code) {
+  const result = await query(`delete from istoki_regions where code = $1`, [code]);
+  return result.rowCount > 0;
+}
+
+async function deletePodcast(id) {
+  const result = await query(`delete from istoki_podcasts where id = $1`, [id]);
+  return result.rowCount > 0;
+}
+
+async function deleteStory(id) {
+  const result = await query(`delete from istoki_stories where id = $1`, [id]);
+  return result.rowCount > 0;
+}
+
+async function deleteChronicleEntry(id) {
+  const result = await query(`delete from istoki_chronicle where id = $1`, [id]);
+  return result.rowCount > 0;
+}
+
 module.exports = {
   listRegions,
   getRegionByCode,
@@ -267,4 +287,8 @@ module.exports = {
   upsertPodcast,
   upsertStory,
   upsertChronicleEntry,
+  deleteRegion,
+  deletePodcast,
+  deleteStory,
+  deleteChronicleEntry,
 };

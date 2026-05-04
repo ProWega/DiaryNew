@@ -16,6 +16,7 @@ import RegistrationPage from "./pages/RegistrationPage";
 import SetupAdminPage from "./pages/SetupAdminPage";
 import IstokiMapPage from "./features/istoki/IstokiMapPage";
 import IstokiPublicLayout from "./features/istoki/IstokiPublicLayout";
+import IstokiAdminPage from "./features/istokiAdmin/IstokiAdminPage";
 import { getDefaultRoute } from "./rbac/permissions";
 
 const APP_TITLE = "Истоки";
@@ -141,6 +142,16 @@ function AppRouter() {
             <PageTitle title="Безопасность и доступ">
               <RouteGuard permission="security.read">
                 <AdminSecurityPage />
+              </RouteGuard>
+            </PageTitle>
+          }
+        />
+        <Route
+          path="admin/istoki"
+          element={
+            <PageTitle title="Истоки · Контент">
+              <RouteGuard permission="istoki.regions.manage">
+                <IstokiAdminPage />
               </RouteGuard>
             </PageTitle>
           }

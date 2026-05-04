@@ -117,6 +117,13 @@ app.use("/api/participant", require("./routes/participant.cjs"));
 app.use("/api/curator", require("./routes/curator.cjs"));
 app.use("/api/organizer", require("./routes/organizer.cjs"));
 app.use("/api/admin", require("./routes/admin.cjs"));
+app.use("/api/admin/istoki", require("./routes/istokiAdmin.cjs"));
+
+// User-uploaded media for the «Истоки» CMS. Served publicly so the audio
+// player + story photos can fetch by URL without auth.
+const { ensureUploadDirs, uploadsRoot } = require("./lib/uploads.cjs");
+ensureUploadDirs();
+app.use("/uploads", express.static(uploadsRoot, { fallthrough: false, maxAge: "1d" }));
 
 // ---------------------------------------------------------------------------
 // Static SPA serving

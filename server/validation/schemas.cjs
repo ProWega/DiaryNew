@@ -162,6 +162,69 @@ const upsertUserAssignmentSchema = z
   })
   .strict();
 
+// ── Истоки v2 (Phase B admin CMS) ─────────────────────────────────
+const ISO_DATE = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Дата в формате YYYY-MM-DD" });
+
+const upsertIstokiRegionSchema = z
+  .object({
+    code: requiredText(64).regex(/^[a-z0-9-]+$/, {
+      message: "Код может содержать только латиницу, цифры и дефис",
+    }),
+    isoCode: trimmed(8).optional().nullable(),
+    name: requiredText(200),
+    geographicHint: optionalText(200),
+    orderIdx: z.number().int().min(0).optional().default(0),
+    isPublished: z.boolean().optional().default(true),
+  })
+  .strict();
+
+const upsertIstokiPodcastSchema = z
+  .object({
+    id: trimmed(64).optional(),
+    title: requiredText(300),
+    description: optionalText(2000),
+    audioUrl: requiredText(500),
+    durationSec: z
+      .number()
+      .int()
+      .min(0)
+      .max(60 * 60 * 24)
+      .optional()
+      .default(0),
+    recordedAt: ISO_DATE.optional().nullable(),
+    speakerName: trimmed(200).optional().nullable(),
+    orderIdx: z.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
+const upsertIstokiStorySchema = z
+  .object({
+    id: trimmed(64).optional(),
+    participantName: requiredText(200),
+    ageOrRole: requiredText(200),
+    beforeText: requiredText(2000),
+    afterText: requiredText(2000),
+    manifestoQuote: requiredText(1000),
+    photoUrl: requiredText(500),
+    regionContextHint: trimmed(200).optional().nullable(),
+    orderIdx: z.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
+const upsertIstokiChronicleSchema = z
+  .object({
+    id: trimmed(64).optional(),
+    eventDate: ISO_DATE,
+    eventTitle: requiredText(300),
+    participantsCount: z.number().int().min(0).optional().default(0),
+    keyInsights: z.array(trimmed(500)).max(20).optional().default([]),
+    orderIdx: z.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
 module.exports = {
   GROUP_LAD_VALUES,
   MOOD_VALUES,
@@ -177,4 +240,8 @@ module.exports = {
   updateUserSchema,
   updateUserStatusSchema,
   upsertUserAssignmentSchema,
+  upsertIstokiRegionSchema,
+  upsertIstokiPodcastSchema,
+  upsertIstokiStorySchema,
+  upsertIstokiChronicleSchema,
 };
