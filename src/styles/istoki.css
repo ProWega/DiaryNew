@@ -161,15 +161,35 @@
 
 .istoki-map-wrap {
   padding: 24px clamp(16px, 4vw, 48px) 80px;
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
 .istoki-map {
   width: 100%;
   height: auto;
+  aspect-ratio: 2 / 1;
+  max-height: min(60vh, 600px);
   display: block;
   filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.55));
+}
+
+.istoki-map path[data-region-code][data-active="true"] {
+  filter: drop-shadow(0 0 6px rgba(201, 92, 54, 0.55));
+}
+
+.istoki-map-skeleton {
+  aspect-ratio: 2 / 1;
+  max-height: min(60vh, 600px);
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  border: 1px solid var(--istoki-card-border);
+  background: var(--istoki-card-bg);
+  color: var(--istoki-text-mute);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .istoki-map path[data-region-code]:focus-visible {
@@ -204,6 +224,12 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--istoki-gold);
+}
+
+.istoki-map-tooltip-counts {
+  font-size: 12px;
+  color: var(--istoki-text-soft);
+  margin-top: 2px;
 }
 
 .istoki-map-legend {

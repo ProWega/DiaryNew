@@ -27,6 +27,14 @@ function strokeFor({ empty, isActive, hovered }) {
   return STROKE_BASE;
 }
 
+function pluralizeCount(count, [one, few, many]) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} ${one}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} ${few}`;
+  return `${count} ${many}`;
+}
+
 function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false }) {
   const [paths, setPaths] = useState(null);
   const [pathsError, setPathsError] = useState(false);
@@ -76,10 +84,20 @@ function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false
     );
   }
 
+  if (!paths) {
+    return (
+      <div className="istoki-map-wrap" data-loading="true">
+        <div className="istoki-map-skeleton" aria-live="polite">
+          Загружаем карту регионов…
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="istoki-map-wrap"
-      data-loading={isLoading || !paths ? "true" : "false"}
+      data-loading={isLoading ? "true" : "false"}
       onMouseMove={handleMove}
     >
       <svg
@@ -127,6 +145,7 @@ function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false
                   y: event.clientY,
                   name: feature.name,
                   hasContent: !empty,
+                  counts: region?.counts ?? null,
                 });
               }}
               onMouseLeave={() => {
@@ -145,11 +164,32 @@ function RussiaMap({ activeCode, onRegionSelect, regions = [], isLoading = false
       </svg>
 
       {tooltip && (
-        <div className="istoki-map-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
+        <div
+          className="istoki-map-tooltip"
+          style={{
+            left: Math.min(
+              tooltip.x + 14,
+              (typeof window !== "undefined" ? window.innerWidth : 1200) - 280,
+            ),
+            top: Math.min(
+              tooltip.y + 14,
+              (typeof window !== "undefined" ? window.innerHeight : 800) - 100,
+            ),
+          }}
+        >
           <span className="istoki-map-tooltip-name">{tooltip.name}</span>
           <span className="istoki-map-tooltip-status">
             {tooltip.hasContent ? "Открыть портал" : "Архив в работе"}
           </span>
+          {tooltip.hasContent && tooltip.counts && (
+            <span className="istoki-map-tooltip-counts">
+              {pluralizeCount(tooltip.counts.podcasts, ["подкаст", "подкаста", "подкастов"])}
+              {" · "}
+              {pluralizeCount(tooltip.counts.stories, ["история", "истории", "историй"])}
+              {" · "}
+              {pluralizeCount(tooltip.counts.chronicle, ["событие", "события", "событий"])}
+            </span>
+          )}
         </div>
       )}
 
