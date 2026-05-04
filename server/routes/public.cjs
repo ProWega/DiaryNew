@@ -10,6 +10,10 @@ const {
   listUsers,
   registerParticipant,
 } = require("../db/repositories/userStore.cjs");
+const {
+  listRegions: listIstokiRegions,
+  getRegionByCode: getIstokiRegionByCode,
+} = require("../db/repositories/istokiStore.cjs");
 const { validateBody } = require("../validation/middleware.cjs");
 const { registerParticipantSchema, setupAdminSchema } = require("../validation/schemas.cjs");
 const {
@@ -116,6 +120,33 @@ router.post(
     setAuthCookie(res, session.token, session.expiresAt);
     setCsrfCookie(res, generateCsrfToken(), session.expiresAt);
     res.status(201).json(result);
+  }),
+);
+
+// GET /api/public/istoki/regions
+router.get(
+  "/public/istoki/regions",
+  asyncHandler(async (_req, res) => {
+    const regions = await listIstokiRegions({ publishedOnly: true });
+    res.json({ regions });
+  }),
+);
+
+// GET /api/public/istoki/regions/:code
+router.get(
+  "/public/istoki/regions/:code",
+  asyncHandler(async (req, res) => {
+    const code = String(req.params.code || "").trim();
+    if (!code) {
+      throw createHttpError(400, "Не указан код региона");
+    }
+
+    const region = await getIstokiRegionByCode(code, { publishedOnly: true });
+    if (!region) {
+      throw createHttpError(404, "Регион не найден");
+    }
+
+    res.json(region);
   }),
 );
 

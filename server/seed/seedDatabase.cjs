@@ -1,9 +1,12 @@
 const { randomUUID } = require("node:crypto");
 const { isProductionMode } = require("../config.cjs");
 const { ensureSchema, hasPostgresConfig, query } = require("../db/postgres.cjs");
+const { seedIstokiRegions } = require("./seedIstoki.cjs");
 
 if (isProductionMode() && process.env.ALLOW_DEMO_SEED !== "true") {
-  throw new Error("Demo seed is blocked in production. Set ALLOW_DEMO_SEED=true only for an intentional demo reset.");
+  throw new Error(
+    "Demo seed is blocked in production. Set ALLOW_DEMO_SEED=true only for an intentional demo reset.",
+  );
 }
 
 const SESSIONS = [
@@ -35,15 +38,48 @@ const STATES = [
   ["relaxed", 2, "Расслабленность", "Расслабленность", "🙂", "#4fc3b5", "#e2f7f4", "#236c65"],
   ["balance", 3, "Баланс", "Баланс", "😊", "#9bd40b", "#f1fad8", "#4d6814"],
   ["engaged", 4, "Включенность", "Включенность", "😀", "#ffd23f", "#fff6cf", "#806319"],
-  ["overstimulated", 5, "Перевозбуждённость", "Перевозбуждение", "😵", "#ff7a1a", "#fff0df", "#91470f"],
+  [
+    "overstimulated",
+    5,
+    "Перевозбуждённость",
+    "Перевозбуждение",
+    "😵",
+    "#ff7a1a",
+    "#fff0df",
+    "#91470f",
+  ],
   ["panic", 6, "Паника", "Паника", "😰", "#ff4a40", "#ffe6e2", "#96302c"],
 ];
 
 const USERS = [
-  { id: "user-participant-1", full_name: "Боря Соколов", role: "participant", age: 19, gender: "мужской" },
-  { id: "user-participant-2", full_name: "Анна Сергеева", role: "participant", age: 19, gender: "женский" },
-  { id: "user-participant-3", full_name: "Егор Кузнецов", role: "participant", age: 18, gender: "мужской" },
-  { id: "user-participant-4", full_name: "Дарья Лисина", role: "participant", age: 21, gender: "женский" },
+  {
+    id: "user-participant-1",
+    full_name: "Боря Соколов",
+    role: "participant",
+    age: 19,
+    gender: "мужской",
+  },
+  {
+    id: "user-participant-2",
+    full_name: "Анна Сергеева",
+    role: "participant",
+    age: 19,
+    gender: "женский",
+  },
+  {
+    id: "user-participant-3",
+    full_name: "Егор Кузнецов",
+    role: "participant",
+    age: 18,
+    gender: "мужской",
+  },
+  {
+    id: "user-participant-4",
+    full_name: "Дарья Лисина",
+    role: "participant",
+    age: 21,
+    gender: "женский",
+  },
   { id: "user-curator-1", full_name: "Марина Чернова", role: "curator" },
   { id: "user-curator-2", full_name: "Даниил Крылов", role: "curator" },
   { id: "user-curator-3", full_name: "Елена Лисицына", role: "curator" },
@@ -96,9 +132,24 @@ const SESSION_USERS = [
 ];
 
 const SPEAKERS = [
-  { id: "speaker-1", name: "Анна Сорокина", role: "Спикер", topics: ["дизайн сообщества", "ценности"] },
-  { id: "speaker-2", name: "Павел Демидов", role: "Ведущий мастерских", topics: ["практикум", "фасилитация"] },
-  { id: "speaker-3", name: "Ирина Богданова", role: "Куратор рефлексии", topics: ["рефлексия", "вечерняя свечка"] },
+  {
+    id: "speaker-1",
+    name: "Анна Сорокина",
+    role: "Спикер",
+    topics: ["дизайн сообщества", "ценности"],
+  },
+  {
+    id: "speaker-2",
+    name: "Павел Демидов",
+    role: "Ведущий мастерских",
+    topics: ["практикум", "фасилитация"],
+  },
+  {
+    id: "speaker-3",
+    name: "Ирина Богданова",
+    role: "Куратор рефлексии",
+    topics: ["рефлексия", "вечерняя свечка"],
+  },
 ];
 
 const PROGRAMS = [
@@ -372,7 +423,10 @@ async function upsert(tableName, row, conflict = ["id"]) {
     on conflict (${conflictColumns.join(", ")})
     do update set ${updates.length ? updates.join(", ") : `${conflictColumns[0]} = excluded.${conflictColumns[0]}`}
   `;
-  await query(sql, columns.map((column) => row[column]));
+  await query(
+    sql,
+    columns.map((column) => row[column]),
+  );
 }
 
 async function seedSessions() {
@@ -382,9 +436,10 @@ async function seedSessions() {
       edit_window: "Редактирование до 03:00 следующего дня",
       registration_status: "open",
       registration_starts_at: "2026-04-01T00:00:00.000Z",
-      registration_ends_at: session.id === "session-vypusknoy-2026"
-        ? "2026-06-17T20:59:00.000Z"
-        : "2026-07-11T20:59:00.000Z",
+      registration_ends_at:
+        session.id === "session-vypusknoy-2026"
+          ? "2026-06-17T20:59:00.000Z"
+          : "2026-07-11T20:59:00.000Z",
       registration_capacity: session.id === "session-vypusknoy-2026" ? 120 : 56,
       registration_policy: JSON.stringify({
         mode: "public",
@@ -611,9 +666,14 @@ async function seedSurveys() {
       await upsert("survey_questions", {
         id: `${survey.id}-q${index + 1}`,
         survey_id: survey.id,
-        question_type: index === 2 && survey.id === "survey-identity-fluctuation" ? "single" : "scale",
+        question_type:
+          index === 2 && survey.id === "survey-identity-fluctuation" ? "single" : "scale",
         title: question,
-        options: JSON.stringify(index === 2 ? ["роль в группе", "учёба / профессия", "личные ценности", "отношения"] : ["1", "2", "3", "4", "5", "6"]),
+        options: JSON.stringify(
+          index === 2
+            ? ["роль в группе", "учёба / профессия", "личные ценности", "отношения"]
+            : ["1", "2", "3", "4", "5", "6"],
+        ),
         sort_order: index,
         meta: JSON.stringify({}),
       });
@@ -628,7 +688,13 @@ async function seedSurveys() {
     published_at: "2026-07-13T08:30:00.000Z",
     audience_summary: "Истоки. Школа · 17-22 лет · все группы · все эмоциональные профили",
     recipients_count: 4,
-    filters: JSON.stringify({ ageMin: 17, ageMax: 22, genders: [], emotionalProfiles: [], groupIds: [] }),
+    filters: JSON.stringify({
+      ageMin: 17,
+      ageMax: 22,
+      genders: [],
+      emotionalProfiles: [],
+      groupIds: [],
+    }),
   });
 }
 
@@ -711,6 +777,7 @@ async function main() {
   await seedDiary();
   await seedSurveys();
   await seedAnalytics();
+  await seedIstokiRegions();
 
   console.log("[db:seed] Demo data is ready.");
 }

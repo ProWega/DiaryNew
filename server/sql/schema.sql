@@ -463,3 +463,61 @@ alter table diary_entries add column if not exists group_lad text;
 alter table daily_reflections add column if not exists is_anonymous boolean not null default false;
 alter table daily_reflections add column if not exists is_hidden_from_curator boolean not null default false;
 alter table session_users add column if not exists mood text;
+
+-- ── Истоки v2 Phase A (regional voices map content store) ──────────
+-- Public showcase: /istoki/map. Migrated from src/features/istoki/data/regions.json.
+create table if not exists istoki_regions (
+  code             text primary key,
+  iso_code         text unique,
+  name             text not null,
+  geographic_hint  text,
+  order_idx        int not null default 0,
+  is_published     boolean not null default true,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create table if not exists istoki_podcasts (
+  id            text primary key,
+  region_code   text not null references istoki_regions(code) on delete cascade,
+  title         text not null,
+  description   text not null default '',
+  audio_url     text not null,
+  duration_sec  int not null default 0,
+  recorded_at   date,
+  speaker_name  text,
+  order_idx     int not null default 0,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create table if not exists istoki_stories (
+  id                   text primary key,
+  region_code          text not null references istoki_regions(code) on delete cascade,
+  participant_name     text not null,
+  age_or_role          text not null,
+  before_text          text not null,
+  after_text           text not null,
+  manifesto_quote      text not null,
+  photo_url            text not null,
+  region_context_hint  text,
+  order_idx            int not null default 0,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+
+create table if not exists istoki_chronicle (
+  id                  text primary key,
+  region_code         text not null references istoki_regions(code) on delete cascade,
+  event_date          date not null,
+  event_title         text not null,
+  participants_count  int not null default 0,
+  key_insights        jsonb not null default '[]'::jsonb,
+  order_idx           int not null default 0,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+create index if not exists idx_istoki_podcasts_region  on istoki_podcasts(region_code);
+create index if not exists idx_istoki_stories_region   on istoki_stories(region_code);
+create index if not exists idx_istoki_chronicle_region on istoki_chronicle(region_code);

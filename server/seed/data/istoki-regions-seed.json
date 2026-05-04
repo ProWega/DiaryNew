@@ -202,5 +202,29 @@
         ]
       }
     ]
+  },
+  {
+    "code": "spb",
+    "name": "Санкт-Петербург",
+    "geographicHint": "Северо-Запад России",
+    "podcasts": [],
+    "stories": [],
+    "chronicle": []
+  },
+  {
+    "code": "ekaterinburg",
+    "name": "Екатеринбург",
+    "geographicHint": "Урал",
+    "podcasts": [],
+    "stories": [],
+    "chronicle": []
+  },
+  {
+    "code": "vladivostok",
+    "name": "Владивосток",
+    "geographicHint": "Дальний Восток",
+    "podcasts": [],
+    "stories": [],
+    "chronicle": []
   }
 ]
