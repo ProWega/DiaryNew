@@ -1,0 +1,170 @@
+/* ── Methodology «Дневник пути» v4 components ────────────────────── */
+
+/* JourneyStagePicker — выбор этапа пути (4 варианта).
+   Mobile-first: при <640px Grid превращается в vertical list автоматически. */
+
+.stage-picker {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.stage-picker-head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.stage-picker-head h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-tight);
+}
+
+.stage-picker-options {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.stage-picker-options.is-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stage-picker-options.is-list {
+  grid-template-columns: 1fr;
+}
+
+.stage-option {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface-card);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.stage-option:hover {
+  border-color: var(--color-sky-border);
+  box-shadow: var(--shadow-1);
+}
+
+.stage-option.is-selected {
+  border-color: var(--color-text-brand);
+  box-shadow: var(--shadow-2);
+  background: var(--color-brand-bg);
+}
+
+.stage-option-name {
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+
+.stage-option-tagline {
+  font-style: normal;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-sm);
+}
+
+.stage-option-description {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.stage-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Mobile-first: участник в основном с телефона. На <640px Grid сжимается
+   в один столбец автоматически без необходимости передавать variant=list. */
+@media (max-width: 640px) {
+  .stage-picker-options.is-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* CarefulModeToggle — флаг «бережно» поверх любого этапа */
+
+.careful-toggle {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  cursor: pointer;
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
+}
+
+.careful-toggle:hover {
+  border-color: var(--color-sky-border);
+}
+
+.careful-toggle.is-active {
+  border-color: var(--color-text-accent);
+  background: var(--color-accent-bg);
+}
+
+.careful-toggle input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.careful-toggle-body {
+  display: grid;
+  gap: 2px;
+}
+
+.careful-toggle-body strong {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+}
+
+.careful-toggle-body em {
+  font-style: normal;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.careful-toggle.is-compact {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* PrivacyToggle — две независимые галки на запись */
+
+.privacy-toggle {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.privacy-toggle.is-compact {
+  gap: var(--space-3);
+}
+
+.privacy-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.privacy-checkbox input[type="checkbox"]:disabled + span {
+  opacity: 0.4;
+}
