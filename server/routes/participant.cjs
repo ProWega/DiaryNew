@@ -7,8 +7,13 @@ const {
   updateParticipantReflection,
 } = require("../db/repositories/diaryStore.cjs");
 const { validateBody } = require("../validation/middleware.cjs");
-const { updateDiaryEntrySchema, updateReflectionSchema } = require("../validation/schemas.cjs");
+const {
+  updateDiaryEntrySchema,
+  updateReflectionSchema,
+  updateJourneyStageSchema,
+} = require("../validation/schemas.cjs");
 const { asyncHandler, getViewerId } = require("../lib/routeHelpers.cjs");
+const { updateParticipantJourneyStage } = require("../services/journeyStageService.cjs");
 
 const router = Router();
 
@@ -53,6 +58,23 @@ router.patch(
         viewerId: getViewerId(req),
         sessionId: req.params.sessionId,
         dayId: req.params.dayId,
+        patch: req.body || {},
+      }),
+    );
+  }),
+);
+
+// PATCH /api/participant/sessions/:sessionId/journey-stage
+// Methodology v4: участник выбирает этап пути и/или ставит careful_mode.
+// См. docs/architecture/methodology-mapping.md §2.4.
+router.patch(
+  "/sessions/:sessionId/journey-stage",
+  validateBody(updateJourneyStageSchema),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await updateParticipantJourneyStage({
+        viewerId: getViewerId(req),
+        sessionId: req.params.sessionId,
         patch: req.body || {},
       }),
     );

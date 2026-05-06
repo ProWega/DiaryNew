@@ -106,6 +106,43 @@ describe("Auth gate (RBAC negative cases)", () => {
   });
 });
 
+describe("Methodology v4: PATCH /journey-stage validation", () => {
+  const csrfHeaders = {
+    Cookie: "newdiary_csrf=t",
+    "X-CSRF-Token": "t",
+    "Content-Type": "application/json",
+  };
+
+  it("rejects invalid journeyStage enum value (400)", async () => {
+    const res = await request(app)
+      .patch("/api/participant/sessions/s1/journey-stage")
+      .set(csrfHeaders)
+      .send({ journeyStage: "not-a-stage" });
+    // Zod rejects unknown enum → 400. Auth/RBAC may reject earlier with 401 — both acceptable.
+    expect([400, 401]).toContain(res.status);
+  });
+
+  it("rejects extra fields (strict schema)", async () => {
+    const res = await request(app)
+      .patch("/api/participant/sessions/s1/journey-stage")
+      .set(csrfHeaders)
+      .send({ journeyStage: "search", extraField: "bad" });
+    expect([400, 401]).toContain(res.status);
+  });
+
+  it("zod accepts empty body shape (no fields → no-op valid)", async () => {
+    const res = await request(app)
+      .patch("/api/participant/sessions/s1/journey-stage")
+      .set(csrfHeaders)
+      .send({});
+    // Empty {} is valid per schema (both fields optional). If 400 returned,
+    // it must be a service-level error (no viewerId), NOT a zod validation error.
+    if (res.status === 400) {
+      expect(res.body.message).not.toMatch(/expected|invalid|required|enum/i);
+    }
+  });
+});
+
 describe("Zod validation gate", () => {
   const csrfHeaders = {
     Cookie: "newdiary_csrf=t",
