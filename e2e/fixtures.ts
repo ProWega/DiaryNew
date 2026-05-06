@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 
 /**
  * Custom fixture: each test starts with a clean localStorage so MSW seed and
@@ -23,5 +23,27 @@ export const test = base.extend({
     await use(page);
   },
 });
+
+/**
+ * После регистрации участника появляется JourneyStageOnboardingModal
+ * (methodology v4 onboarding). Тесты, которые проверяют что-то вне модала
+ * (theme, navigation, etc), должны его закрыть через «Решу позже».
+ *
+ * Robust к задержке монтирования модала: ждёт появления до 8s, кликает,
+ * ждёт исчезновения backdrop'а, чтобы pointer events не были перехвачены.
+ */
+export async function dismissJourneyStageOnboarding(page: Page) {
+  const backdrop = page.locator(".modal-backdrop");
+  try {
+    await backdrop.waitFor({ state: "visible", timeout: 8000 });
+  } catch {
+    return; // Модал не появился — нечего скрывать.
+  }
+
+  const skip = page.getByRole("button", { name: "Решу позже" });
+  await skip.click();
+  // Wait for backdrop to fully detach so subsequent clicks aren't intercepted.
+  await backdrop.waitFor({ state: "detached", timeout: 5000 });
+}
 
 export { expect };

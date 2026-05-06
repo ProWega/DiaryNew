@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, dismissJourneyStageOnboarding } from "./fixtures";
 
 test.describe("theme toggle", () => {
   test("default is light, toggling switches to dark and persists", async ({ page }) => {
@@ -8,6 +8,9 @@ test.describe("theme toggle", () => {
     await page.locator(".registration-option").first().click();
     await page.getByRole("button", { name: "Зарегистрироваться" }).click();
     await expect(page).toHaveURL(/\/participant\/session\/[^/]+\/today$/);
+
+    // Methodology v4 onboarding modal appears after registration — dismiss it.
+    await dismissJourneyStageOnboarding(page);
 
     // Default theme — light
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

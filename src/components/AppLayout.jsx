@@ -4,6 +4,14 @@ import { useAuth } from "../auth/AuthContext";
 import { getDefaultRoute } from "../rbac/permissions";
 import FeedbackState from "./FeedbackState";
 import { useTheme } from "../hooks/useTheme";
+import JourneyStageOnboardingModal from "./methodology/JourneyStageOnboardingModal";
+import { useJourneyStageMutation } from "../api/hooks";
+
+// localStorage key — отметка что участник пропустил onboarding в текущей сессии заезда.
+// Не блокирует появление модала навсегда: можно стереть ключ или сбросить через настройки.
+function journeyStageSkipKey(sessionId) {
+  return `newdiary-journey-stage-skipped-${sessionId}`;
+}
 
 function getInitials(fullName = "") {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -129,6 +137,50 @@ export function ParticipantTopbar({
   );
 }
 
+/**
+ * Gate-компонент: показывает onboarding-модал participant'у когда journey_stage
+ * ещё не выбран И не помечено «решу позже». После сохранения bootstrap
+ * рефрешится → journeyStage становится не-null → модал больше не появляется.
+ * После «пропустить» помечается localStorage-ключ для текущего sessionId.
+ */
+function ParticipantJourneyStageGate({ bootstrap }) {
+  const sessionId = bootstrap?.sessionInfo?.id ?? null;
+  const journeyStage = bootstrap?.journeyStage ?? null;
+  const isCarefulMode = bootstrap?.isCarefulMode ?? false;
+  const { saving, updateJourneyStage } = useJourneyStageMutation();
+  const [skipped, setSkipped] = useState(() => {
+    if (!sessionId || typeof window === "undefined") return false;
+    return window.localStorage.getItem(journeyStageSkipKey(sessionId)) === "1";
+  });
+
+  // Не показываем если уже выбрано или скрыто пользователем.
+  const shouldShow = !skipped && journeyStage === null && !isCarefulMode;
+
+  async function handleSubmit(patch) {
+    const result = await updateJourneyStage(patch);
+    if (result && sessionId && typeof window !== "undefined") {
+      // Если пользователь сохранил — значит выбрал. Но на всякий случай сбрасываем skip-флаг.
+      window.localStorage.removeItem(journeyStageSkipKey(sessionId));
+    }
+  }
+
+  function handleSkip() {
+    if (sessionId && typeof window !== "undefined") {
+      window.localStorage.setItem(journeyStageSkipKey(sessionId), "1");
+    }
+    setSkipped(true);
+  }
+
+  return (
+    <JourneyStageOnboardingModal
+      open={shouldShow}
+      onSubmit={handleSubmit}
+      onSkip={handleSkip}
+      saving={saving}
+    />
+  );
+}
+
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -173,6 +225,7 @@ function AppLayout() {
 
   return (
     <div className="app-shell">
+      {isParticipantShell ? <ParticipantJourneyStageGate bootstrap={bootstrap} /> : null}
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 

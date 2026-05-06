@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, dismissJourneyStageOnboarding } from "./fixtures";
 
 test.describe("navigation", () => {
   test("unknown route without auth redirects to /register", async ({ page }) => {
@@ -13,6 +13,9 @@ test.describe("navigation", () => {
     await page.locator(".registration-option").first().click();
     await page.getByRole("button", { name: "Зарегистрироваться" }).click();
     await expect(page).toHaveURL(/\/today$/);
+
+    // Methodology v4 onboarding modal blocks pointer events — dismiss before navigating.
+    await dismissJourneyStageOnboarding(page);
 
     // Click "Узнать себя"
     await page.getByRole("link", { name: "Узнать себя" }).click();
