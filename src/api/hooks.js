@@ -160,7 +160,7 @@ export function useParticipantDiary(sessionId) {
               answers: { ...(day.reflection?.answers || {}), ...(patch.answers || {}) },
             };
             const answered =
-              ["q1", "q2", "q3", "freeText"].some((field) =>
+              ["q1", "q2", "q3", "mind", "heart", "will", "freeText"].some((field) =>
                 String(reflection[field] || "").trim(),
               ) || Object.values(reflection.answers || {}).some((v) => String(v || "").trim());
             return {

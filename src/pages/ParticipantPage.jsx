@@ -49,15 +49,16 @@ function ParticipantPage({ mode }) {
   const { bootstrap } = useAuth();
   const { data, loading, error, refresh, updateEntry, updateReflection } =
     useParticipantDiary(sessionId);
-  const [selectedHistoryDay, setSelectedHistoryDay] = useState(() => readStoredSelectedDay(sessionId));
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState(() =>
+    readStoredSelectedDay(sessionId),
+  );
   const liveHistory = data?.history ?? [];
   const selectedDayStorageKey = getParticipantDayStorageKey(sessionId);
   const fallbackCurrentDay = useMemo(
     () => selectClosestProgramDay(liveHistory) || liveHistory[0] || null,
     [liveHistory],
   );
-  const currentDay =
-    liveHistory.find((day) => day.id === data?.currentDayId) ?? fallbackCurrentDay;
+  const currentDay = liveHistory.find((day) => day.id === data?.currentDayId) ?? fallbackCurrentDay;
 
   useEffect(() => {
     setSelectedHistoryDay(readStoredSelectedDay(sessionId));
@@ -101,15 +102,17 @@ function ParticipantPage({ mode }) {
       return undefined;
     }
 
-    const timerId = window.setTimeout(() => {
-      refresh();
-    }, Math.min(delay, 2147483647));
+    const timerId = window.setTimeout(
+      () => {
+        refresh();
+      },
+      Math.min(delay, 2147483647),
+    );
 
     return () => window.clearTimeout(timerId);
   }, [liveHistory, refresh]);
 
-  const selectedDay =
-    liveHistory.find((day) => day.id === selectedHistoryDay) ?? currentDay;
+  const selectedDay = liveHistory.find((day) => day.id === selectedHistoryDay) ?? currentDay;
   const activeDay = selectedDay ?? currentDay;
   const todayEvents = activeDay?.events ?? [];
   const reflection = activeDay?.reflection ?? {
@@ -117,6 +120,9 @@ function ParticipantPage({ mode }) {
     q1: "",
     q2: "",
     q3: "",
+    mind: "",
+    heart: "",
+    will: "",
     freeText: "",
   };
 
@@ -232,6 +238,8 @@ function ParticipantPage({ mode }) {
       overallTrajectory={overallTrajectory}
       overallAverages={overallAverages}
       formatAverage={formatAverage}
+      journeyStage={bootstrap.journeyStage ?? null}
+      isCarefulMode={Boolean(bootstrap.isCarefulMode)}
     />
   );
 }
@@ -249,17 +257,11 @@ export function ParticipantSelfKnowledgePage() {
 
   if (!bootstrap || !currentUser) {
     return (
-      <FeedbackState
-        title="Загружаем раздел"
-        description="Собираем данные личного кабинета."
-      />
+      <FeedbackState title="Загружаем раздел" description="Собираем данные личного кабинета." />
     );
   }
 
   return (
-    <ParticipantSelfKnowledgeView
-      currentUser={currentUser}
-      sessionInfo={bootstrap.sessionInfo}
-    />
+    <ParticipantSelfKnowledgeView currentUser={currentUser} sessionInfo={bootstrap.sessionInfo} />
   );
 }

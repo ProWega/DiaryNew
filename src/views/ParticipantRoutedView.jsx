@@ -2,9 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DistributionBars, EmotionLineChart } from "../components/Charts";
 import MetricBadge from "../components/MetricBadge";
 import StateScalePicker from "../components/participant/StateScalePicker";
+import ReflectionEditor from "../components/methodology/ReflectionEditor";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
 
 const reflectionFields = ["q1", "q2"];
+const METHODOLOGY_AXES = ["mind", "heart", "will"];
+
+function hasLegacyReflectionContent(reflection) {
+  return ["q1", "q2", "q3"].some((field) => String(reflection?.[field] || "").trim());
+}
+
+function hasMethodologyAxisContent(reflection) {
+  return METHODOLOGY_AXES.some((axis) => String(reflection?.[axis] || "").trim());
+}
 const EVENT_SCROLL_MARGIN = 16;
 
 function getFirstPendingEventId(events) {
@@ -22,7 +32,11 @@ function isEventLocked(event) {
 }
 
 function getNextAvailableEvent(events, index, direction) {
-  for (let nextIndex = index + direction; nextIndex >= 0 && nextIndex < events.length; nextIndex += direction) {
+  for (
+    let nextIndex = index + direction;
+    nextIndex >= 0 && nextIndex < events.length;
+    nextIndex += direction
+  ) {
     if (!isEventLocked(events[nextIndex])) {
       return events[nextIndex];
     }
@@ -63,7 +77,8 @@ function getStickyParticipantOffset() {
     return EVENT_SCROLL_MARGIN;
   }
 
-  const topbarHeight = document.querySelector(".participant-topbar")?.getBoundingClientRect().height || 0;
+  const topbarHeight =
+    document.querySelector(".participant-topbar")?.getBoundingClientRect().height || 0;
   return topbarHeight + EVENT_SCROLL_MARGIN;
 }
 
@@ -85,10 +100,7 @@ function scrollEventIntoView(element, options = {}) {
   }
 
   const offset = options.offset ?? getStickyParticipantOffset();
-  const targetTop = Math.max(
-    0,
-    window.scrollY + element.getBoundingClientRect().top - offset,
-  );
+  const targetTop = Math.max(0, window.scrollY + element.getBoundingClientRect().top - offset);
 
   if (Math.abs(window.scrollY - targetTop) < 4) {
     return;
@@ -101,10 +113,12 @@ function scrollEventIntoView(element, options = {}) {
 }
 
 function isReflectionAnswered(reflection) {
-  const answers = reflection?.answers && typeof reflection.answers === "object" ? reflection.answers : {};
+  const answers =
+    reflection?.answers && typeof reflection.answers === "object" ? reflection.answers : {};
   return (
-    [...reflectionFields, "freeText"].some((field) => String(reflection?.[field] || "").trim()) ||
-    Object.values(answers).some((value) => String(value || "").trim())
+    [...reflectionFields, ...METHODOLOGY_AXES, "freeText"].some((field) =>
+      String(reflection?.[field] || "").trim(),
+    ) || Object.values(answers).some((value) => String(value || "").trim())
   );
 }
 
@@ -137,8 +151,9 @@ function createEventDraft(event, previousDraft = null) {
     stateId: previousDraft?.stateId || event?.stateId || "",
     comment: previousDraft?.isCommentDirty ? previousDraft.comment : event?.comment || "",
     reflectionAnswers: previousDraft?.isReflectionAnswersDirty ? previousAnswers : eventAnswers,
-    confidence:
-      previousDraft?.isConfidenceDirty ? previousDraft.confidence : event?.confidence || "high",
+    confidence: previousDraft?.isConfidenceDirty
+      ? previousDraft.confidence
+      : event?.confidence || "high",
     isCommentDirty: Boolean(previousDraft?.isCommentDirty),
     isReflectionAnswersDirty: Boolean(previousDraft?.isReflectionAnswersDirty),
     isConfidenceDirty: Boolean(previousDraft?.isConfidenceDirty),
@@ -165,6 +180,8 @@ function ParticipantRoutedView({
   overallTrajectory,
   overallAverages,
   formatAverage,
+  journeyStage = null,
+  isCarefulMode = false,
 }) {
   const [openEventId, setOpenEventId] = useState("");
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
@@ -180,7 +197,9 @@ function ParticipantRoutedView({
   const activeDayId = selectedDay?.id || "";
   const hasMultipleDays = liveHistory.length > 1;
   const todayChartEvents = todayEvents.filter((event) => event.answered !== false && event.stateId);
-  const selectedChartEvents = (selectedDay?.events || []).filter((event) => event.answered !== false && event.stateId);
+  const selectedChartEvents = (selectedDay?.events || []).filter(
+    (event) => event.answered !== false && event.stateId,
+  );
   const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
   const visibleReflectionPrompts = useMemo(
     () =>
@@ -202,7 +221,10 @@ function ParticipantRoutedView({
   const allEventsAnswered = todayEvents.length > 0 && answeredEventCount === todayEvents.length;
   const showReflectionForm = reflectionAnswered || (allEventsAnswered && isReflectionStarted);
   const hasDayRequiredReflectionGap =
-    showReflectionForm && hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
+    showReflectionForm &&
+    hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
+  const showArchivedReflection =
+    hasLegacyReflectionContent(reflection) && !hasMethodologyAxisContent(reflection);
   const checklistTotal = todayEvents.length + 1;
   const checklistAnswered = answeredEventCount + (reflectionAnswered ? 1 : 0);
   const completionValue = Math.max(0, Math.min(todayMetrics.completion || 0, 100));
@@ -267,7 +289,11 @@ function ParticipantRoutedView({
   useEffect(() => {
     const pendingNavigation = pendingNavigationRef.current;
 
-    if (!pendingNavigation || pendingNavigation.eventId !== openEventId || typeof window === "undefined") {
+    if (
+      !pendingNavigation ||
+      pendingNavigation.eventId !== openEventId ||
+      typeof window === "undefined"
+    ) {
       return;
     }
 
@@ -450,7 +476,8 @@ function ParticipantRoutedView({
           ...currentDraft,
           reflectionAnswers: nextAnswers,
           isReflectionAnswersDirty:
-            JSON.stringify(nextAnswers) !== JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)),
+            JSON.stringify(nextAnswers) !==
+            JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)),
         },
       };
     });
@@ -601,10 +628,13 @@ function ParticipantRoutedView({
               <div>
                 <p className="eyebrow">Состояние</p>
                 <h3>
-                  {selectedDay?.label || "День"}{selectedDay?.dateLabel ? ` · ${selectedDay.dateLabel}` : ""}
+                  {selectedDay?.label || "День"}
+                  {selectedDay?.dateLabel ? ` · ${selectedDay.dateLabel}` : ""}
                 </h3>
                 <p className="participant-flow-copy">
-                  {openEventPosition ? `Событие ${openEventPosition} из ${todayEvents.length}. ` : ""}
+                  {openEventPosition
+                    ? `Событие ${openEventPosition} из ${todayEvents.length}. `
+                    : ""}
                   Откройте карточку и выберите точку на шкале.
                 </p>
               </div>
@@ -614,7 +644,11 @@ function ParticipantRoutedView({
                     <button
                       key={day.id}
                       type="button"
-                      className={selectedDay?.id === day.id ? "mini-tab participant-day-tab is-active" : "mini-tab participant-day-tab"}
+                      className={
+                        selectedDay?.id === day.id
+                          ? "mini-tab participant-day-tab is-active"
+                          : "mini-tab participant-day-tab"
+                      }
                       disabled={Boolean(savingEventId)}
                       onClick={() => void handleDaySwitch(day.id)}
                     >
@@ -624,12 +658,19 @@ function ParticipantRoutedView({
                   ))}
                 </div>
               ) : null}
-              <div className="participant-progress-meter" aria-label={`Заполнено ${completionValue}%`}>
+              <div
+                className="participant-progress-meter"
+                aria-label={`Заполнено ${completionValue}%`}
+              >
                 <span style={{ width: `${completionValue}%` }} />
               </div>
               <div className="participant-progress-meta">
-                <span>{answeredEventCount} из {todayEvents.length} событий</span>
-                <span>{checklistAnswered} из {checklistTotal} пунктов дня</span>
+                <span>
+                  {answeredEventCount} из {todayEvents.length} событий
+                </span>
+                <span>
+                  {checklistAnswered} из {checklistTotal} пунктов дня
+                </span>
               </div>
             </div>
 
@@ -642,7 +683,8 @@ function ParticipantRoutedView({
                 const hasStateSelection = Boolean(effectiveStateId);
                 const eventReflectionQuestions = safeReflectionQuestions(event.reflectionQuestions);
                 const eventReflectionAnswers = safeReflectionAnswers(draft.reflectionAnswers);
-                const hasRequiredReflectionGap = hasStateSelection &&
+                const hasRequiredReflectionGap =
+                  hasStateSelection &&
                   hasMissingRequiredAnswers(eventReflectionQuestions, eventReflectionAnswers);
                 const hasDeferredDraftChanges =
                   draft.comment !== (event.comment || "") ||
@@ -697,23 +739,29 @@ function ParticipantRoutedView({
                       <span className="participant-event-row-meta">
                         <span className="event-time participant-event-row-time">{event.time}</span>
                         <span className="participant-event-row-state">
-                        {isLocked ? (
-                          <>
-                            <span className="participant-event-row-lock" aria-hidden="true">🔒</span>
-                            Закрыто
-                          </>
-                        ) : effectiveState ? (
-                          <>
-                            <span>{effectiveState.icon}</span>
-                            {effectiveState.shortLabel || effectiveState.label}
-                          </>
-                        ) : (
-                          "Без отметки"
-                        )}
-                      </span>
+                          {isLocked ? (
+                            <>
+                              <span className="participant-event-row-lock" aria-hidden="true">
+                                🔒
+                              </span>
+                              Закрыто
+                            </>
+                          ) : effectiveState ? (
+                            <>
+                              <span>{effectiveState.icon}</span>
+                              {effectiveState.shortLabel || effectiveState.label}
+                            </>
+                          ) : (
+                            "Без отметки"
+                          )}
+                        </span>
                       </span>
                       <span
-                        className={isOpen ? "participant-event-row-chevron is-open" : "participant-event-row-chevron"}
+                        className={
+                          isOpen
+                            ? "participant-event-row-chevron is-open"
+                            : "participant-event-row-chevron"
+                        }
                         aria-hidden="true"
                       >
                         <span className="participant-event-chevron" />
@@ -731,7 +779,9 @@ function ParticipantRoutedView({
                       <div className="participant-event-body">
                         {isLocked ? (
                           <div className="participant-event-locked">
-                            <span className="participant-event-locked-icon" aria-hidden="true">🔒</span>
+                            <span className="participant-event-locked-icon" aria-hidden="true">
+                              🔒
+                            </span>
                             <div>
                               <strong>Оценка пока закрыта</strong>
                               <p>{formatEventAccessReason(event)}</p>
@@ -739,125 +789,142 @@ function ParticipantRoutedView({
                           </div>
                         ) : (
                           <>
-                        <div className="participant-event-workspace">
-                          <div className="participant-event-arc-shell">
-                            <StateScalePicker
-                              value={effectiveStateId}
-                              onChange={(stateId) => handleEventStateSelect(activeDayId, event, stateId)}
-                              states={stateScale}
-                              variant="arc"
-                              animated
-                              showDescriptions
-                              label=""
-                            />
-                            {stateSaveStatus?.message ? (
-                              <p
-                                className={`participant-event-save-note is-${stateSaveStatus.status}`}
-                                role={stateSaveStatus.status === "error" ? "alert" : "status"}
-                              >
-                                {stateSaveStatus.message}
-                              </p>
-                            ) : null}
-                          </div>
+                            <div className="participant-event-workspace">
+                              <div className="participant-event-arc-shell">
+                                <StateScalePicker
+                                  value={effectiveStateId}
+                                  onChange={(stateId) =>
+                                    handleEventStateSelect(activeDayId, event, stateId)
+                                  }
+                                  states={stateScale}
+                                  variant="arc"
+                                  animated
+                                  showDescriptions
+                                  label=""
+                                />
+                                {stateSaveStatus?.message ? (
+                                  <p
+                                    className={`participant-event-save-note is-${stateSaveStatus.status}`}
+                                    role={stateSaveStatus.status === "error" ? "alert" : "status"}
+                                  >
+                                    {stateSaveStatus.message}
+                                  </p>
+                                ) : null}
+                              </div>
 
-                          <div className="participant-step-actions">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              disabled={!previousAvailableEvent || isEventSaving}
-                              onClick={() => moveOpenEvent(activeDayId, event, index, -1)}
-                            >
-                              Назад
-                            </button>
-                            <button
-                              type="button"
-                              className="primary-button participant-step-primary"
-                              disabled={isEventSaving || hasRequiredReflectionGap}
-                              aria-label={
-                                isEventSaving
-                                  ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c"
-                                  : !nextAvailableEvent
-                                    ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
-                                    : "\u0414\u0430\u043b\u0435\u0435"
-                              }
-                              data-step-label={
-                                isEventSaving
-                                  ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c..."
-                                  : !nextAvailableEvent
-                                    ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
-                                    : "\u0414\u0430\u043b\u0435\u0435"
-                              }
-                              onClick={() =>
-                                !nextAvailableEvent
-                                  ? saveCurrentEvent(activeDayId, event)
-                                  : moveOpenEvent(activeDayId, event, index, 1)
-                              }
-                            >
-                              Далее
-                            </button>
-                          </div>
-                        </div>
+                              <div className="participant-step-actions">
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={!previousAvailableEvent || isEventSaving}
+                                  onClick={() => moveOpenEvent(activeDayId, event, index, -1)}
+                                >
+                                  Назад
+                                </button>
+                                <button
+                                  type="button"
+                                  className="primary-button participant-step-primary"
+                                  disabled={isEventSaving || hasRequiredReflectionGap}
+                                  aria-label={
+                                    isEventSaving
+                                      ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c"
+                                      : !nextAvailableEvent
+                                        ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
+                                        : "\u0414\u0430\u043b\u0435\u0435"
+                                  }
+                                  data-step-label={
+                                    isEventSaving
+                                      ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c..."
+                                      : !nextAvailableEvent
+                                        ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"
+                                        : "\u0414\u0430\u043b\u0435\u0435"
+                                  }
+                                  onClick={() =>
+                                    !nextAvailableEvent
+                                      ? saveCurrentEvent(activeDayId, event)
+                                      : moveOpenEvent(activeDayId, event, index, 1)
+                                  }
+                                >
+                                  Далее
+                                </button>
+                              </div>
+                            </div>
 
-                        {hasStateSelection ? (
-                          <>
-                            {eventReflectionQuestions.length ? (
-                              <div className="reflection-list participant-event-reflection-list">
-                                {eventReflectionQuestions.map((question) => (
-                                  <label key={question.id} className="reflection-item">
-                                    <span>
-                                      {question.text}
-                                      {question.required ? " *" : ""}
-                                    </span>
+                            {hasStateSelection ? (
+                              <>
+                                {eventReflectionQuestions.length ? (
+                                  <div className="reflection-list participant-event-reflection-list">
+                                    {eventReflectionQuestions.map((question) => (
+                                      <label key={question.id} className="reflection-item">
+                                        <span>
+                                          {question.text}
+                                          {question.required ? " *" : ""}
+                                        </span>
+                                        <textarea
+                                          rows="2"
+                                          value={eventReflectionAnswers[question.id] || ""}
+                                          disabled={isEventSaving}
+                                          placeholder="Напишите 1–2 предложения"
+                                          aria-required={question.required}
+                                          onChange={(eventInput) =>
+                                            handleEventReflectionAnswerChange(
+                                              event,
+                                              question.id,
+                                              eventInput.target.value,
+                                            )
+                                          }
+                                        />
+                                      </label>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="input-row participant-comment-row">
                                     <textarea
-                                      rows="2"
-                                      value={eventReflectionAnswers[question.id] || ""}
+                                      rows="3"
+                                      value={draft.comment}
                                       disabled={isEventSaving}
-                                      placeholder="Напишите 1–2 предложения"
-                                      aria-required={question.required}
+                                      placeholder="Можно добавить пару слов, если хочется"
                                       onChange={(eventInput) =>
-                                        handleEventReflectionAnswerChange(event, question.id, eventInput.target.value)
+                                        handleEventCommentChange(event, eventInput.target.value)
                                       }
                                     />
-                                  </label>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="input-row participant-comment-row">
-                                <textarea
-                                  rows="3"
-                                  value={draft.comment}
-                                  disabled={isEventSaving}
-                                  placeholder="Можно добавить пару слов, если хочется"
-                                  onChange={(eventInput) =>
-                                    handleEventCommentChange(event, eventInput.target.value)
-                                  }
-                                />
-                              </div>
-                            )}
+                                  </div>
+                                )}
 
-                            {hasRequiredReflectionGap ? (
-                              <p className="confidence-note participant-required-note" role="alert">
-                                Ответьте на обязательные вопросы, чтобы продолжить.
-                              </p>
+                                {hasRequiredReflectionGap ? (
+                                  <p
+                                    className="confidence-note participant-required-note"
+                                    role="alert"
+                                  >
+                                    Ответьте на обязательные вопросы, чтобы продолжить.
+                                  </p>
+                                ) : null}
+
+                                <div className="event-foot">
+                                  <button
+                                    type="button"
+                                    aria-pressed={effectiveConfidence === "low"}
+                                    disabled={isEventSaving}
+                                    className={
+                                      effectiveConfidence === "low"
+                                        ? "ghost-button is-active"
+                                        : "ghost-button"
+                                    }
+                                    onClick={() => handleEventConfidenceToggle(event)}
+                                  >
+                                    Сложно оценить
+                                  </button>
+                                  <span className="confidence-note participant-draft-note">
+                                    {confidenceNote}
+                                  </span>
+                                  <span className="confidence-note" aria-hidden="true">
+                                    {event.confidence === "low"
+                                      ? "Отметка сохранена как примерная"
+                                      : "Отметка сохранена"}
+                                  </span>
+                                </div>
+                              </>
                             ) : null}
-
-                            <div className="event-foot">
-                              <button
-                                type="button"
-                                aria-pressed={effectiveConfidence === "low"}
-                                disabled={isEventSaving}
-                                className={effectiveConfidence === "low" ? "ghost-button is-active" : "ghost-button"}
-                                onClick={() => handleEventConfidenceToggle(event)}
-                              >
-                                Сложно оценить
-                              </button>
-                              <span className="confidence-note participant-draft-note">{confidenceNote}</span>
-                              <span className="confidence-note" aria-hidden="true">
-                                {event.confidence === "low" ? "Отметка сохранена как примерная" : "Отметка сохранена"}
-                              </span>
-                            </div>
-                          </>
-                        ) : null}
                           </>
                         )}
                       </div>
@@ -875,13 +942,22 @@ function ParticipantRoutedView({
                   <p className="eyebrow">Итог дня</p>
                   <h3>{completionValue}% заполнено</h3>
                 </div>
-                <MetricBadge compact label="Средний уровень" value={formatAverage(todayMetrics.average)} />
+                <MetricBadge
+                  compact
+                  label="Средний уровень"
+                  value={formatAverage(todayMetrics.average)}
+                />
               </div>
-              <div className="participant-progress-meter is-large" aria-label={`Заполнено ${completionValue}%`}>
+              <div
+                className="participant-progress-meter is-large"
+                aria-label={`Заполнено ${completionValue}%`}
+              >
                 <span style={{ width: `${completionValue}%` }} />
               </div>
               <div className="participant-progress-meta">
-                <span>{answeredEventCount} из {todayEvents.length} событий</span>
+                <span>
+                  {answeredEventCount} из {todayEvents.length} событий
+                </span>
                 <span>Рефлексия: {reflectionAnswered ? "учтена" : "не заполнена"}</span>
               </div>
             </article>
@@ -898,7 +974,9 @@ function ParticipantRoutedView({
                     <h3>Итог дня откроется после отметок</h3>
                     <p>Сначала завершите события, потом спокойно подведите итог.</p>
                   </div>
-                  <span className="confidence-tag">{answeredEventCount} из {todayEvents.length}</span>
+                  <span className="confidence-tag">
+                    {answeredEventCount} из {todayEvents.length}
+                  </span>
                 </div>
               ) : null}
 
@@ -926,12 +1004,15 @@ function ParticipantRoutedView({
                       <p className="eyebrow">Итог дня</p>
                       <h3>Короткое завершение</h3>
                     </div>
-                    <span className="confidence-tag">{reflectionAnswered ? "учтена" : "черновик"}</span>
+                    <span className="confidence-tag">
+                      {reflectionAnswered ? "учтена" : "черновик"}
+                    </span>
                   </div>
 
                   <div className="reflection-list participant-reflection-list">
-                    {dayReflectionQuestions.length
-                      ? dayReflectionQuestions.map((question) => {
+                    {dayReflectionQuestions.length ? (
+                      <>
+                        {dayReflectionQuestions.map((question) => {
                           const answers = safeReflectionAnswers(reflection.answers);
 
                           return (
@@ -957,48 +1038,69 @@ function ParticipantRoutedView({
                               />
                             </label>
                           );
-                        })
-                      : visibleReflectionPrompts.map((prompt, index) => {
-                          const field = reflectionFields[index] || `q${index + 1}`;
-
-                          return (
-                            <label key={prompt} className="reflection-item">
-                              <span>{prompt}</span>
-                              <textarea
-                                rows="2"
-                                value={reflection[field]}
-                                placeholder="Напишите 1–2 предложения"
-                                onChange={(event) =>
-                                  setReflection(activeDayId, (previous) => ({
-                                    ...previous,
-                                    [field]: event.target.value,
-                                  }))
-                                }
-                              />
-                            </label>
-                          );
                         })}
 
-                    {hasDayRequiredReflectionGap ? (
-                      <p className="confidence-note participant-required-note" role="alert">
-                        Ответьте на обязательные вопросы, чтобы итог дня считался заполненным.
-                      </p>
-                    ) : null}
+                        {hasDayRequiredReflectionGap ? (
+                          <p className="confidence-note participant-required-note" role="alert">
+                            Ответьте на обязательные вопросы, чтобы итог дня считался заполненным.
+                          </p>
+                        ) : null}
 
-                    <label className="reflection-item">
-                      <span>Дополнить, если важно</span>
-                      <textarea
-                        rows="4"
-                        value={reflection.freeText}
-                        placeholder="Что ещё важно зафиксировать?"
-                        onChange={(event) =>
+                        <label className="reflection-item">
+                          <span>Дополнить, если важно</span>
+                          <textarea
+                            rows="4"
+                            value={reflection.freeText}
+                            placeholder="Что ещё важно зафиксировать?"
+                            onChange={(event) =>
+                              setReflection(activeDayId, (previous) => ({
+                                ...previous,
+                                freeText: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </>
+                    ) : showArchivedReflection ? (
+                      <div className="reflection-archived" aria-label="Архивная запись">
+                        <p className="eyebrow">Архивная запись (формат прошлого заезда)</p>
+                        {visibleReflectionPrompts.map((prompt, index) => {
+                          const field = reflectionFields[index] || `q${index + 1}`;
+                          const answer = String(reflection[field] || "");
+                          return (
+                            <div key={prompt} className="reflection-item is-archived">
+                              <span>{prompt}</span>
+                              <p className="reflection-archived-answer">
+                                {answer.trim() ? answer : "—"}
+                              </p>
+                            </div>
+                          );
+                        })}
+                        {String(reflection.freeText || "").trim() ? (
+                          <div className="reflection-item is-archived">
+                            <span>Дополнить, если важно</span>
+                            <p className="reflection-archived-answer">{reflection.freeText}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <ReflectionEditor
+                        value={{
+                          mind: reflection.mind || "",
+                          heart: reflection.heart || "",
+                          will: reflection.will || "",
+                          freeText: reflection.freeText || "",
+                        }}
+                        journeyStage={journeyStage}
+                        isCarefulMode={isCarefulMode}
+                        onChange={(next) =>
                           setReflection(activeDayId, (previous) => ({
                             ...previous,
-                            freeText: event.target.value,
+                            ...next,
                           }))
                         }
                       />
-                    </label>
+                    )}
                   </div>
                 </>
               ) : null}

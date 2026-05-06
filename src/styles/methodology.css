@@ -247,6 +247,39 @@
   color: var(--color-text-soft);
 }
 
+/* Архивная вёрстка для записей в формате прошлого заезда (q1/q2/q3, read-only). */
+
+.reflection-archived {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft, transparent);
+}
+
+.reflection-archived > .eyebrow {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.reflection-item.is-archived {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.reflection-item.is-archived > span {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-soft);
+}
+
+.reflection-archived-answer {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--color-text);
+  line-height: var(--line-height-relaxed);
+}
+
 /* JourneyStageOnboardingModal — onboarding при первом входе в диарий */
 
 .stage-onboarding {

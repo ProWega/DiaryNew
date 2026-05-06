@@ -235,12 +235,16 @@ async function getParticipantDiary({ viewerId, sessionId }) {
           q1: reflection?.answers?.q1 || "",
           q2: reflection?.answers?.q2 || "",
           q3: reflection?.answers?.q3 || "",
+          mind: reflection?.answers?.mind || "",
+          heart: reflection?.answers?.heart || "",
+          will: reflection?.answers?.will || "",
           freeText: reflection?.free_text || "",
           answered: reflectionAnswered,
           respondedAt: reflection?.responded_at || null,
         },
         reflectionQuestions: normalizeReflectionQuestions(
-          row.reflection_prompts || context.days.find((day) => day.id === row.day_id)?.reflectionQuestions,
+          row.reflection_prompts ||
+            context.days.find((day) => day.id === row.day_id)?.reflectionQuestions,
         ),
         progress: createEmptyProgress(),
         events: [],
@@ -270,10 +274,14 @@ async function getParticipantDiary({ viewerId, sessionId }) {
     const reflection = reflectionByDay.get(day.id);
     return {
       ...day,
-      progress: buildDayProgress(viewerId, sourceEvents.map((event) => ({
-        ...event,
-        _entry: entryByEvent.get(event.id),
-      })), reflection),
+      progress: buildDayProgress(
+        viewerId,
+        sourceEvents.map((event) => ({
+          ...event,
+          _entry: entryByEvent.get(event.id),
+        })),
+        reflection,
+      ),
       events: day.events.map(({ _entry, ...event }) => event),
     };
   });
@@ -341,8 +349,13 @@ async function updateParticipantEntry({ viewerId, sessionId, dayId, entryId, pat
   const hasComment = hasField(patch, "comment");
   const hasConfidence = hasField(patch, "confidence");
   const hasReflectionAnswers = hasField(patch, "reflectionAnswers");
-  const reflectionAnswers = hasReflectionAnswers ? normalizeReflectionAnswers(patch.reflectionAnswers) : {};
-  if (!patch.allowIncompleteReflection && (statePatch.hasState || hasReflectionAnswers || hasComment || hasConfidence)) {
+  const reflectionAnswers = hasReflectionAnswers
+    ? normalizeReflectionAnswers(patch.reflectionAnswers)
+    : {};
+  if (
+    !patch.allowIncompleteReflection &&
+    (statePatch.hasState || hasReflectionAnswers || hasComment || hasConfidence)
+  ) {
     validateRequiredReflectionAnswers(event.meta?.reflectionQuestions, reflectionAnswers);
   }
 
@@ -412,15 +425,21 @@ async function updateParticipantReflection({ viewerId, sessionId, dayId, patch }
   const answers = configuredQuestions.length
     ? normalizeReflectionAnswers(patch.answers || patch)
     : {
+        // Legacy v3 fields (kept for archived entries — read-only on client).
         q1: patch.q1 || "",
         q2: patch.q2 || "",
         q3: patch.q3 || "",
+        // Methodology v4 axes (Ум/Сердце/Воля) stored as keys in answers JSONB.
+        mind: patch.mind || "",
+        heart: patch.heart || "",
+        will: patch.will || "",
       };
   const freeText = patch.freeText || "";
   const hasMissingRequiredAnswers = configuredQuestions.some(
     (question) => question.required && !hasText(answers[question.id]),
   );
-  const answered = (Object.values(answers).some(hasText) || hasText(freeText)) && !hasMissingRequiredAnswers;
+  const answered =
+    (Object.values(answers).some(hasText) || hasText(freeText)) && !hasMissingRequiredAnswers;
 
   await query(
     `
