@@ -5,11 +5,13 @@ import {
   STATE_SCALE_TO_METHODOLOGY,
   GROUP_LAD,
   GROUP_LAD_META,
-  MOOD,
-  MOOD_META,
+  JOURNEY_STAGE,
+  JOURNEY_STAGE_META,
+  CAREFUL_MODE_META,
   SUMMARY_AXES,
   SUMMARY_AXIS_META,
-  REFLECTION_PROMPTS_BY_MOOD,
+  REFLECTION_PROMPTS_BY_STAGE,
+  REFLECTION_PROMPTS_CAREFUL,
 } from "./methodology";
 import { STATE_SCALE_ORDER } from "./stateScaleModel";
 
@@ -69,17 +71,34 @@ describe("GROUP_LAD (3 values)", () => {
   });
 });
 
-describe("MOOD (4 настроя)", () => {
-  it("has exactly 4 moods", () => {
-    expect(MOOD).toEqual(["crossroads", "support", "transmission", "silence"]);
+describe("JOURNEY_STAGE (4 этапа пути v4)", () => {
+  it("has exactly 4 stages in canonical order", () => {
+    expect(JOURNEY_STAGE).toEqual(["search", "verification", "support", "transmission"]);
   });
 
-  it("every mood has non-empty meta with ru, tagline, description", () => {
-    for (const mood of MOOD) {
-      expect(MOOD_META[mood].ru).toBeTruthy();
-      expect(MOOD_META[mood].tagline).toBeTruthy();
-      expect(MOOD_META[mood].description).toBeTruthy();
+  it("every stage has non-empty meta with ru, tagline, description", () => {
+    for (const stage of JOURNEY_STAGE) {
+      expect(JOURNEY_STAGE_META[stage].ru).toBeTruthy();
+      expect(JOURNEY_STAGE_META[stage].tagline).toBeTruthy();
+      expect(JOURNEY_STAGE_META[stage].description).toBeTruthy();
     }
+  });
+
+  it("does not include 'silence' as a stage (Тишина — отдельный careful_mode flag)", () => {
+    expect(JOURNEY_STAGE).not.toContain("silence");
+    expect(JOURNEY_STAGE).not.toContain("crossroads");
+  });
+});
+
+describe("CAREFUL_MODE_META (флаг «бережно» поверх любого этапа)", () => {
+  it("has non-empty ru, tagline, description", () => {
+    expect(CAREFUL_MODE_META.ru).toBeTruthy();
+    expect(CAREFUL_MODE_META.tagline).toBeTruthy();
+    expect(CAREFUL_MODE_META.description).toBeTruthy();
+  });
+
+  it("description mentions that it can be applied over any stage", () => {
+    expect(CAREFUL_MODE_META.description.toLowerCase()).toMatch(/поверх|любо|этап/);
   });
 });
 
@@ -96,28 +115,50 @@ describe("SUMMARY_AXES (Ум / Сердце / Воля)", () => {
   });
 });
 
-describe("REFLECTION_PROMPTS_BY_MOOD (4 моода × 3 оси)", () => {
-  it("every mood has prompts for every summary axis", () => {
-    for (const mood of MOOD) {
+describe("REFLECTION_PROMPTS_BY_STAGE (4 этапа × 3 оси)", () => {
+  it("every journey stage has prompts for every summary axis", () => {
+    for (const stage of JOURNEY_STAGE) {
       for (const axis of SUMMARY_AXES) {
-        expect(REFLECTION_PROMPTS_BY_MOOD[mood][axis]).toBeTruthy();
+        expect(REFLECTION_PROMPTS_BY_STAGE[stage][axis]).toBeTruthy();
       }
     }
   });
 
   it("prompts are short — under 120 chars (методическое правило: тон мягкий)", () => {
-    for (const mood of MOOD) {
+    for (const stage of JOURNEY_STAGE) {
       for (const axis of SUMMARY_AXES) {
-        expect(REFLECTION_PROMPTS_BY_MOOD[mood][axis].length).toBeLessThanOrEqual(120);
+        expect(REFLECTION_PROMPTS_BY_STAGE[stage][axis].length).toBeLessThanOrEqual(120);
       }
     }
   });
 
-  it("prompts under mood=silence avoid hard verbs (правило 6: мягкие пороги)", () => {
-    const silencePrompts = REFLECTION_PROMPTS_BY_MOOD.silence;
+  it("no prompt across all stages uses banned hard verbs (правило 6)", () => {
+    for (const stage of JOURNEY_STAGE) {
+      for (const axis of SUMMARY_AXES) {
+        const prompt = REFLECTION_PROMPTS_BY_STAGE[stage][axis].toLowerCase();
+        expect(prompt).not.toMatch(/опишите|оцените|подробно|обязательно/);
+      }
+    }
+  });
+});
+
+describe("REFLECTION_PROMPTS_CAREFUL (мягкие промпты для careful_mode)", () => {
+  it("has prompts for all 3 summary axes", () => {
     for (const axis of SUMMARY_AXES) {
-      const prompt = silencePrompts[axis].toLowerCase();
+      expect(REFLECTION_PROMPTS_CAREFUL[axis]).toBeTruthy();
+    }
+  });
+
+  it("prompts have soft tone — no hard verbs (правило 6: мягкие пороги для бережного)", () => {
+    for (const axis of SUMMARY_AXES) {
+      const prompt = REFLECTION_PROMPTS_CAREFUL[axis].toLowerCase();
       expect(prompt).not.toMatch(/опишите|оцените|подробно|обязательно/);
+    }
+  });
+
+  it("prompts under 100 chars (бережно = коротко)", () => {
+    for (const axis of SUMMARY_AXES) {
+      expect(REFLECTION_PROMPTS_CAREFUL[axis].length).toBeLessThanOrEqual(100);
     }
   });
 });

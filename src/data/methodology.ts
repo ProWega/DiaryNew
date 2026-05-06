@@ -1,13 +1,14 @@
 /**
- * Methodology constants for «Дневник пути» (Истоки).
+ * Methodology constants for «Дневник пути» (Истоки), version v4.
  *
  * This file is the single source of truth for:
  *  - 5 methodology state labels (Тишина / Настройка / Лад / Подъём / Сбой)
  *  - mapping 7 current state ids → 5 methodology labels
- *  - 4 mood (настрой) values
+ *  - 4 journey stages: Поиск / Проверка / Опора / Передача
+ *  - careful mode flag («бережно» поверх любого этапа)
  *  - 3 group lad values (С группой / Рядом / В стороне)
  *  - 3 day-summary axes (Ум / Сердце / Воля)
- *  - prompts per axis × per mood
+ *  - prompts per axis × per journey stage + careful-mode prompts
  *
  * See docs/architecture/methodology-mapping.md for the rationale and the
  * "что нельзя нарушать" technical contract this file supports.
@@ -89,33 +90,64 @@ export const GROUP_LAD_META: Record<GroupLad, { ru: string; description: string 
   },
 };
 
-// ── Mood (настрой) ───────────────────────────────────────────────────
+// ── Journey stage (этап пути) ────────────────────────────────────────
 
-export const MOOD = ["crossroads", "support", "transmission", "silence"] as const;
-export type Mood = (typeof MOOD)[number];
+/**
+ * 4 этапа пути по методике v4. Этапы циклически переживаются заново —
+ * педагог в Передаче может на новой смене оказаться в Поиске. Это не регресс,
+ * а живое движение пути (раздел II.2 v4).
+ *
+ * NB: «Тишина» больше не этап — стала отдельным флагом `careful_mode` ниже.
+ */
+export const JOURNEY_STAGE = ["search", "verification", "support", "transmission"] as const;
+export type JourneyStage = (typeof JOURNEY_STAGE)[number];
 
-export const MOOD_META: Record<Mood, { ru: string; tagline: string; description: string }> = {
-  crossroads: {
-    ru: "Распутье",
-    tagline: "Я в начале пути",
+export const JOURNEY_STAGE_META: Record<
+  JourneyStage,
+  { ru: string; tagline: string; description: string }
+> = {
+  search: {
+    ru: "Поиск",
+    tagline: "Я ещё выбираю, кем быть",
     description: "Смотрю, пробую, выбираю. Хочу понять, что отзывается, а что нет.",
+  },
+  verification: {
+    ru: "Проверка",
+    tagline: "Я уже на пути и проверяю себя в нём",
+    description:
+      "Решение принято, но настоящая проверка — в реальности — только начинается. Хочу убедиться, что выбрал правильно, и научиться идти.",
   },
   support: {
     ru: "Опора",
-    tagline: "Я уже выбрал и хочу укрепиться",
-    description: "Я знаю, куда иду. Мне нужно подтверждение, опора, встречи с теми, кто рядом.",
+    tagline: "Я уверенно иду своим путём",
+    description:
+      "Я знаю, куда иду. Приехал найти своих, поговорить с теми, кто рядом, и углубиться.",
   },
   transmission: {
     ru: "Передача",
-    tagline: "Я несу ответственность за других и собираю ресурсы",
+    tagline: "У меня есть свои",
     description:
-      "У меня есть свои — те, за кого я отвечаю. Приехал собрать инструменты и обменяться опытом.",
+      "Те, за кого я отвечаю. Приехал собрать инструменты, обменяться опытом и привезти что-то конкретное.",
   },
-  silence: {
-    ru: "Тишина",
-    tagline: "Я в нагрузке и нуждаюсь в бережном пространстве",
-    description: "Я приехал в нагрузке. Мне сложно. Хочу, чтобы со мной было бережно.",
-  },
+};
+
+// ── Careful mode («бережно») — флаг поверх любого этапа ─────────────
+
+/**
+ * Опциональная пометка, которую участник ставит, когда сейчас сложно
+ * и хочется деликатности — болезнь близкого, особый ребёнок, СВО, кризис.
+ *
+ * Принципиально, что это НЕ один из этапов — острая нагрузка почти всегда
+ * сопрягается с другим этапом пути (мама особого ребёнка одновременно
+ * в Передаче и в нагрузке). См. v4 раздел I.5.
+ *
+ * В БД хранится в `session_users.is_careful_mode boolean`.
+ */
+export const CAREFUL_MODE_META = {
+  ru: "Бережно",
+  tagline: "Сейчас бережно",
+  description:
+    "Иногда сейчас сложно, и хочется, чтобы со мной было бережно. Можно поставить поверх любого этапа.",
 };
 
 // ── Summary axes (Ум / Сердце / Воля) ────────────────────────────────
@@ -130,29 +162,40 @@ export const SUMMARY_AXIS_META: Record<SummaryAxis, { ru: string; defaultPrompt:
 };
 
 /**
- * Per-mood reflection prompts for each summary axis. Used by the reflection
+ * Per-stage reflection prompts for each summary axis. Used by the reflection
  * editor to soften/adapt the question tone. The methodology requires the
- * prompts to shift under the chosen mood (раздел III.3, table «Тон вопросов»).
+ * prompts to shift under the chosen journey stage (v4 раздел III.3 table
+ * «Тон вопросов»).
  */
-export const REFLECTION_PROMPTS_BY_MOOD: Record<Mood, Record<SummaryAxis, string>> = {
-  crossroads: {
+export const REFLECTION_PROMPTS_BY_STAGE: Record<JourneyStage, Record<SummaryAxis, string>> = {
+  search: {
     mind: "Что я понял про дело, к которому присматриваюсь?",
     heart: "Что отозвалось — это моё или нет?",
     will: "К чему хочу подойти ближе?",
   },
-  support: {
-    mind: "Что прояснилось в моём пути?",
+  verification: {
+    mind: "Что прояснилось в моём пути? Где была проверка?",
     heart: "Кого встретил из тех, кто идёт рядом?",
     will: "Что подтвердилось, к чему укрепился?",
+  },
+  support: {
+    mind: "Что углубилось сегодня?",
+    heart: "Кого встретил из своих?",
+    will: "К чему подвинулся в своём деле?",
   },
   transmission: {
     mind: "Какая мысль годится для моих?",
     heart: "Что задело так, что хочу передать?",
     will: "Что решил привезти и сделать?",
   },
-  silence: {
-    mind: "Что начало проясняться?",
-    heart: "Где было тепло?",
-    will: "К какому маленькому шагу подвинулся?",
-  },
+};
+
+/**
+ * Soft prompts применяются ПОВЕРХ любого этапа когда `is_careful_mode=true`.
+ * Тон мягкий, не давит — методическое правило 6 (мягкие пороги для бережного).
+ */
+export const REFLECTION_PROMPTS_CAREFUL: Record<SummaryAxis, string> = {
+  mind: "Что начало проясняться?",
+  heart: "Где было тепло?",
+  will: "К какому маленькому шагу подвинулся?",
 };
