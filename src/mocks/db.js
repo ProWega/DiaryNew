@@ -136,6 +136,10 @@ export function enrichBootstrap(db, viewer) {
     reflectionPrompts,
     navigation: getNavigationItems(viewer),
     scopeBadges: getScopeBadges(viewer),
+    // Methodology v4: journey stage + careful mode for current participant.
+    // Persisted on the user record via PATCH /api/participant/.../journey-stage.
+    journeyStage: viewer.journeyStage ?? null,
+    isCarefulMode: viewer.isCarefulMode ?? false,
   };
 }
 

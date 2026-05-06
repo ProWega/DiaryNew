@@ -137,6 +137,18 @@ export const jsonApi = {
     });
   },
 
+  updateJourneyStage(
+    viewerId: string | number,
+    sessionId: string | number,
+    patch: { journeyStage?: string | null; isCarefulMode?: boolean },
+  ) {
+    return requestJson(`/api/participant/sessions/${sessionId}/journey-stage`, {
+      method: "PATCH",
+      headers: viewerHeaders(viewerId),
+      body: patch,
+    });
+  },
+
   getCuratorDashboard(
     viewerId: string | number,
     sessionId: string | number,

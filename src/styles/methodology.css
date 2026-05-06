@@ -246,3 +246,32 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-soft);
 }
+
+/* JourneyStageOnboardingModal — onboarding при первом входе в диарий */
+
+.stage-onboarding {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.stage-onboarding > .subtle {
+  margin: 0;
+  line-height: var(--line-height-relaxed);
+}
+
+.stage-onboarding > .stage-picker {
+  padding: 0;
+}
+
+.stage-onboarding-careful {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.stage-onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}

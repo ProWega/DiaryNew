@@ -377,3 +377,32 @@ export function useAdminWorkspace() {
     createMagicLink: (payload) => jsonApi.createMagicLink(userId, payload),
   };
 }
+
+// Methodology v4: журнализация выбора этапа пути + careful_mode участником.
+// На успех инвалидирует bootstrap-кеш (там лежит journeyStage / isCarefulMode),
+// чтобы AppLayout и onboarding modal сразу увидели актуальное значение.
+export function useJourneyStageMutation() {
+  const { currentUser, refreshBootstrap } = useAuth();
+  const userId = currentUser?.id;
+  const sessionId = currentUser?.sessionId;
+  const mutation = useCommandMutation({
+    success: "Этап сохранён",
+    error: "Не удалось сохранить",
+  });
+
+  const updateJourneyStage = useCallback(
+    async (patch) => {
+      if (!userId || !sessionId) return null;
+      const result = await mutation.runMutation(() =>
+        jsonApi.updateJourneyStage(userId, sessionId, patch),
+      );
+      if (result && refreshBootstrap) {
+        await refreshBootstrap();
+      }
+      return result;
+    },
+    [userId, sessionId, mutation, refreshBootstrap],
+  );
+
+  return { saving: mutation.saving, error: mutation.mutationError, updateJourneyStage };
+}

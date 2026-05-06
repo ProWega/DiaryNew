@@ -178,6 +178,34 @@ const participantHandlers = [
       }
     },
   ),
+
+  // Methodology v4: PATCH journey_stage + careful_mode (см. methodology-mapping.md §2.4)
+  http.patch("/api/participant/sessions/:sessionId/journey-stage", async ({ request }) => {
+    const viewerId = request.headers.get("x-viewer-id");
+    const body = await request.json();
+    const db = readDatabase();
+
+    try {
+      const viewer = getViewer(db, viewerId);
+      const userIndex = db.users.findIndex((u) => u.id === viewer.id);
+      if (userIndex < 0) {
+        return HttpResponse.json({ message: "Пользователь не найден" }, { status: 404 });
+      }
+
+      const next = { ...db.users[userIndex] };
+      if ("journeyStage" in body) next.journeyStage = body.journeyStage ?? null;
+      if ("isCarefulMode" in body) next.isCarefulMode = Boolean(body.isCarefulMode);
+      db.users[userIndex] = next;
+      writeDatabase(db);
+
+      return ok({
+        journeyStage: next.journeyStage ?? null,
+        isCarefulMode: next.isCarefulMode ?? false,
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  }),
 ];
 
 // ─── Curator ──────────────────────────────────────────────────────────────────
