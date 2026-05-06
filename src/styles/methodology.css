@@ -168,3 +168,81 @@
 .privacy-checkbox input[type="checkbox"]:disabled + span {
   opacity: 0.4;
 }
+
+/* ReflectionEditor — итог дня (Ум / Сердце / Воля + свободно) */
+
+.reflection-editor {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-surface-card);
+}
+
+.reflection-editor.is-compact {
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.reflection-editor-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.reflection-editor-axes {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.reflection-editor.is-compact .reflection-editor-axes {
+  gap: var(--space-3);
+}
+
+.reflection-axis {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reflection-axis-name {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.reflection-axis-prompt {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-soft);
+  line-height: var(--line-height-relaxed);
+}
+
+.reflection-axis-input,
+.reflection-free-input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-1);
+  background: var(--color-surface-input);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+  resize: vertical;
+}
+
+.reflection-axis-input:focus,
+.reflection-free-input:focus {
+  outline: none;
+  border-color: var(--color-sky-border);
+  box-shadow: 0 0 0 3px var(--color-sky-focus-ring);
+}
+
+.reflection-free {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reflection-free-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-soft);
+}
