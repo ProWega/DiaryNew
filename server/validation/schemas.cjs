@@ -8,7 +8,7 @@ const CONFIDENCE_VALUES = ["low", "high"];
 
 // Methodology «Дневник пути» — see docs/architecture/methodology-mapping.md
 const GROUP_LAD_VALUES = ["with_group", "alongside", "apart"];
-const MOOD_VALUES = ["crossroads", "support", "transmission", "silence"];
+const JOURNEY_STAGE_VALUES = ["search", "verification", "support", "transmission"];
 const SUMMARY_AXIS_VALUES = ["mind", "heart", "will"];
 
 const trimmed = (max) =>
@@ -108,10 +108,13 @@ const updateReflectionSchema = z
   })
   .strict();
 
-// PATCH /api/participant/sessions/:sessionId/mood — Phase 2 sets mood at session_user level.
-const updateMoodSchema = z
+// PATCH /api/participant/sessions/:sessionId/journey-stage — v4: sets etap puti
+// + careful mode at session_user level. Both fields optional individually so
+// participant can update one without resetting the other.
+const updateJourneyStageSchema = z
   .object({
-    mood: z.enum(MOOD_VALUES).nullable(),
+    journeyStage: z.enum(JOURNEY_STAGE_VALUES).nullable().optional(),
+    isCarefulMode: z.boolean().optional(),
   })
   .strict();
 
@@ -250,13 +253,13 @@ const istokiEventsBatchSchema = z
 
 module.exports = {
   GROUP_LAD_VALUES,
-  MOOD_VALUES,
+  JOURNEY_STAGE_VALUES,
   SUMMARY_AXIS_VALUES,
   consumeMagicLinkSchema,
   createMagicLinkSchema,
   createUserSchema,
   registerParticipantSchema,
-  updateMoodSchema,
+  updateJourneyStageSchema,
   setupAdminSchema,
   updateDiaryEntrySchema,
   updateReflectionSchema,

@@ -462,7 +462,11 @@ alter table diary_entries add column if not exists is_hidden_from_curator boolea
 alter table diary_entries add column if not exists group_lad text;
 alter table daily_reflections add column if not exists is_anonymous boolean not null default false;
 alter table daily_reflections add column if not exists is_hidden_from_curator boolean not null default false;
-alter table session_users add column if not exists mood text;
+
+-- ── Methodology «Дневник пути» Phase 2.5 (v4: journey stage + careful mode) ─
+-- v4 переопределила: mood → journey_stage, Тишина стала отдельным флагом.
+alter table session_users add column if not exists journey_stage text;
+alter table session_users add column if not exists is_careful_mode boolean not null default false;
 
 -- ── Истоки v2 Phase A (regional voices map content store) ──────────
 -- Public showcase: /istoki/map. Migrated from src/features/istoki/data/regions.json.
