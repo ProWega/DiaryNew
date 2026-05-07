@@ -620,7 +620,6 @@ function buildCuratorReportScope({
     entries: scopedEntries,
     reflections: scopedReflections,
   });
-  const allLevels = scopedEntries.map((entry) => Number(entry.state_level)).filter(Number.isFinite);
   const eventPulse = buildEventPulse({
     events: eventRows,
     members,
@@ -634,16 +633,6 @@ function buildCuratorReportScope({
 
     return left.completion - right.completion || left.name.localeCompare(right.name, "ru");
   });
-  const heatmap = {
-    columns: members.map((member) => member.name.split(" ")[0]),
-    rows: eventRows.slice(0, 8).map((event) => ({
-      label: event.title,
-      values: members.map((member) => {
-        const point = member.trajectory.find((item) => item.eventId === event.id);
-        return Number.isFinite(Number(point?.stateLevel)) ? Number(point.stateLevel) : null;
-      }),
-    })),
-  };
   const focusEvents = buildFocusEvents(eventPulse);
   const dayReflections = buildReflectionDays({
     days: day ? [day] : participation.days,
@@ -684,14 +673,13 @@ function buildCuratorReportScope({
     progress,
     participantsCount: members.length,
     completion: progress.completion,
-    averageActivation: roundMetric(averageOrNull(allLevels)),
-    riskCases: members.filter((member) => member.status === "risk" || member.status === "watch")
-      .length,
+    // Phase 4.4 (methodology v4): aggregates that violate rule 4 («запрет
+    // арифметики») and rule 2 («запрет диагностики») are no longer surfaced —
+    // averageActivation / riskCases / heatmap dropped. См. methodology-mapping.md §2.5.
     eventPulse,
     participantRows,
     reflectionPrep,
     organizerBrief: buildOrganizerBrief({ eventPulse, alerts }),
-    heatmap,
     topThemes: scopedCommentClusters,
     aiSummary: aiReport,
     members: participantRows,

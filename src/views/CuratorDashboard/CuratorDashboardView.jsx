@@ -1,116 +1,25 @@
 import { useEffect, useState } from "react";
-import {
-  EventImpactBarChart,
-  RiskScatterChart,
-  StackedDistributionChart,
-} from "../../components/Charts";
-import { formatPercent, formatNumber } from "../../lib/format";
+import { formatPercent } from "../../lib/format";
 import {
   asArray,
-  getStatusCopy,
   getSeverityClass,
   formatCuratorText,
-  formatAverageState,
-  getEventShortLabel,
-  getStateByLevel,
   buildReflectionBriefFallback,
   getReportScopeLabel,
   DataStateBanner,
 } from "./_helpers";
 import { PulseOfDayChart } from "./PulseOfDayChart";
-import { GroupScore } from "./GroupScore";
 import { ReflectionBriefCard, FactList } from "./ReflectionBriefCard";
-import { SelectedParticipantCard } from "./SelectedParticipantCard";
 import { EventCommentsAndAiSection } from "./EventCommentsAndAiSection";
 import MetricBadge from "../../components/MetricBadge";
 
-const CURATOR_ZONE_SEGMENTS = [
-  { id: "low", label: "Низкий ресурс", color: "#4f5759" },
-  { id: "mid", label: "Баланс", color: "#78733d" },
-  { id: "high", label: "Напряжение", color: "#c95c36" },
-];
+// Phase 4.4 (methodology v4): RiskScatterChart / StackedDistributionChart /
+// EventImpactBarChart / GroupScore / SelectedParticipantCard removed from this
+// view per methodology rules 2 and 4. Their .jsx files stay in the repo as
+// dead code for reference; new curator UX lives in src/views/CuratorBrief.
+// См. methodology-mapping.md §2.5.
 
-function buildCuratorDistributionRows(events = [], participants = []) {
-  return asArray(events)
-    .map((event) => {
-      let low = 0;
-      let mid = 0;
-      let high = 0;
-
-      for (const participant of asArray(participants)) {
-        const point = asArray(participant.trajectory).find((item) => item.eventId === event.id);
-        const level = Number(point?.stateLevel);
-        if (!Number.isFinite(level)) {
-          continue;
-        }
-
-        if (level <= 1) {
-          low += 1;
-        } else if (level >= 5) {
-          high += 1;
-        } else {
-          mid += 1;
-        }
-      }
-
-      const total = low + mid + high;
-      return {
-        id: event.id,
-        label: event.title,
-        total,
-        segments: CURATOR_ZONE_SEGMENTS.map((segment) => ({
-          ...segment,
-          value: segment.id === "low" ? low : segment.id === "mid" ? mid : high,
-        })).filter((segment) => segment.value > 0),
-      };
-    })
-    .filter((row) => row.total > 0);
-}
-
-function buildCuratorRiskEventRows(eventPulse = []) {
-  return asArray(eventPulse)
-    .filter((event) => Number(event.riskAnswersCount || 0) > 0)
-    .map((event) => ({
-      id: event.id,
-      label: getEventShortLabel(event),
-      value: Number(event.riskAnswersCount || 0),
-      color: "#6b1f2a",
-    }));
-}
-
-function buildCuratorScatterData(participants = []) {
-  return asArray(participants)
-    .filter((participant) => Number.isFinite(Number(participant.average)))
-    .map((participant, index) => ({
-      id: participant.id,
-      label: participant.name,
-      shortLabel: participant.name?.slice(0, 2)?.toUpperCase() || `${index + 1}`,
-      x: Number(participant.average),
-      y: Number.isFinite(Number(participant.amplitude)) ? Number(participant.amplitude) : 0,
-      size: Math.max(8, Number(participant.completion || 0)),
-      status: participant.status,
-      average: participant.average,
-      amplitude: participant.amplitude,
-      xValueLabel: formatAverageState(participant.average),
-      yValueLabel: formatNumber(participant.amplitude),
-      completion: participant.completion,
-      commentsCount: participant.commentsCount,
-      answeredEvents: participant.answeredEvents,
-      totalEvents: participant.totalEvents,
-      openRiskSignalsCount: participant.openRiskSignalsCount,
-      color:
-        participant.status === "risk"
-          ? "#6b1f2a"
-          : participant.status === "watch"
-            ? "#9a7a32"
-            : participant.status === "silent"
-              ? "#4f5759"
-              : "#78733d",
-    }));
-}
-
-function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }) {
-  const [selectedScatterId, setSelectedScatterId] = useState(initialSelectedParticipantId);
+function CuratorDashboardView({ dashboard }) {
   const reportScopes = asArray(dashboard.reportScopes);
   const [selectedScopeId, setSelectedScopeId] = useState(reportScopes[0]?.scopeId || "all");
 
@@ -132,9 +41,6 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
   const commentClusters = asArray(reflectionPrep.commentClusters);
   const organizerBrief = asArray(scopedDashboard.organizerBrief);
   const openRisks = asArray(reflectionPrep.openRisks);
-  const distributionRows = buildCuratorDistributionRows(events, participantRows);
-  const riskEventRows = buildCuratorRiskEventRows(eventPulse);
-  const scatterData = buildCuratorScatterData(participantRows);
   const reflectionBrief =
     reflectionPrep.reflectionBrief ||
     buildReflectionBriefFallback({
@@ -143,8 +49,6 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
       openRisks,
       dashboard: scopedDashboard,
     });
-  const selectedParticipant =
-    participantRows.find((participant) => participant.id === selectedScatterId) || null;
 
   return (
     <section className="role-view curator-workspace">
@@ -161,11 +65,6 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
         <div className="hero-stats">
           <MetricBadge label="Участников" value={`${scopedDashboard.participantsCount || 0}`} />
           <MetricBadge label="Заполнение" value={formatPercent(scopedDashboard.completion)} />
-          <MetricBadge
-            label="Средний пульс"
-            value={formatAverageState(scopedDashboard.averageActivation)}
-          />
-          <MetricBadge label="Открытых рисков" value={`${openRisks.length}`} />
         </div>
       </div>
 
@@ -235,22 +134,6 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
         dashboard={scopedDashboard}
       />
 
-      <RiskScatterChart
-        title="Карта участников группы"
-        description="Размер точки = заполнение, X = среднее состояние, Y = амплитуда дня."
-        data={scatterData}
-        emptyLabel="Нет траекторий участников для scatter-карты."
-        selectedId={selectedScatterId}
-        onPointClick={(item) =>
-          setSelectedScatterId((current) => (current === item.id ? null : item.id))
-        }
-        onClearSelection={() => setSelectedScatterId(null)}
-      />
-      <SelectedParticipantCard
-        participant={selectedParticipant}
-        onClear={() => setSelectedScatterId(null)}
-      />
-
       <div className="curator-brief-grid curator-organizer-brief-grid">
         <FactList
           eyebrow="Организаторам"
@@ -263,34 +146,6 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
               <p>{formatCuratorText(item.evidence)}</p>
             </div>
           )}
-        />
-      </div>
-
-      <article className="panel-card curator-score-card">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Партитура группы</p>
-            <h3>Кто и как прошёл события дня</h3>
-          </div>
-          <span className="soft-pill is-outline">Пропуски остаются пустыми</span>
-        </div>
-        <GroupScore participants={participantRows} events={events} />
-      </article>
-
-      <div className="curator-brief-grid curator-secondary-analytics">
-        <StackedDistributionChart
-          title="Распределение состояний по событиям"
-          description="Только реальные ответы группы: пропуски остаются пустыми и не маскируются нейтральным значением."
-          rows={distributionRows}
-          emptyLabel="Недостаточно ответов, чтобы собрать распределение по событиям."
-        />
-        <EventImpactBarChart
-          title="События с риском"
-          description="Высота столбца показывает, сколько ответов по событию попали в крайние зоны шкалы."
-          data={riskEventRows}
-          emptyLabel="Пока нет событий с ответами в зоне риска."
-          positiveColor="#6b1f2a"
-          negativeColor="#6b1f2a"
         />
       </div>
 
@@ -327,10 +182,7 @@ function CuratorDashboardView({ dashboard, initialSelectedParticipantId = null }
           renderItem={(cluster) => (
             <div key={cluster.id || cluster.label} className="curator-fact-item">
               <strong>{cluster.label}</strong>
-              <span>
-                {cluster.count} связанных записей
-                {cluster.score !== null ? ` · score ${formatNumber(cluster.score, 2)}` : ""}
-              </span>
+              <span>{cluster.count} связанных записей</span>
               {cluster.summary ? <p>{cluster.summary}</p> : null}
             </div>
           )}
