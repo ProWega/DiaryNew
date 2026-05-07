@@ -127,5 +127,11 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "overrides": {
+    "vitepress": {
+      "vite": "6.4.2",
+      "@vitejs/plugin-vue": "5.2.4"
+    }
   }
 }
