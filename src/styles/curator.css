@@ -931,3 +931,217 @@
     flex-direction: column;
   }
 }
+
+/* Phase 4.2 — CuratorBrief view: записка / карточка / партитура */
+
+.curator-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.curator-view-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.curator-view-toggle .mini-tab {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.curator-view-toggle .mini-tab:hover:not(:disabled) {
+  border-color: var(--color-text);
+  color: var(--color-text);
+}
+
+.curator-view-toggle .mini-tab.is-active {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+
+.curator-brief-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.curator-brief-section {
+  display: grid;
+  gap: 14px;
+}
+
+.curator-brief-picture {
+  display: grid;
+  gap: 8px;
+}
+
+.curator-brief-picture-line {
+  margin: 0;
+  line-height: var(--line-height-relaxed);
+}
+
+.curator-brief-picture-line.is-careful {
+  color: var(--color-text-soft);
+}
+
+.curator-brief-stages h4,
+.curator-brief-points h4,
+.curator-brief-events h4,
+.curator-brief-score h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.curator-brief-stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.curator-brief-stage-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.curator-brief-stage-list li span {
+  font-size: 0.78rem;
+  color: var(--color-text-soft);
+}
+
+.curator-brief-stage-list li strong {
+  font-size: 1.2rem;
+}
+
+.curator-brief-stage-list li.is-careful {
+  border: 1px dashed var(--color-border);
+}
+
+.curator-brief-point-list,
+.curator-brief-event-list,
+.curator-brief-candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.curator-brief-point {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.curator-brief-point-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+  color: var(--color-text-soft);
+  white-space: nowrap;
+  align-self: start;
+}
+
+.curator-brief-point-tag.is-careful_mode {
+  background: rgba(91, 109, 171, 0.18);
+  color: #2a3866;
+}
+
+.curator-brief-point-tag.is-shift_down {
+  background: rgba(168, 59, 42, 0.14);
+  color: #5e1c12;
+}
+
+.curator-brief-point-tag.is-silence_streak {
+  background: rgba(58, 74, 120, 0.14);
+  color: #1f2a4a;
+}
+
+.curator-brief-point strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.curator-brief-point p {
+  margin: 0;
+  color: var(--color-text-soft);
+  line-height: var(--line-height-relaxed);
+}
+
+.curator-brief-event {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.03));
+}
+
+.curator-brief-event-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.curator-brief-event-head small {
+  color: var(--color-text-soft);
+}
+
+.curator-brief-quotes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.curator-brief-quotes li {
+  color: var(--color-text-soft);
+  font-style: italic;
+}
+
+.curator-brief-candidate {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+}
+
+.curator-brief-candidate strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.curator-brief-candidate p {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.curator-brief-score-snapshot {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.curator-brief-score-snapshot p {
+  margin: 0;
+  line-height: var(--line-height-relaxed);
+}

@@ -4,7 +4,7 @@ import AppLayout from "./components/AppLayout";
 import RouteGuard from "./components/RouteGuard";
 import { useAuth } from "./auth/AuthContext";
 import AdminSecurityPage from "./pages/AdminSecurityPage";
-import CuratorDashboardPage from "./pages/CuratorDashboardPage";
+import CuratorBriefPage from "./pages/CuratorBriefPage";
 import MagicLinkPage from "./pages/MagicLinkPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import {
@@ -121,7 +121,7 @@ function AppRouter() {
           element={
             <PageTitle title="Кабинет куратора">
               <RouteGuard permission="group.analytics.read">
-                <CuratorDashboardPage />
+                <CuratorBriefPage />
               </RouteGuard>
             </PageTitle>
           }

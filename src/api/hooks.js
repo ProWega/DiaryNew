@@ -14,6 +14,14 @@ const qk = {
     sessionId,
     groupId,
   ],
+  curatorBrief: (userId, sessionId, groupId, dayId) => [
+    "curator",
+    "brief",
+    userId,
+    sessionId,
+    groupId,
+    dayId || "default",
+  ],
   organizerWorkspace: (userId, sessionId) => ["organizer", "workspace", userId, sessionId],
   adminDashboard: (userId) => ["admin", "dashboard", userId],
   adminWorkspace: (userId) => ["admin", "workspace", userId],
@@ -205,6 +213,21 @@ export function useCuratorDashboard(sessionId, groupId) {
   const query = useQuery({
     queryKey,
     queryFn: () => jsonApi.getCuratorDashboard(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+export function useCuratorBrief(sessionId, groupId, dayId = null) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.curatorBrief(userId, sessionId, groupId, dayId);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorBrief(userId, sessionId, groupId, dayId),
     enabled: Boolean(userId && sessionId && groupId),
   });
 

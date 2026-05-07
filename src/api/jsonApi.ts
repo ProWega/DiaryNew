@@ -159,6 +159,18 @@ export const jsonApi = {
     });
   },
 
+  getCuratorBrief(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    dayId?: string | null,
+  ) {
+    const search = dayId ? `?dayId=${encodeURIComponent(dayId)}` : "";
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/brief${search}`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
   getOrganizerWorkspace(viewerId: string | number, sessionId: string | number) {
     return requestJson(`/api/organizer/sessions/${sessionId}/workspace`, {
       headers: viewerHeaders(viewerId),
