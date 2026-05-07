@@ -38,6 +38,12 @@ const METHODOLOGY_LABEL_RU = Object.freeze({
 });
 
 const JOURNEY_STAGES = Object.freeze(["search", "verification", "support", "transmission"]);
+const JOURNEY_STAGE_RU = Object.freeze({
+  search: "Поиск",
+  verification: "Проверка",
+  support: "Опора",
+  transmission: "Передача",
+});
 
 const CONVERSATION_POINT_LIMIT = 5;
 const EVENT_QUOTE_LIMIT = 3;
@@ -163,6 +169,65 @@ function buildConversationPoints({ members, todayEntries, yesterdayEntries }) {
   return points.slice(0, CONVERSATION_POINT_LIMIT);
 }
 
+function methodologyLabelForState(stateId) {
+  const id = methodologyOf(stateId);
+  if (!id) return null;
+  return { id, ru: METHODOLOGY_LABEL_RU[id] };
+}
+
+function buildParticipantCards({ members, todayEntries, yesterdayEntries, conversationPoints }) {
+  const hintByUserId = new Map(
+    conversationPoints.map((point) => [
+      point.participantId,
+      { reason: point.reason, note: point.note },
+    ]),
+  );
+
+  return members.map((member) => {
+    const todayEntry = findFirstEntryByUser(todayEntries, member.id);
+    const yesterdayEntry = findFirstEntryByUser(yesterdayEntries, member.id);
+    const hint = hintByUserId.get(member.id) || null;
+
+    return {
+      userId: member.id,
+      displayName: member.fullName || "Участник без имени",
+      journeyStage: member.journeyStage || null,
+      journeyStageLabel: member.journeyStage ? JOURNEY_STAGE_RU[member.journeyStage] || null : null,
+      isCarefulMode: Boolean(member.isCarefulMode),
+      today: methodologyLabelForState(todayEntry?.stateId),
+      yesterday: methodologyLabelForState(yesterdayEntry?.stateId),
+      conversationHint: hint,
+    };
+  });
+}
+
+function buildProgramArc({ programDays, entriesByDay }) {
+  if (!Array.isArray(programDays) || programDays.length === 0) return { dayBreakdown: [] };
+
+  const dayBreakdown = programDays.map((day) => {
+    const dayEntries = entriesByDay[day.id] || [];
+    const counts = { silence: 0, tuning: 0, harmony: 0, lift: 0, breakdown: 0 };
+    const respondedUserIds = new Set();
+    for (const entry of dayEntries) {
+      const label = methodologyOf(entry.stateId);
+      if (label) counts[label] += 1;
+      if (entry.userId != null) respondedUserIds.add(entry.userId);
+    }
+    const dominantState = pickDominant(counts);
+
+    return {
+      dayId: day.id,
+      dayLabel: day.label || day.dateLabel || "",
+      respondedCount: respondedUserIds.size,
+      totalEntries: dayEntries.length,
+      dominantState,
+      dominantStateLabel: dominantState ? METHODOLOGY_LABEL_RU[dominantState] : null,
+    };
+  });
+
+  return { dayBreakdown };
+}
+
 function buildEventList({ events, todayEntries }) {
   return events.map((event) => {
     const eventEntries = todayEntries.filter((entry) => entry.eventId === event.id);
@@ -187,14 +252,24 @@ function buildNarrativeBrief({
   todayEntries = [],
   yesterdayEntries = [],
   events = [],
+  programDays = [],
+  entriesByDay = {},
 }) {
+  const conversationPoints = buildConversationPoints({ members, todayEntries, yesterdayEntries });
   return {
     dayId,
     dayLabel,
     picture: buildPicture({ members, todayEntries }),
-    conversationPoints: buildConversationPoints({ members, todayEntries, yesterdayEntries }),
+    conversationPoints,
     stageResonance: buildStageResonance({ members }),
     events: buildEventList({ events, todayEntries }),
+    participantCards: buildParticipantCards({
+      members,
+      todayEntries,
+      yesterdayEntries,
+      conversationPoints,
+    }),
+    programArc: buildProgramArc({ programDays, entriesByDay }),
   };
 }
 
@@ -238,20 +313,6 @@ async function fetchMembersForGroup(sessionId, groupId) {
   }));
 }
 
-async function fetchEntriesForDay(sessionId, groupId, dayId) {
-  const result = await query(
-    `select de.id, de.user_id, de.event_id, de.state_id, de.state_level,
-            de.comment, de.is_anonymous, de.is_hidden_from_curator,
-            de.responded_at, e.day_id
-     from diary_entries de
-     join events e on e.id = de.event_id
-     join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
-     where de.session_id = $1 and su.group_id = $2 and e.day_id = $3`,
-    [sessionId, groupId, dayId],
-  );
-  return result.rows;
-}
-
 async function fetchEventsForDay(sessionId, dayId) {
   const result = await query(
     `select id, title from events where session_id = $1 and day_id = $2 order by ordinal`,
@@ -268,8 +329,28 @@ function previousDayId(allDays, currentDayId) {
 
 async function fetchAllDays(sessionId) {
   const result = await query(
-    `select id from program_days where session_id = $1 order by ordinal asc`,
+    `select id, label, date_label, ordinal
+     from program_days where session_id = $1 order by ordinal asc`,
     [sessionId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    dateLabel: row.date_label,
+    ordinal: row.ordinal,
+  }));
+}
+
+async function fetchEntriesAcrossDays(sessionId, groupId) {
+  const result = await query(
+    `select de.id, de.user_id, de.event_id, de.state_id, de.state_level,
+            de.comment, de.is_anonymous, de.is_hidden_from_curator,
+            de.responded_at, e.day_id
+     from diary_entries de
+     join events e on e.id = de.event_id
+     join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
+     where de.session_id = $1 and su.group_id = $2`,
+    [sessionId, groupId],
   );
   return result.rows;
 }
@@ -279,6 +360,7 @@ function normaliseEntry(row) {
     id: row.id,
     userId: row.user_id,
     eventId: row.event_id,
+    dayId: row.day_id || null,
     stateId: row.state_id || null,
     stateLevel: Number.isFinite(Number(row.state_level)) ? Number(row.state_level) : null,
     comment: row.comment || "",
@@ -291,31 +373,41 @@ function normaliseEntry(row) {
 async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = null }) {
   await ensureCuratorAccess(viewerId, sessionId, groupId);
 
-  const targetDay = await fetchTargetDay(sessionId, dayId);
+  const allDays = await fetchAllDays(sessionId);
+  const targetDay = (await fetchTargetDay(sessionId, dayId)) || allDays[allDays.length - 1] || null;
+
   if (!targetDay) {
     return buildNarrativeBrief({});
   }
 
-  const allDays = await fetchAllDays(sessionId);
   const yesterdayId = previousDayId(allDays, targetDay.id);
 
-  const [members, todayRows, yesterdayRows, events] = await Promise.all([
+  const [members, allEntriesRows, events] = await Promise.all([
     fetchMembersForGroup(sessionId, groupId),
-    fetchEntriesForDay(sessionId, groupId, targetDay.id),
-    yesterdayId ? fetchEntriesForDay(sessionId, groupId, yesterdayId) : Promise.resolve([]),
+    fetchEntriesAcrossDays(sessionId, groupId),
     fetchEventsForDay(sessionId, targetDay.id),
   ]);
 
-  const todayEntries = applyToList(todayRows.map(normaliseEntry), "curator");
-  const yesterdayEntries = applyToList(yesterdayRows.map(normaliseEntry), "curator");
+  const filteredAll = applyToList(allEntriesRows.map(normaliseEntry), "curator");
+  const entriesByDay = filteredAll.reduce((acc, entry) => {
+    const key = entry.dayId;
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(entry);
+    return acc;
+  }, {});
+  const todayEntries = entriesByDay[targetDay.id] || [];
+  const yesterdayEntries = (yesterdayId && entriesByDay[yesterdayId]) || [];
 
   return buildNarrativeBrief({
     dayId: targetDay.id,
-    dayLabel: targetDay.label || targetDay.date_label || "",
+    dayLabel: targetDay.label || targetDay.date_label || targetDay.dateLabel || "",
     members,
     todayEntries,
     yesterdayEntries,
     events,
+    programDays: allDays,
+    entriesByDay,
   });
 }
 

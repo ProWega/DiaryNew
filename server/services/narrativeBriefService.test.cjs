@@ -218,7 +218,7 @@ describe("buildNarrativeBrief — events", () => {
 });
 
 describe("buildNarrativeBrief — full shape", () => {
-  it("returns all 4 sections + dayId + dayLabel", () => {
+  it("returns all sections + dayId + dayLabel", () => {
     const result = buildNarrativeBrief({
       dayId: "day-1",
       dayLabel: "День 1",
@@ -233,6 +233,8 @@ describe("buildNarrativeBrief — full shape", () => {
       conversationPoints: expect.any(Array),
       stageResonance: expect.any(Object),
       events: expect.any(Array),
+      participantCards: expect.any(Array),
+      programArc: expect.any(Object),
     });
   });
 
@@ -241,5 +243,146 @@ describe("buildNarrativeBrief — full shape", () => {
     const empty = buildNarrativeBrief({});
     expect(empty.picture.totalParticipants).toBe(0);
     expect(empty.conversationPoints).toEqual([]);
+    expect(empty.participantCards).toEqual([]);
+    expect(empty.programArc.dayBreakdown).toEqual([]);
+  });
+});
+
+describe("buildNarrativeBrief — participantCards", () => {
+  it("returns one card per member with journey stage label and careful flag", () => {
+    const result = buildNarrativeBrief({
+      members: [
+        member({ id: "u-1", journeyStage: "verification", isCarefulMode: true }),
+        member({ id: "u-2", journeyStage: "transmission" }),
+      ],
+    });
+
+    expect(result.participantCards).toHaveLength(2);
+    expect(result.participantCards[0]).toMatchObject({
+      userId: "u-1",
+      displayName: "Иван И.",
+      journeyStage: "verification",
+      journeyStageLabel: "Проверка",
+      isCarefulMode: true,
+    });
+    expect(result.participantCards[1].journeyStageLabel).toBe("Передача");
+    expect(result.participantCards[1].isCarefulMode).toBe(false);
+  });
+
+  it("includes today/yesterday methodology labels when entries exist", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1" })],
+      todayEntries: [entry({ userId: "u-1", stateId: "engaged" })], // lift
+      yesterdayEntries: [entry({ userId: "u-1", stateId: "balance" })], // harmony
+    });
+
+    expect(result.participantCards[0].today).toEqual({ id: "lift", ru: "Подъём" });
+    expect(result.participantCards[0].yesterday).toEqual({ id: "harmony", ru: "Лад" });
+  });
+
+  it("today/yesterday are null when no entry for that user", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1" })],
+    });
+
+    expect(result.participantCards[0].today).toBeNull();
+    expect(result.participantCards[0].yesterday).toBeNull();
+  });
+
+  it("attaches conversationHint when participant is in conversationPoints", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1", isCarefulMode: true })],
+    });
+
+    expect(result.participantCards[0].conversationHint).toMatchObject({
+      reason: "careful_mode",
+    });
+  });
+
+  it("no hint when participant has no conversation point", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1" })],
+    });
+
+    expect(result.participantCards[0].conversationHint).toBeNull();
+  });
+
+  it("display name falls back when fullName is null (anonymous)", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1", fullName: null })],
+    });
+    expect(result.participantCards[0].displayName).toBe("Участник без имени");
+  });
+});
+
+describe("buildNarrativeBrief — programArc", () => {
+  it("returns one snapshot per program day", () => {
+    const result = buildNarrativeBrief({
+      programDays: [
+        { id: "day-1", label: "День 1" },
+        { id: "day-2", label: "День 2" },
+      ],
+      entriesByDay: {
+        "day-1": [
+          entry({ userId: "u-1", stateId: "balance" }), // harmony
+          entry({ userId: "u-2", stateId: "balance" }), // harmony
+        ],
+        "day-2": [
+          entry({ userId: "u-1", stateId: "engaged" }), // lift
+        ],
+      },
+    });
+
+    expect(result.programArc.dayBreakdown).toHaveLength(2);
+    expect(result.programArc.dayBreakdown[0]).toMatchObject({
+      dayId: "day-1",
+      dayLabel: "День 1",
+      respondedCount: 2,
+      totalEntries: 2,
+      dominantState: "harmony",
+      dominantStateLabel: "Лад",
+    });
+    expect(result.programArc.dayBreakdown[1].dominantState).toBe("lift");
+  });
+
+  it("dominant is null when day has no entries", () => {
+    const result = buildNarrativeBrief({
+      programDays: [{ id: "day-1", label: "День 1" }],
+      entriesByDay: {},
+    });
+
+    expect(result.programArc.dayBreakdown[0]).toMatchObject({
+      respondedCount: 0,
+      totalEntries: 0,
+      dominantState: null,
+      dominantStateLabel: null,
+    });
+  });
+
+  it("respondedCount is unique users (anonymous entries do not double-count)", () => {
+    const result = buildNarrativeBrief({
+      programDays: [{ id: "day-1", label: "День 1" }],
+      entriesByDay: {
+        "day-1": [
+          entry({ userId: "u-1", stateId: "balance" }),
+          entry({ userId: "u-1", stateId: "engaged" }),
+          entry({ userId: null, isAnonymous: true, stateId: "balance" }),
+        ],
+      },
+    });
+
+    expect(result.programArc.dayBreakdown[0].respondedCount).toBe(1);
+    expect(result.programArc.dayBreakdown[0].totalEntries).toBe(3);
+  });
+
+  it("never produces banned diagnostic words in dayLabel/dominantStateLabel", () => {
+    const result = buildNarrativeBrief({
+      programDays: [{ id: "d", label: "День 1" }],
+      entriesByDay: { d: [entry({ userId: "u-1", stateId: "panic" })] },
+    });
+    const text = JSON.stringify(result.programArc).toLowerCase();
+    for (const banned of ["риск", "уровень", "стадия", "диагноз", "метрика", "статус", "оценк"]) {
+      expect(text).not.toContain(banned);
+    }
   });
 });

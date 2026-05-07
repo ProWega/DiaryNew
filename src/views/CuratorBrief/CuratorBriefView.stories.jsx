@@ -40,6 +40,82 @@ const sampleBrief = {
     },
     { id: "e-2", title: "Лекция «Дорога»", responseCount: 7, quotes: [] },
   ],
+  participantCards: [
+    {
+      userId: "u-1",
+      displayName: "Иван П.",
+      journeyStage: "support",
+      journeyStageLabel: "Опора",
+      isCarefulMode: false,
+      today: { id: "harmony", ru: "Лад" },
+      yesterday: { id: "tuning", ru: "Настройка" },
+      conversationHint: null,
+    },
+    {
+      userId: "u-2",
+      displayName: "Анна К.",
+      journeyStage: "verification",
+      journeyStageLabel: "Проверка",
+      isCarefulMode: true,
+      today: { id: "tuning", ru: "Настройка" },
+      yesterday: { id: "harmony", ru: "Лад" },
+      conversationHint: {
+        reason: "careful_mode",
+        note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+      },
+    },
+    {
+      userId: "u-3",
+      displayName: "Илья М.",
+      journeyStage: "search",
+      journeyStageLabel: "Поиск",
+      isCarefulMode: false,
+      today: { id: "breakdown", ru: "Сбой" },
+      yesterday: { id: "harmony", ru: "Лад" },
+      conversationHint: {
+        reason: "shift_down",
+        note: "Вчера в Ладе, сегодня в Сбое.",
+      },
+    },
+    {
+      userId: "u-4",
+      displayName: "Мария В.",
+      journeyStage: "transmission",
+      journeyStageLabel: "Передача",
+      isCarefulMode: false,
+      today: { id: "lift", ru: "Подъём" },
+      yesterday: null,
+      conversationHint: null,
+    },
+  ],
+  programArc: {
+    dayBreakdown: [
+      {
+        dayId: "day-1",
+        dayLabel: "День 1",
+        respondedCount: 9,
+        totalEntries: 14,
+        dominantState: "harmony",
+        dominantStateLabel: "Лад",
+      },
+      {
+        dayId: "day-2",
+        dayLabel: "День 2",
+        respondedCount: 0,
+        totalEntries: 0,
+        dominantState: null,
+        dominantStateLabel: null,
+      },
+      {
+        dayId: "day-3",
+        dayLabel: "День 3",
+        respondedCount: 0,
+        totalEntries: 0,
+        dominantState: null,
+        dominantStateLabel: null,
+      },
+    ],
+  },
 };
 
 const emptyBrief = {
@@ -49,6 +125,8 @@ const emptyBrief = {
   conversationPoints: [],
   stageResonance: { search: 0, verification: 0, support: 0, transmission: 0, careful: 0 },
   events: [],
+  participantCards: [],
+  programArc: { dayBreakdown: [] },
 };
 
 export default {

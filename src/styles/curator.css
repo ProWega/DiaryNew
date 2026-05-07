@@ -1145,3 +1145,185 @@
   margin: 0;
   line-height: var(--line-height-relaxed);
 }
+
+/* Phase 4.3 — карточка участника (grid + drilldown) */
+
+.curator-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.curator-card-pill {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.curator-card-pill:hover:not(:disabled) {
+  border-color: var(--color-text);
+}
+
+.curator-card-pill.is-active {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+
+.curator-card-pill.is-active small {
+  color: var(--color-bg);
+  opacity: 0.85;
+}
+
+.curator-card-pill.is-careful::after {
+  content: "бережно";
+  font-size: 0.7rem;
+  color: var(--color-text-soft);
+}
+
+.curator-card-pill.is-active.is-careful::after {
+  color: var(--color-bg);
+}
+
+.curator-card-pill.has-hint:not(.is-active) {
+  border-style: dashed;
+}
+
+.curator-card-pill small {
+  color: var(--color-text-soft);
+  font-size: 0.78rem;
+}
+
+.curator-card-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.curator-card-summary header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.curator-card-summary header strong {
+  font-size: 1.05rem;
+}
+
+.curator-card-states {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.curator-card-states > div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.curator-card-states dt {
+  font-size: 0.78rem;
+  color: var(--color-text-soft);
+  margin-bottom: 2px;
+}
+
+.curator-card-states dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.curator-card-hint {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+}
+
+.curator-card-hint p {
+  margin: 0;
+  color: var(--color-text-soft);
+  line-height: var(--line-height-relaxed);
+}
+
+/* Phase 4.3 — партитура смены: горизонтальная лента дней */
+
+.curator-arc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.curator-arc-day {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.03));
+}
+
+.curator-arc-day.is-current {
+  border-color: var(--color-text);
+}
+
+.curator-arc-day.is-empty {
+  opacity: 0.7;
+}
+
+.curator-arc-day header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.curator-arc-day header small {
+  color: var(--color-text-soft);
+  font-size: 0.75rem;
+}
+
+.curator-arc-state {
+  margin: 0;
+  font-weight: 600;
+}
+
+.curator-arc-day.is-silence .curator-arc-state {
+  color: #2a3866;
+}
+.curator-arc-day.is-tuning .curator-arc-state {
+  color: #3a4046;
+}
+.curator-arc-day.is-harmony .curator-arc-state {
+  color: #2f4220;
+}
+.curator-arc-day.is-lift .curator-arc-state {
+  color: #664a14;
+}
+.curator-arc-day.is-breakdown .curator-arc-state {
+  color: #5e1c12;
+}
+
+.curator-arc-resonance {
+  margin: 4px 0 0;
+}
