@@ -173,7 +173,9 @@ function countReflectionAnswers(reflection) {
 function buildReflectionDays({ days, reflections }) {
   return days.map((day) => {
     const dayReflections = reflections.filter((reflection) => reflection.day_id === day.id);
-    const freeTextCount = dayReflections.filter((reflection) => trimText(reflection.free_text)).length;
+    const freeTextCount = dayReflections.filter((reflection) =>
+      trimText(reflection.free_text),
+    ).length;
 
     return {
       id: day.id,
@@ -232,7 +234,9 @@ function buildFocusEvents(eventPulse) {
       }
 
       if (event.deltaFromPrevious !== null && Math.abs(event.deltaFromPrevious) >= 1) {
-        evidence.push(`переход относительно прошлого события: ${event.deltaFromPrevious > 0 ? "+" : ""}${event.deltaFromPrevious}`);
+        evidence.push(
+          `переход относительно прошлого события: ${event.deltaFromPrevious > 0 ? "+" : ""}${event.deltaFromPrevious}`,
+        );
       }
 
       if (event.completion < 60) {
@@ -262,11 +266,7 @@ function buildFocusEvents(eventPulse) {
         severity: getEventSeverity(event),
         prompt,
         evidence,
-        score:
-          riskRatio * 10 +
-          deltaAbs * 2 +
-          commentDensity * 3 +
-          (event.completion < 60 ? 1 : 0),
+        score: riskRatio * 10 + deltaAbs * 2 + commentDensity * 3 + (event.completion < 60 ? 1 : 0),
       };
     })
     .filter((event) => event.evidence.length)
@@ -275,12 +275,20 @@ function buildFocusEvents(eventPulse) {
     .map(({ score, ...event }) => event);
 }
 
-function buildReflectionBrief({ eventPulse, participantRows, dayReflections, alerts, focusEvents }) {
+function buildReflectionBrief({
+  eventPulse,
+  participantRows,
+  dayReflections,
+  alerts,
+  focusEvents,
+}) {
   const safeEvents = eventPulse.filter((event) => event.hasResponses);
   const answeredEvents = safeEvents.length;
   const totalEvents = eventPulse.length;
   const averageCompletion = totalEvents
-    ? Math.round(eventPulse.reduce((sum, event) => sum + Number(event.completion || 0), 0) / totalEvents)
+    ? Math.round(
+        eventPulse.reduce((sum, event) => sum + Number(event.completion || 0), 0) / totalEvents,
+      )
     : 0;
   const coverageConfidence = getConfidenceByCompletion(averageCompletion);
   const openAlerts = alerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt);
@@ -328,7 +336,8 @@ function buildReflectionBrief({ eventPulse, participantRows, dayReflections, ale
         id: participant.id,
         name: participant.name,
         status: participant.status,
-        confidence: participant.completion >= 50 || participant.status === "silent" ? "medium" : "low",
+        confidence:
+          participant.completion >= 50 || participant.status === "silent" ? "medium" : "low",
         evidence: evidence.slice(0, 4),
       };
     })
@@ -357,7 +366,10 @@ function buildReflectionBrief({ eventPulse, participantRows, dayReflections, ale
       });
     });
 
-  const reflectionResponses = dayReflections.reduce((sum, day) => sum + Number(day.responsesCount || 0), 0);
+  const reflectionResponses = dayReflections.reduce(
+    (sum, day) => sum + Number(day.responsesCount || 0),
+    0,
+  );
   if (participantRows.length && reflectionResponses === 0) {
     blindSpots.push({
       id: "no-day-reflections",
@@ -516,15 +528,16 @@ function selectAiReport(reports, dayId, groupId) {
   );
   const fallbackReports = dayId ? reports.filter((report) => !report.day_id) : [];
 
-  return [...matchingReports, ...fallbackReports].sort((left, right) => {
-    const groupScore =
-      Number(right.group_id === groupId) - Number(left.group_id === groupId);
-    if (groupScore) {
-      return groupScore;
-    }
+  return (
+    [...matchingReports, ...fallbackReports].sort((left, right) => {
+      const groupScore = Number(right.group_id === groupId) - Number(left.group_id === groupId);
+      if (groupScore) {
+        return groupScore;
+      }
 
-    return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
-  })[0] || null;
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+    })[0] || null
+  );
 }
 
 function filterCommentClustersForDay(commentClusters, dayId) {
@@ -579,7 +592,9 @@ function buildCuratorReportScope({
         return {
           eventId: event.id,
           dayId: event.day_id,
-          stateLevel: Number.isFinite(Number(entry?.state_level)) ? Number(entry.state_level) : null,
+          stateLevel: Number.isFinite(Number(entry?.state_level))
+            ? Number(entry.state_level)
+            : null,
           stateId: entry?.state_id || null,
           answered: Boolean(entry),
           comment: trimText(entry?.comment),
@@ -594,7 +609,9 @@ function buildCuratorReportScope({
       completion: eventRows.length ? participantProgress : 0,
       commentsCount: entries.filter((entry) => trimText(entry.comment)).length,
       riskSignalsCount: userAlerts.length,
-      openRiskSignalsCount: userAlerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt).length,
+      openRiskSignalsCount: userAlerts.filter(
+        (alert) => alert.status !== "resolved" && !alert.resolvedAt,
+      ).length,
     };
   });
   const progress = calculateProgress({
@@ -668,7 +685,8 @@ function buildCuratorReportScope({
     participantsCount: members.length,
     completion: progress.completion,
     averageActivation: roundMetric(averageOrNull(allLevels)),
-    riskCases: members.filter((member) => member.status === "risk" || member.status === "watch").length,
+    riskCases: members.filter((member) => member.status === "risk" || member.status === "watch")
+      .length,
     eventPulse,
     participantRows,
     reflectionPrep,
@@ -862,7 +880,10 @@ async function getAdminDashboard() {
     accessMatrix: [
       { role: "Участник", rights: "Заполнение своего дневника и просмотр своей динамики" },
       { role: "Куратор", rights: "Аналитика только своей группы" },
-      { role: "Организатор", rights: "Управление программой, группами, опросами и отчётами заезда" },
+      {
+        role: "Организатор",
+        rights: "Управление программой, группами, опросами и отчётами заезда",
+      },
       { role: "Администратор", rights: "Пользователи, безопасность, аудит и интеграции" },
     ],
     securityCards: [
@@ -881,4 +902,5 @@ async function getAdminDashboard() {
 module.exports = {
   getAdminDashboard,
   getCuratorDashboard,
+  ensureCuratorAccess,
 };

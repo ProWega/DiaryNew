@@ -56,6 +56,48 @@ export function buildSeedDatabase() {
         sessionId: DEFAULT_SESSION_ID,
       },
     },
+    curatorBriefByGroupId: {
+      "group-school-1": {
+        dayId: "day-1",
+        dayLabel: "День 1",
+        picture: {
+          totalParticipants: 12,
+          respondedToday: 9,
+          dominantState: "harmony",
+          dominantStateLabel: "Лад",
+          carefulCount: 2,
+        },
+        conversationPoints: [
+          {
+            participantId: "user-participant-2",
+            displayName: "Анна К.",
+            reason: "careful_mode",
+            note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+          },
+          {
+            participantId: "user-participant-3",
+            displayName: "Илья М.",
+            reason: "shift_down",
+            note: "Вчера в Ладе, сегодня в Сбое.",
+          },
+        ],
+        stageResonance: {
+          search: 4,
+          verification: 3,
+          support: 3,
+          transmission: 2,
+          careful: 2,
+        },
+        events: [
+          {
+            id: "event-1",
+            title: "Утренний круг",
+            responseCount: 9,
+            quotes: ["Тепло настроились на день"],
+          },
+        ],
+      },
+    },
     organizerDashboardBySessionId: {
       [DEFAULT_SESSION_ID]: {
         ...organizerOverview,

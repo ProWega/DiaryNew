@@ -230,6 +230,27 @@ const curatorHandlers = [
       }
     },
   ),
+
+  // Phase 4.1: methodology v4 narrative brief
+  http.get(
+    "/api/curator/sessions/:sessionId/groups/:groupId/brief",
+    async ({ request, params }) => {
+      await delay(MS);
+      const viewerId = request.headers.get("x-viewer-id");
+      const { sessionId, groupId } = params;
+      const db = readDatabase();
+
+      try {
+        ensureAccess(db, viewerId, "group.analytics.read", { sessionId, groupId });
+        const brief = db.curatorBriefByGroupId?.[groupId];
+        if (!brief)
+          return HttpResponse.json({ message: "Записка пока не готова" }, { status: 404 });
+        return ok(cloneJson(brief));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  ),
 ];
 
 // ─── Organizer ────────────────────────────────────────────────────────────────

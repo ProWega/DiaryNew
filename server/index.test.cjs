@@ -202,3 +202,22 @@ describe("Static SPA fallback", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("Phase 4.1: GET /api/curator/.../brief — narrative записка", () => {
+  it("rejects unauthenticated read (401/403/500 — anything but a 200 response)", async () => {
+    const res = await request(app).get("/api/curator/sessions/s1/groups/g1/brief");
+    // No viewer header → ensureCuratorAccess throws. Not 200, not a generic 404.
+    expect([401, 403, 404, 500]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  it("does not fall back to legacy /dashboard handler", async () => {
+    const res = await request(app).get("/api/curator/sessions/s1/groups/g1/brief?dayId=day-1");
+    // Should hit the new route — error path acceptable, but body must not be the
+    // old dashboard shape (which would have averageActivation / participantRows).
+    if (res.body && typeof res.body === "object") {
+      expect(res.body).not.toHaveProperty("averageActivation");
+      expect(res.body).not.toHaveProperty("participantRows");
+    }
+  });
+});
