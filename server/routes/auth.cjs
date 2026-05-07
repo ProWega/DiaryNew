@@ -12,15 +12,27 @@ const {
   resolveViewer,
   setAuthCookie,
 } = require("../lib/routeHelpers.cjs");
-const { clearCsrfCookie, generateCsrfToken, setCsrfCookie } = require("../lib/csrf.cjs");
+const {
+  clearCsrfCookie,
+  generateCsrfToken,
+  getCsrfCookieValue,
+  setCsrfCookie,
+} = require("../lib/csrf.cjs");
 const { issueMagicLink } = require("../services/magicLinkService.cjs");
 
 const router = Router();
 
 // GET /api/auth/me
+// Side-effect: if the user is authenticated but missing the CSRF cookie
+// (e.g. it was cleared by the browser, or the auth-session predates the
+// CSRF rollout), mint a fresh one so subsequent PATCH/POST calls don't
+// 403 on a missing double-submit token.
 router.get(
   "/me",
   asyncHandler(async (req, res) => {
+    if (req.authUser?.id && !getCsrfCookieValue(req)) {
+      setCsrfCookie(res, generateCsrfToken());
+    }
     res.json({
       user: req.authUser || null,
       features: getClientFeatures(),

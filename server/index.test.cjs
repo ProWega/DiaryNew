@@ -186,6 +186,27 @@ describe("Zod validation gate", () => {
   });
 });
 
+describe("CSRF cookie recovery via /api/auth/me", () => {
+  it("does not set a CSRF cookie when no user is authenticated", async () => {
+    const res = await request(app).get("/api/auth/me");
+    expect(res.status).toBe(200);
+    const setCookie = res.headers["set-cookie"] || [];
+    const cookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const csrfCookie = cookieList.find((c) => c.startsWith("newdiary_csrf="));
+    expect(csrfCookie).toBeUndefined();
+  });
+
+  it("does not overwrite an existing CSRF cookie", async () => {
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Cookie", "newdiary_csrf=existing-token-12345");
+    const setCookie = res.headers["set-cookie"] || [];
+    const cookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const csrfCookie = cookieList.find((c) => c.startsWith("newdiary_csrf="));
+    expect(csrfCookie).toBeUndefined();
+  });
+});
+
 describe("Health endpoint", () => {
   it("responds (200 or 503 depending on Postgres) and has CORS-friendly shape", async () => {
     const res = await request(app).get("/api/health");
