@@ -28,7 +28,7 @@
 | `PGPORT`                     | `5432`                      | Порт PostgreSQL.                                                                                                                  |
 | `PGDATABASE`                 | `newdiary`                  | Имя базы PostgreSQL.                                                                                                              |
 | `PGUSER`                     | `postgres`                  | Пользователь PostgreSQL.                                                                                                          |
-| `PGPASSWORD`                 | `1234`                      | Пароль пользователя PostgreSQL.                                                                                                   |
+| `PGPASSWORD`                 | `postgres`                  | Пароль пользователя PostgreSQL.                                                                                                   |
 | `PGSSL`                      | `false`                     | Использовать ли SSL при подключении к PostgreSQL.                                                                                 |
 
 ## Ubuntu / Docker deploy

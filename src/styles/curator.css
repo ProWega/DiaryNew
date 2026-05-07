@@ -980,6 +980,18 @@
   gap: 14px;
 }
 
+/* LLM-generated narrative paragraph at the top of the записка section.
+   Subtle highlight so it reads as a hand-written note, not as raw data. */
+.curator-brief-narrative {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 3px solid var(--color-text);
+  border-radius: 0 14px 14px 0;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.03));
+  line-height: var(--line-height-relaxed);
+  font-size: 1rem;
+}
+
 .curator-brief-picture {
   display: grid;
   gap: 8px;

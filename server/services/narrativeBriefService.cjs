@@ -17,6 +17,7 @@
 const { query } = require("../db/postgres.cjs");
 const { applyToList } = require("../lib/privacy.cjs");
 const { ensureCuratorAccess } = require("../db/repositories/analyticsStore.cjs");
+const { enrichWithNarrative } = require("./narrativeBriefLLM.cjs");
 
 // 7-id stateId → 5 methodology labels (mirrors src/data/methodology.ts).
 const STATE_TO_METHODOLOGY = Object.freeze({
@@ -377,7 +378,8 @@ async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = 
   const targetDay = (await fetchTargetDay(sessionId, dayId)) || allDays[allDays.length - 1] || null;
 
   if (!targetDay) {
-    return buildNarrativeBrief({});
+    const empty = buildNarrativeBrief({});
+    return enrichWithNarrative(empty, { groupId });
   }
 
   const yesterdayId = previousDayId(allDays, targetDay.id);
@@ -399,7 +401,7 @@ async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = 
   const todayEntries = entriesByDay[targetDay.id] || [];
   const yesterdayEntries = (yesterdayId && entriesByDay[yesterdayId]) || [];
 
-  return buildNarrativeBrief({
+  const brief = buildNarrativeBrief({
     dayId: targetDay.id,
     dayLabel: targetDay.label || targetDay.date_label || targetDay.dateLabel || "",
     members,
@@ -409,6 +411,8 @@ async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = 
     programDays: allDays,
     entriesByDay,
   });
+
+  return enrichWithNarrative(brief, { groupId });
 }
 
 module.exports = {

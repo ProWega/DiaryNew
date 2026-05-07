@@ -8,8 +8,9 @@ const REASON_LABEL = {
 
 function ReflectionNoteSection({ brief }) {
   if (!brief) return null;
-  const { picture, stageResonance, conversationPoints, events, dayLabel } = brief;
+  const { picture, stageResonance, conversationPoints, events, dayLabel, narrative } = brief;
   const dominant = picture?.dominantState ? STATE_LABEL_META[picture.dominantState] : null;
+  const hasLlmNarrative = narrative?.source === "llm" && narrative?.text;
 
   return (
     <article className="panel-card curator-brief-section curator-brief-note">
@@ -22,6 +23,8 @@ function ReflectionNoteSection({ brief }) {
           {picture?.respondedToday ?? 0} из {picture?.totalParticipants ?? 0} отозвались
         </span>
       </header>
+
+      {hasLlmNarrative ? <p className="curator-brief-narrative">{narrative.text}</p> : null}
 
       <div className="curator-brief-picture">
         {dominant ? (

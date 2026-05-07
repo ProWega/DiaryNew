@@ -116,6 +116,10 @@ const sampleBrief = {
       },
     ],
   },
+  narrative: {
+    text: "День прошёл в Ладе — большинство в группе нашли свой ритм и держатся рядом. Двое в бережном — стоит подойти к ним мягко, без напоминаний и заданий. У одного резкое смещение в Сбой после ровного вчера: возможно, важно просто побыть рядом и не настаивать на разговоре.",
+    source: "llm",
+  },
 };
 
 const emptyBrief = {
@@ -127,6 +131,7 @@ const emptyBrief = {
   events: [],
   participantCards: [],
   programArc: { dayBreakdown: [] },
+  narrative: { text: null, source: "fallback" },
 };
 
 export default {
