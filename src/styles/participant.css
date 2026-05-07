@@ -1082,6 +1082,168 @@
   opacity: 0.84;
 }
 
+/* Methodology v4: tab-row для выбора варианта шкалы у участника */
+
+.participant-state-variant-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.participant-state-variant-tabs .mini-tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.participant-state-variant-tabs .mini-tab:hover:not(:disabled) {
+  border-color: var(--color-text);
+  color: var(--color-text);
+}
+
+.participant-state-variant-tabs .mini-tab.is-active {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+
+/* arc-5 переиспользует разметку arc, но с 5 сегментами — стили те же */
+
+.state-scale-picker.is-arc-5 {
+  --state-scale-arc-flow-gap: 14px;
+}
+
+/* emoji-5: ряд из 5 крупных эмодзи-кнопок */
+
+.state-scale-picker.is-emoji-5 .state-scale-emoji-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.state-scale-emoji-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.state-scale-emoji-button:hover:not(:disabled) {
+  border-color: var(--state-color);
+  background: var(--state-surface);
+}
+
+.state-scale-emoji-button.is-selected {
+  background: var(--state-color);
+  border-color: var(--state-color);
+  color: #ffffff;
+}
+
+.state-scale-emoji-button:focus-visible {
+  outline: 2px solid var(--state-color);
+  outline-offset: 2px;
+}
+
+.state-scale-emoji-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+/* slider-5: один range на 5 точек + подпись */
+
+.state-scale-picker.is-slider-5 .state-scale-slider5 {
+  display: grid;
+  gap: 12px;
+}
+
+.state-scale-slider5-track-row {
+  position: relative;
+  padding: 12px 0 18px;
+}
+
+.state-scale-slider5-input {
+  width: 100%;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-border);
+  outline: none;
+}
+
+.state-scale-slider5-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--state-color, var(--color-text));
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.state-scale-slider5-input::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--state-color, var(--color-text));
+  border: 2px solid var(--color-bg);
+  cursor: pointer;
+}
+
+.state-scale-slider5-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.state-scale-slider5-ticks span {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--state-color);
+  opacity: 0.45;
+}
+
+.state-scale-slider5-ticks span.is-active {
+  opacity: 1;
+  transform: scale(1.4);
+}
+
+.state-scale-slider5-label {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--state-surface, transparent);
+  color: var(--state-color);
+}
+
+.state-scale-slider5-label small {
+  color: var(--color-text-soft);
+}
+
 .state-scale-picker.is-animated .state-scale-option,
 .state-scale-picker.is-animated .state-scale-segment,
 .state-scale-picker.is-animated .state-scale-needle,

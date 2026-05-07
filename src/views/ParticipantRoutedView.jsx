@@ -164,6 +164,30 @@ function getSaveErrorMessage(error) {
   return error?.message || "Не удалось сохранить отметку. Попробуйте выбрать состояние ещё раз.";
 }
 
+const STATE_SCALE_VARIANT_OPTIONS = [
+  { id: "arc-5", label: "Дуга" },
+  { id: "emoji-5", label: "Эмодзи" },
+  { id: "slider-5", label: "Слайдер" },
+];
+const STATE_SCALE_VARIANT_DEFAULT = "arc-5";
+const STATE_SCALE_VARIANT_IDS = STATE_SCALE_VARIANT_OPTIONS.map((opt) => opt.id);
+
+function getStateScaleVariantStorageKey(userId) {
+  return userId ? `newdiary-state-scale-variant-${userId}` : "";
+}
+
+function readStoredStateScaleVariant(userId) {
+  if (typeof window === "undefined") return STATE_SCALE_VARIANT_DEFAULT;
+  const key = getStateScaleVariantStorageKey(userId);
+  if (!key) return STATE_SCALE_VARIANT_DEFAULT;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return STATE_SCALE_VARIANT_IDS.includes(raw) ? raw : STATE_SCALE_VARIANT_DEFAULT;
+  } catch {
+    return STATE_SCALE_VARIANT_DEFAULT;
+  }
+}
+
 function ParticipantRoutedView({
   mode,
   stateScale,
@@ -182,6 +206,7 @@ function ParticipantRoutedView({
   formatAverage,
   journeyStage = null,
   isCarefulMode = false,
+  userId = "",
 }) {
   const [openEventId, setOpenEventId] = useState("");
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
@@ -189,6 +214,24 @@ function ParticipantRoutedView({
   const [eventDrafts, setEventDrafts] = useState({});
   const [eventSaveStatuses, setEventSaveStatuses] = useState({});
   const [savingEventId, setSavingEventId] = useState("");
+  const [stateScaleVariant, setStateScaleVariant] = useState(() =>
+    readStoredStateScaleVariant(userId),
+  );
+
+  useEffect(() => {
+    setStateScaleVariant(readStoredStateScaleVariant(userId));
+  }, [userId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = getStateScaleVariantStorageKey(userId);
+    if (!key) return;
+    try {
+      window.localStorage.setItem(key, stateScaleVariant);
+    } catch {
+      // ignore quota / private mode failures
+    }
+  }, [stateScaleVariant, userId]);
   const pendingStateSaveRef = useRef({});
   const eventShellRefs = useRef({});
   const eventButtonRefs = useRef({});
@@ -791,13 +834,35 @@ function ParticipantRoutedView({
                           <>
                             <div className="participant-event-workspace">
                               <div className="participant-event-arc-shell">
+                                <div
+                                  className="participant-state-variant-tabs"
+                                  role="tablist"
+                                  aria-label="Вид шкалы состояния"
+                                >
+                                  {STATE_SCALE_VARIANT_OPTIONS.map((option) => (
+                                    <button
+                                      key={option.id}
+                                      type="button"
+                                      role="tab"
+                                      aria-selected={stateScaleVariant === option.id}
+                                      className={
+                                        stateScaleVariant === option.id
+                                          ? "mini-tab is-active"
+                                          : "mini-tab"
+                                      }
+                                      onClick={() => setStateScaleVariant(option.id)}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
                                 <StateScalePicker
                                   value={effectiveStateId}
                                   onChange={(stateId) =>
                                     handleEventStateSelect(activeDayId, event, stateId)
                                   }
                                   states={stateScale}
-                                  variant="arc"
+                                  variant={stateScaleVariant}
                                   animated
                                   showDescriptions
                                   label=""

@@ -3,6 +3,8 @@ import {
   STATE_LABELS,
   STATE_LABEL_META,
   STATE_SCALE_TO_METHODOLOGY,
+  STATE_METHODOLOGY_TO_DEFAULT_SCALE,
+  STATE_METHODOLOGY_ORDER,
   GROUP_LAD,
   GROUP_LAD_META,
   JOURNEY_STAGE,
@@ -55,6 +57,32 @@ describe("STATE_SCALE_TO_METHODOLOGY (7 → 5 mapping)", () => {
     expect(STATE_SCALE_TO_METHODOLOGY.passive).toBe("silence");
     expect(STATE_SCALE_TO_METHODOLOGY.overstimulated).toBe("breakdown");
     expect(STATE_SCALE_TO_METHODOLOGY.panic).toBe("breakdown");
+  });
+});
+
+describe("STATE_METHODOLOGY_TO_DEFAULT_SCALE (5 → 7 reverse mapping)", () => {
+  it("covers every methodology label", () => {
+    for (const label of STATE_LABELS) {
+      expect(STATE_METHODOLOGY_TO_DEFAULT_SCALE[label]).toBeTruthy();
+    }
+  });
+
+  it("picks middle of each group — not edges (apathy/panic)", () => {
+    expect(STATE_METHODOLOGY_TO_DEFAULT_SCALE.silence).toBe("passive");
+    expect(STATE_METHODOLOGY_TO_DEFAULT_SCALE.breakdown).toBe("overstimulated");
+  });
+
+  it("round-trip: each canonical id maps back to its own methodology label", () => {
+    for (const label of STATE_LABELS) {
+      const canonical = STATE_METHODOLOGY_TO_DEFAULT_SCALE[label];
+      expect(STATE_SCALE_TO_METHODOLOGY[canonical]).toBe(label);
+    }
+  });
+});
+
+describe("STATE_METHODOLOGY_ORDER", () => {
+  it("matches STATE_LABELS (silence → breakdown)", () => {
+    expect(STATE_METHODOLOGY_ORDER).toEqual(STATE_LABELS);
   });
 });
 

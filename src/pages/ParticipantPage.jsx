@@ -46,7 +46,7 @@ function getNextEventUnlockDelay(history) {
 
 function ParticipantPage({ mode }) {
   const { sessionId } = useParams();
-  const { bootstrap } = useAuth();
+  const { bootstrap, currentUser } = useAuth();
   const { data, loading, error, refresh, updateEntry, updateReflection } =
     useParticipantDiary(sessionId);
   const [selectedHistoryDay, setSelectedHistoryDay] = useState(() =>
@@ -240,6 +240,7 @@ function ParticipantPage({ mode }) {
       formatAverage={formatAverage}
       journeyStage={bootstrap.journeyStage ?? null}
       isCarefulMode={Boolean(bootstrap.isCarefulMode)}
+      userId={currentUser?.id || ""}
     />
   );
 }

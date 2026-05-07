@@ -9,7 +9,10 @@ export default {
   title: "Participant/StateScalePicker",
   component: StateScalePicker,
   argTypes: {
-    variant: { control: "radio", options: ["arc", "zones", "compact"] },
+    variant: {
+      control: "radio",
+      options: ["arc", "zones", "compact", "arc-5", "emoji-5", "slider-5"],
+    },
     size: { control: "radio", options: ["default", "compact"] },
     value: { control: "select", options: stateIds },
     animated: { control: "boolean" },
@@ -187,4 +190,51 @@ export const WithoutAnimation = {
     value: "panic",
   },
   render: (args) => <StateScalePickerStory {...args} />,
+};
+
+// Methodology v4: 5-уровневые варианты, выбор канонического id «середины» группы.
+
+export const Arc5Methodology = {
+  args: {
+    variant: "arc-5",
+    value: "balance",
+    label: "Шкала состояния",
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const Emoji5Methodology = {
+  args: {
+    variant: "emoji-5",
+    value: "engaged",
+    label: "Шкала состояния",
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile" },
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+export const Slider5Methodology = {
+  args: {
+    variant: "slider-5",
+    value: "relaxed",
+    label: "Шкала состояния",
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+};
+
+// Smoke: legacy `panic` value должен подсветить группу breakdown в новом 5-варианте.
+export const Methodology5WithLegacyPanicValue = {
+  args: {
+    variant: "emoji-5",
+    value: "panic",
+    label: "Шкала состояния",
+  },
+  render: (args) => <StateScalePickerStory {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const breakdownButton = await canvas.findByRole("radio", { name: /Сбой/ });
+    await expect(breakdownButton).toHaveAttribute("aria-checked", "true");
+  },
 };

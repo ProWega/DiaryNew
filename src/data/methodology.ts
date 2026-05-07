@@ -70,6 +70,27 @@ export const STATE_SCALE_TO_METHODOLOGY: Record<string, MethodologyState> = {
   panic: "breakdown",
 };
 
+/**
+ * Reverse mapping: methodology label → canonical 7-level stateId picked when
+ * the participant selects this label in a 5-level UI. Middle of each group so
+ * новые записи не сваливаются в крайние `apathy`/`panic` (правило «Тишина не
+ * дно» и симметричное «Сбой не край»).
+ */
+export const STATE_METHODOLOGY_TO_DEFAULT_SCALE: Record<MethodologyState, string> = {
+  silence: "passive",
+  tuning: "relaxed",
+  harmony: "balance",
+  lift: "engaged",
+  breakdown: "overstimulated",
+};
+
+/**
+ * Stable display order for the 5 methodology labels (silence → breakdown).
+ * Re-exported alias of STATE_LABELS for callers that want the ordering intent
+ * to be explicit.
+ */
+export const STATE_METHODOLOGY_ORDER = STATE_LABELS;
+
 // ── Group lad (second dimension of state) ────────────────────────────
 
 export const GROUP_LAD = ["with_group", "alongside", "apart"] as const;

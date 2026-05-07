@@ -1,3 +1,10 @@
+import {
+  STATE_LABELS,
+  STATE_LABEL_META,
+  STATE_SCALE_TO_METHODOLOGY,
+  STATE_METHODOLOGY_TO_DEFAULT_SCALE,
+} from "./methodology";
+
 // Группы 3 → методически: Тишина / Лад / Сбой (Настройка и Подъём
 // визуально живут внутри центральной группы как переходы).
 // IDs сохранены (burnout/integration/distress) для backward-compat
@@ -170,6 +177,51 @@ function getLevel(state, fallbackIndex) {
   }
 
   return fallbackIndex;
+}
+
+/**
+ * Build the 5-group view from a normalized 7-level state list. Each group keeps
+ * `sourceIds` (1–2 items) so callers can highlight a group from a stored legacy
+ * stateId, plus `canonicalId` to write back on selection.
+ */
+export function methodologyStateGroups(states) {
+  const normalized = normalizeStateScale(states);
+  const byId = new Map(normalized.map((state) => [state.id, state]));
+
+  return STATE_LABELS.map((id, level) => {
+    const canonicalId = STATE_METHODOLOGY_TO_DEFAULT_SCALE[id];
+    const sourceIds = Object.entries(STATE_SCALE_TO_METHODOLOGY)
+      .filter(([, label]) => label === id)
+      .map(([sourceId]) => sourceId);
+    const canonicalState =
+      byId.get(canonicalId) || normalized.find((s) => sourceIds.includes(s.id));
+    const labelMeta = STATE_LABEL_META[id];
+
+    return {
+      id,
+      level,
+      label: labelMeta.ru,
+      shortLabel: labelMeta.ru,
+      description: labelMeta.description,
+      participantHint: labelMeta.participantHint,
+      icon: canonicalState?.icon || "",
+      color: canonicalState?.color || "#78733d",
+      surface: canonicalState?.surface || "#f4efdb",
+      textColor: canonicalState?.textColor || "#2a2522",
+      toneColor: canonicalState?.toneColor || canonicalState?.color || "#78733d",
+      sourceIds,
+      canonicalId,
+    };
+  });
+}
+
+/**
+ * Find the methodology group that owns a given legacy stateId. Used to light
+ * up the right group when the stored value is `apathy` or `panic`.
+ */
+export function findMethodologyGroupForStateId(groups, stateId) {
+  if (!stateId) return null;
+  return groups.find((group) => group.sourceIds.includes(stateId)) || null;
 }
 
 export function normalizeStateScale(states = []) {
