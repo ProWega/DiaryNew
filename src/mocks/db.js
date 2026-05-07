@@ -177,6 +177,69 @@ export function buildSeedDatabase() {
       },
     },
     adminDashboard: cloneJson(adminOverview),
+    // Phase 5.1: точки возврата для текущего участника. В проде вычисляются
+    // лениво из sessions.end_date + интервалы 1/4/12/26/52 недели; здесь
+    // фиксированный сэмпл для UI-разработки.
+    returnPointsByUserId: {
+      "user-participant-1": [
+        {
+          sessionId: "session-school-archive",
+          sessionLabel: "Школа: октябрь 2025",
+          touchpointIndex: 1,
+          weeksAfter: 1,
+          scheduledFor: "2025-11-08T00:00:00.000Z",
+          invitation: "Прошла неделя — что осталось рядом, а что отдалилось?",
+          status: "responded",
+          response: {
+            id: "return-archive-1",
+            content: "Запомнилось, как мы вечером сидели у костра — это держит уже неделю.",
+            isAnonymous: false,
+            isHiddenFromCurator: false,
+            updatedAt: "2025-11-09T20:14:00.000Z",
+          },
+        },
+        {
+          sessionId: "session-school-archive",
+          sessionLabel: "Школа: октябрь 2025",
+          touchpointIndex: 2,
+          weeksAfter: 4,
+          scheduledFor: "2025-11-29T00:00:00.000Z",
+          invitation: "Месяц спустя — что подвинулось, что задержалось?",
+          status: "available",
+          response: null,
+        },
+        {
+          sessionId: "session-school-archive",
+          sessionLabel: "Школа: октябрь 2025",
+          touchpointIndex: 3,
+          weeksAfter: 12,
+          scheduledFor: "2026-01-24T00:00:00.000Z",
+          invitation: "Три месяца — что из услышанного оказалось вашим?",
+          status: "available",
+          response: null,
+        },
+        {
+          sessionId: "session-school-archive",
+          sessionLabel: "Школа: октябрь 2025",
+          touchpointIndex: 4,
+          weeksAfter: 26,
+          scheduledFor: "2026-05-02T00:00:00.000Z",
+          invitation: "Полгода — какая дорога продолжается?",
+          status: "future",
+          response: null,
+        },
+        {
+          sessionId: "session-school-archive",
+          sessionLabel: "Школа: октябрь 2025",
+          touchpointIndex: 5,
+          weeksAfter: 52,
+          scheduledFor: "2026-10-31T00:00:00.000Z",
+          invitation: "Год — что вспоминается само, без усилия?",
+          status: "future",
+          response: null,
+        },
+      ],
+    },
   };
 }
 

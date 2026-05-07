@@ -203,6 +203,45 @@ describe("Static SPA fallback", () => {
   });
 });
 
+describe("Phase 5.1: return points endpoints", () => {
+  const csrfHeaders = {
+    Cookie: "newdiary_csrf=t",
+    "X-CSRF-Token": "t",
+    "Content-Type": "application/json",
+  };
+
+  it("rejects unauthenticated GET /diary/return-points", async () => {
+    const res = await request(app).get("/api/participant/diary/return-points");
+    expect([401, 403, 404, 500]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  it("rejects POST without CSRF tokens (CSRF guard)", async () => {
+    const res = await request(app)
+      .post("/api/participant/diary/return-points/s1/1")
+      .set("Content-Type", "application/json")
+      .send({ content: "..." });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/CSRF/);
+  });
+
+  it("rejects POST with empty content (zod requiredText)", async () => {
+    const res = await request(app)
+      .post("/api/participant/diary/return-points/s1/1")
+      .set(csrfHeaders)
+      .send({ content: "" });
+    expect([400, 401]).toContain(res.status);
+  });
+
+  it("rejects POST with extra fields (strict zod)", async () => {
+    const res = await request(app)
+      .post("/api/participant/diary/return-points/s1/1")
+      .set(csrfHeaders)
+      .send({ content: "ok", unknownField: "bad" });
+    expect([400, 401]).toContain(res.status);
+  });
+});
+
 describe("Phase 4.1: GET /api/curator/.../brief — narrative записка", () => {
   it("rejects unauthenticated read (401/403/500 — anything but a 200 response)", async () => {
     const res = await request(app).get("/api/curator/sessions/s1/groups/g1/brief");

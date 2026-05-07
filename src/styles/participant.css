@@ -1887,3 +1887,115 @@
     border-radius: var(--radius-card);
   }
 }
+
+/* Phase 5.1 — точки возврата (life after smena) */
+
+.return-points-view {
+  display: grid;
+  gap: 24px;
+  max-width: 760px;
+}
+
+.return-points-head {
+  display: grid;
+  gap: 8px;
+}
+
+.return-points-head h2 {
+  margin: 0;
+}
+
+.return-points-list {
+  display: grid;
+  gap: 16px;
+}
+
+.return-point-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface, transparent);
+}
+
+.return-point-card.is-future {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.return-point-card.is-responded {
+  border-color: var(--color-text);
+}
+
+.return-point-head {
+  display: grid;
+  gap: 6px;
+}
+
+.return-point-head h3 {
+  margin: 0;
+  line-height: var(--line-height-relaxed);
+}
+
+.return-point-tag {
+  align-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.04));
+  color: var(--color-text-soft);
+}
+
+.return-point-tag.is-available {
+  background: rgba(93, 124, 62, 0.18);
+  color: #2f4220;
+}
+
+.return-point-tag.is-responded {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.return-point-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.return-point-text textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 96px;
+}
+
+.return-point-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.85rem;
+  color: var(--color-text-soft);
+}
+
+.return-point-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.return-point-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.return-point-saved-at {
+  margin: 0;
+  font-size: 0.78rem;
+}

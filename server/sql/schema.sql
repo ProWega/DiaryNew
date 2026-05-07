@@ -539,3 +539,21 @@ create table if not exists istoki_events (
 
 create index if not exists idx_istoki_events_type_date   on istoki_events(event_type, created_at desc);
 create index if not exists idx_istoki_events_region_date on istoki_events(region_code, created_at desc);
+
+-- Phase 5.1: точки возврата. Туpoints вычисляются лениво от sessions.end_date;
+-- эта таблица хранит только написанные участником «дополнения» к смене.
+-- См. docs/architecture/methodology-mapping.md §2.6.
+create table if not exists return_entries (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  session_id text not null references sessions(id) on delete cascade,
+  touchpoint_index integer not null check (touchpoint_index between 1 and 5),
+  content text not null,
+  is_anonymous boolean not null default false,
+  is_hidden_from_curator boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, session_id, touchpoint_index)
+);
+
+create index if not exists return_entries_user_session_idx on return_entries (user_id, session_id);

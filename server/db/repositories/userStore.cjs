@@ -168,6 +168,11 @@ function getNavigationItems(user) {
       label: "Динамика",
       to: `/participant/session/${user.sessionId}/dynamics`,
     });
+    items.push({
+      id: "participant-return-points",
+      label: "После смены",
+      to: "/participant/return-points",
+    });
   }
 
   if (user.role === "curator" || user.role === "organizer") {

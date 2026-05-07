@@ -206,6 +206,72 @@ const participantHandlers = [
       return fail(error);
     }
   }),
+
+  // Phase 5.1 — точки возврата (life after smena, methodology v4 §2.6)
+  http.get("/api/participant/diary/return-points", async ({ request }) => {
+    const viewerId = request.headers.get("x-viewer-id");
+    const db = readDatabase();
+    try {
+      const viewer = getViewer(db, viewerId);
+      const points = db.returnPointsByUserId?.[viewer.id] || [];
+      return ok({ points: cloneJson(points) });
+    } catch (error) {
+      return fail(error);
+    }
+  }),
+
+  http.post(
+    "/api/participant/diary/return-points/:sessionId/:touchpointIndex",
+    async ({ request, params }) => {
+      const viewerId = request.headers.get("x-viewer-id");
+      const { sessionId, touchpointIndex } = params;
+      const body = await request.json();
+      const db = readDatabase();
+
+      try {
+        const viewer = getViewer(db, viewerId);
+        const idx = Number.parseInt(touchpointIndex, 10);
+        if (!Number.isInteger(idx) || idx < 1 || idx > 5) {
+          return HttpResponse.json(
+            { message: "Некорректный индекс точки возврата" },
+            { status: 400 },
+          );
+        }
+        const content = String(body?.content || "").trim();
+        if (!content) {
+          return HttpResponse.json({ message: "Запись не может быть пустой" }, { status: 400 });
+        }
+
+        const list = db.returnPointsByUserId?.[viewer.id] || [];
+        const updated = list.map((point) =>
+          point.sessionId === sessionId && point.touchpointIndex === idx
+            ? {
+                ...point,
+                status: "responded",
+                response: {
+                  id: point.response?.id || `return-${Date.now()}`,
+                  content,
+                  isAnonymous: Boolean(body?.isAnonymous),
+                  isHiddenFromCurator: Boolean(body?.isHiddenFromCurator),
+                  updatedAt: new Date().toISOString(),
+                },
+              }
+            : point,
+        );
+
+        if (!db.returnPointsByUserId) db.returnPointsByUserId = {};
+        db.returnPointsByUserId[viewer.id] = updated;
+        writeDatabase(db);
+
+        const saved = updated.find(
+          (point) => point.sessionId === sessionId && point.touchpointIndex === idx,
+        );
+        return ok(cloneJson(saved?.response));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  ),
 ];
 
 // ─── Curator ──────────────────────────────────────────────────────────────────

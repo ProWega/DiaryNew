@@ -118,6 +118,16 @@ const updateJourneyStageSchema = z
   })
   .strict();
 
+// POST /api/participant/diary/return-points/:sessionId/:touchpointIndex
+// Phase 5.1 — записывает «дополнение к смене» в одной из 5 точек возврата.
+const submitReturnEntrySchema = z
+  .object({
+    content: requiredText(4000),
+    isAnonymous: z.boolean().optional(),
+    isHiddenFromCurator: z.boolean().optional(),
+  })
+  .strict();
+
 // POST /api/admin/users
 const createUserSchema = z
   .object({
@@ -260,6 +270,7 @@ module.exports = {
   createUserSchema,
   registerParticipantSchema,
   updateJourneyStageSchema,
+  submitReturnEntrySchema,
   setupAdminSchema,
   updateDiaryEntrySchema,
   updateReflectionSchema,

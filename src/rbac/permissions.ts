@@ -185,6 +185,14 @@ export function getNavigationItems(user: CurrentUser | null | undefined): Naviga
     });
   }
 
+  if (user.role === "participant") {
+    items.push({
+      id: "participant-return-points",
+      label: "После смены",
+      to: "/participant/return-points",
+    });
+  }
+
   if (
     can(user, "group.analytics.read", {
       sessionId: user.sessionId,

@@ -12,6 +12,7 @@ import {
   ParticipantSelfKnowledgePage,
   ParticipantTodayPage,
 } from "./pages/ParticipantPage";
+import ReturnPointsPage from "./pages/ReturnPointsPage";
 import RegistrationPage from "./pages/RegistrationPage";
 import SetupAdminPage from "./pages/SetupAdminPage";
 import IstokiMapPage from "./features/istoki/IstokiMapPage";
@@ -112,6 +113,16 @@ function AppRouter() {
             <PageTitle title="Динамика состояния">
               <RouteGuard permission="participant.dynamics.read">
                 <ParticipantDynamicsPage />
+              </RouteGuard>
+            </PageTitle>
+          }
+        />
+        <Route
+          path="participant/return-points"
+          element={
+            <PageTitle title="После смены">
+              <RouteGuard permission="participant.diary.read">
+                <ReturnPointsPage />
               </RouteGuard>
             </PageTitle>
           }

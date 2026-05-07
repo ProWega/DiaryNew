@@ -149,6 +149,25 @@ export const jsonApi = {
     });
   },
 
+  getReturnPoints(viewerId: string | number) {
+    return requestJson(`/api/participant/diary/return-points`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  submitReturnEntry(
+    viewerId: string | number,
+    sessionId: string | number,
+    touchpointIndex: number,
+    patch: { content: string; isAnonymous?: boolean; isHiddenFromCurator?: boolean },
+  ) {
+    return requestJson(`/api/participant/diary/return-points/${sessionId}/${touchpointIndex}`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: patch,
+    });
+  },
+
   getCuratorDashboard(
     viewerId: string | number,
     sessionId: string | number,

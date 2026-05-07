@@ -22,6 +22,7 @@ const qk = {
     groupId,
     dayId || "default",
   ],
+  returnPoints: (userId) => ["participant", "return-points", userId],
   organizerWorkspace: (userId, sessionId) => ["organizer", "workspace", userId, sessionId],
   adminDashboard: (userId) => ["admin", "dashboard", userId],
   adminWorkspace: (userId) => ["admin", "workspace", userId],
@@ -232,6 +233,47 @@ export function useCuratorBrief(sessionId, groupId, dayId = null) {
   });
 
   return queryShape(query, queryKey, queryClient);
+}
+
+export function useReturnPoints() {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.returnPoints(userId);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getReturnPoints(userId),
+    enabled: Boolean(userId),
+  });
+
+  const mutation = useCommandMutation({
+    success: "Запись сохранена",
+    error: "Не удалось сохранить запись",
+  });
+
+  const submit = useCallback(
+    async ({ sessionId, touchpointIndex, content, isAnonymous, isHiddenFromCurator }) => {
+      if (!userId) return null;
+      const result = await mutation.runMutation(() =>
+        jsonApi.submitReturnEntry(userId, sessionId, touchpointIndex, {
+          content,
+          isAnonymous,
+          isHiddenFromCurator,
+        }),
+      );
+      // Refresh the cached list so the optimistic state lines up.
+      queryClient.invalidateQueries({ queryKey });
+      return result;
+    },
+    [userId, queryKey, queryClient, mutation],
+  );
+
+  return {
+    ...queryShape(query, queryKey, queryClient),
+    submit,
+    submitting: mutation.saving,
+  };
 }
 
 export function useOrganizerWorkspace(sessionId) {

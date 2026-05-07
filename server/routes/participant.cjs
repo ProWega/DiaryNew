@@ -11,9 +11,14 @@ const {
   updateDiaryEntrySchema,
   updateReflectionSchema,
   updateJourneyStageSchema,
+  submitReturnEntrySchema,
 } = require("../validation/schemas.cjs");
 const { asyncHandler, getViewerId } = require("../lib/routeHelpers.cjs");
 const { updateParticipantJourneyStage } = require("../services/journeyStageService.cjs");
+const {
+  getReturnPointsForViewer,
+  submitReturnEntry,
+} = require("../services/returnPointsService.cjs");
 
 const router = Router();
 
@@ -75,6 +80,35 @@ router.patch(
       await updateParticipantJourneyStage({
         viewerId: getViewerId(req),
         sessionId: req.params.sessionId,
+        patch: req.body || {},
+      }),
+    );
+  }),
+);
+
+// GET /api/participant/diary/return-points
+// Phase 5.1 — точки возврата для всех смен, в которых участник был.
+// См. docs/architecture/methodology-mapping.md §2.6.
+router.get(
+  "/diary/return-points",
+  asyncHandler(async (req, res) => {
+    res.json({
+      points: await getReturnPointsForViewer(getViewerId(req)),
+    });
+  }),
+);
+
+// POST /api/participant/diary/return-points/:sessionId/:touchpointIndex
+router.post(
+  "/diary/return-points/:sessionId/:touchpointIndex",
+  validateBody(submitReturnEntrySchema),
+  asyncHandler(async (req, res) => {
+    const touchpointIndex = Number.parseInt(req.params.touchpointIndex, 10);
+    res.json(
+      await submitReturnEntry({
+        viewerId: getViewerId(req),
+        sessionId: req.params.sessionId,
+        touchpointIndex,
         patch: req.body || {},
       }),
     );
