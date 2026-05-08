@@ -37,6 +37,14 @@ const {
   getTopStories: getIstokiTopStories,
   getDailyTimeSeries: getIstokiDailyTimeSeries,
 } = require("../db/repositories/istokiAnalyticsStore.cjs");
+const {
+  listSubmissions: listIstokiSubmissions,
+  getSubmissionById: getIstokiSubmissionById,
+  countByStatus: countIstokiSubmissionsByStatus,
+  approveSubmission: approveIstokiSubmission,
+  rejectSubmission: rejectIstokiSubmission,
+} = require("../db/repositories/istokiSubmissionsStore.cjs");
+const { moderationApproveSchema, moderationRejectSchema } = require("../validation/schemas.cjs");
 
 const router = Router();
 
@@ -438,6 +446,76 @@ router.get(
         eventType: req.query.eventType ? String(req.query.eventType) : undefined,
       }),
     });
+  }),
+);
+
+// ── Submissions moderation queue (Phase F) ────────────────────────
+
+router.get(
+  "/submissions",
+  asyncHandler(async (req, res) => {
+    const items = await listIstokiSubmissions({
+      status: req.query.status ? String(req.query.status) : undefined,
+      regionCode: req.query.regionCode ? String(req.query.regionCode) : undefined,
+      limit: parseLimit(req.query.limit, 50),
+    });
+    res.json({ items });
+  }),
+);
+
+router.get(
+  "/submissions/counts",
+  asyncHandler(async (_req, res) => {
+    res.json(await countIstokiSubmissionsByStatus());
+  }),
+);
+
+router.get(
+  "/submissions/:id",
+  asyncHandler(async (req, res) => {
+    const submission = await getIstokiSubmissionById(req.params.id);
+    if (!submission) throw createHttpError(404, "Заявка не найдена");
+    res.json(submission);
+  }),
+);
+
+router.post(
+  "/submissions/:id/approve",
+  validateBody(moderationApproveSchema),
+  asyncHandler(async (req, res) => {
+    const submission = await approveIstokiSubmission({
+      id: req.params.id,
+      actorId: req.viewer.id,
+      note: req.body?.note ?? null,
+    });
+    logAuditEvent({
+      actorId: req.viewer.id,
+      action: "istoki.submission.approve",
+      entityType: "istoki_submission",
+      entityId: req.params.id,
+      payload: { regionCode: submission.regionCode, kind: submission.kind },
+    });
+    res.json(submission);
+  }),
+);
+
+router.post(
+  "/submissions/:id/reject",
+  validateBody(moderationRejectSchema),
+  asyncHandler(async (req, res) => {
+    const submission = await rejectIstokiSubmission({
+      id: req.params.id,
+      actorId: req.viewer.id,
+      note: req.body.note,
+    });
+    logAuditEvent({
+      actorId: req.viewer.id,
+      action: "istoki.submission.reject",
+      entityType: "istoki_submission",
+      entityId: req.params.id,
+      payload: { regionCode: submission.regionCode, kind: submission.kind },
+    });
+    res.json(submission);
   }),
 );
 

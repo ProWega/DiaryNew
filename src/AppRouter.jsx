@@ -17,6 +17,7 @@ import RegistrationPage from "./pages/RegistrationPage";
 import SetupAdminPage from "./pages/SetupAdminPage";
 import IstokiMapPage from "./features/istoki/IstokiMapPage";
 import IstokiPublicLayout from "./features/istoki/IstokiPublicLayout";
+import SubmissionStatusPage from "./features/istoki/SubmissionStatusPage";
 import IstokiAdminPage from "./features/istokiAdmin/IstokiAdminPage";
 import { getDefaultRoute } from "./rbac/permissions";
 
@@ -79,6 +80,16 @@ function AppRouter() {
           <PageTitle title="Голоса регионов">
             <IstokiPublicLayout>
               <IstokiMapPage deepLink />
+            </IstokiPublicLayout>
+          </PageTitle>
+        }
+      />
+      <Route
+        path="/istoki/submission/:token"
+        element={
+          <PageTitle title="Статус заявки">
+            <IstokiPublicLayout>
+              <SubmissionStatusPage />
             </IstokiPublicLayout>
           </PageTitle>
         }

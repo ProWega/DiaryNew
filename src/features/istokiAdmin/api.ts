@@ -350,3 +350,92 @@ export function useAdminMutations() {
 }
 
 export { uploadFile };
+
+// ── Phase F · moderation queue ─────────────────────────────────────
+
+export type SubmissionStatus = "pending" | "approved" | "rejected";
+export type SubmissionKind = "podcast" | "story" | "chronicle";
+
+export interface AdminSubmission {
+  id: string;
+  kind: SubmissionKind;
+  regionCode: string | null;
+  status: SubmissionStatus;
+  submitterName: string;
+  submitterEmail: string;
+  draft: Record<string, unknown>;
+  moderationNote: string | null;
+  reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  statusToken: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubmissionCounts {
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
+export function useAdminSubmissions(status: SubmissionStatus | "" = "pending") {
+  const viewerId = useViewerId();
+  const qs = status ? `?status=${status}` : "";
+  return useQuery({
+    queryKey: ["istoki", "admin", "submissions", status, viewerId],
+    queryFn: () => adminFetch<{ items: AdminSubmission[] }>(`/submissions${qs}`, { viewerId }),
+    enabled: Boolean(viewerId),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAdminSubmissionsCount() {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "submissions", "counts", viewerId],
+    queryFn: () => adminFetch<SubmissionCounts>("/submissions/counts", { viewerId }),
+    enabled: Boolean(viewerId),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAdminSubmission(id: string | null | undefined) {
+  const viewerId = useViewerId();
+  return useQuery({
+    queryKey: ["istoki", "admin", "submission", id, viewerId],
+    queryFn: () => adminFetch<AdminSubmission>(`/submissions/${id}`, { viewerId }),
+    enabled: Boolean(id) && Boolean(viewerId),
+  });
+}
+
+export function useSubmissionMutations() {
+  const viewerId = useViewerId();
+  const queryClient = useQueryClient();
+
+  function invalidateAll() {
+    queryClient.invalidateQueries({ queryKey: ["istoki", "admin", "submissions"] });
+    queryClient.invalidateQueries({ queryKey: ["istoki", "admin", "regions"] });
+    queryClient.invalidateQueries({ queryKey: ["istoki", "regions"] });
+  }
+
+  return {
+    approve: useMutation({
+      mutationFn: ({ id, note }: { id: string; note?: string }) =>
+        adminFetch<AdminSubmission>(`/submissions/${id}/approve`, {
+          method: "POST",
+          body: { note: note || null },
+          viewerId,
+        }),
+      onSuccess: invalidateAll,
+    }),
+    reject: useMutation({
+      mutationFn: ({ id, note }: { id: string; note: string }) =>
+        adminFetch<AdminSubmission>(`/submissions/${id}/reject`, {
+          method: "POST",
+          body: { note },
+          viewerId,
+        }),
+      onSuccess: invalidateAll,
+    }),
+  };
+}

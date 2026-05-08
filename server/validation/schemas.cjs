@@ -261,6 +261,98 @@ const istokiEventsBatchSchema = z
   })
   .strict();
 
+// ── Istoki v2 Phase F: public submissions + moderation ────────────
+
+const submitterEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(120)
+  .email({ message: "Укажите корректный email" });
+const submitterName = requiredText(120);
+const istokiRegionCode = requiredText(80);
+const externalUrl = requiredText(500); // expected to be a public URL — kept loose
+
+const podcastDraftSchema = z
+  .object({
+    title: requiredText(300),
+    description: optionalText(2000),
+    audioUrl: externalUrl,
+    durationSec: z
+      .number()
+      .int()
+      .min(0)
+      .max(60 * 60 * 24)
+      .optional()
+      .default(0),
+    recordedAt: ISO_DATE.optional().nullable(),
+    speakerName: trimmed(200).optional().nullable(),
+  })
+  .strict();
+
+const storyDraftSchema = z
+  .object({
+    participantName: requiredText(200),
+    ageOrRole: requiredText(200),
+    beforeText: requiredText(2000),
+    afterText: requiredText(2000),
+    manifestoQuote: requiredText(1000),
+    photoUrl: externalUrl,
+    regionContextHint: trimmed(200).optional().nullable(),
+  })
+  .strict();
+
+const chronicleDraftSchema = z
+  .object({
+    eventDate: ISO_DATE,
+    eventTitle: requiredText(300),
+    participantsCount: z.number().int().min(0).optional().default(0),
+    keyInsights: z.array(trimmed(500)).max(20).optional().default([]),
+  })
+  .strict();
+
+const submissionCommonShape = {
+  regionCode: istokiRegionCode,
+  submitterName,
+  submitterEmail,
+};
+
+const createIstokiSubmissionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("podcast"),
+      ...submissionCommonShape,
+      draft: podcastDraftSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("story"),
+      ...submissionCommonShape,
+      draft: storyDraftSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("chronicle"),
+      ...submissionCommonShape,
+      draft: chronicleDraftSchema,
+    })
+    .strict(),
+]);
+
+const moderationApproveSchema = z
+  .object({
+    note: trimmed(1000).optional().nullable(),
+  })
+  .strict();
+
+const moderationRejectSchema = z
+  .object({
+    note: requiredText(1000),
+  })
+  .strict();
+
 module.exports = {
   GROUP_LAD_VALUES,
   JOURNEY_STAGE_VALUES,
@@ -283,4 +375,7 @@ module.exports = {
   upsertIstokiChronicleSchema,
   istokiEventSchema,
   istokiEventsBatchSchema,
+  createIstokiSubmissionSchema,
+  moderationApproveSchema,
+  moderationRejectSchema,
 };

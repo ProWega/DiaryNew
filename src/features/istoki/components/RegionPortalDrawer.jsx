@@ -10,7 +10,7 @@ const TABS = [
   { id: "chronicle", label: "Цифровая летопись" },
 ];
 
-function RegionPortalDrawer({ region, onClose }) {
+function RegionPortalDrawer({ region, onClose, onSubmitContent }) {
   const [activeTab, setActiveTab] = useState("voice");
   const { track } = useIstokiTracking();
 
@@ -67,6 +67,11 @@ function RegionPortalDrawer({ region, onClose }) {
             {region.name}
           </h2>
           <div className="istoki-drawer-hint">{region.geographicHint}</div>
+          {onSubmitContent && (
+            <button type="button" className="istoki-drawer-cta" onClick={onSubmitContent}>
+              + Добавить материал по региону
+            </button>
+          )}
         </div>
 
         <div className="istoki-drawer-tabs" role="tablist" aria-label="Разделы портала">

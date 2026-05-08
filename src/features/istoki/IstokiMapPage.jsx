@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import RussiaMap from "./components/RussiaMap";
 import RegionPortalDrawer from "./components/RegionPortalDrawer";
+import SubmissionModal from "./components/SubmissionModal";
 import { useIstokiRegion, useIstokiRegions } from "./api";
 
 function matchesQuery(region, query) {
@@ -91,6 +92,38 @@ function IstokiMapPage({ deepLink = false }) {
   const visibleCount = filteredRegions.length;
   const populatedCount = filteredRegions.filter((r) => r.hasContent).length;
 
+  const totalCounts = useMemo(() => {
+    return regions.reduce(
+      (acc, r) => {
+        const c = r.counts || { podcasts: 0, stories: 0, chronicle: 0 };
+        acc.podcasts += c.podcasts || 0;
+        acc.stories += c.stories || 0;
+        acc.chronicle += c.chronicle || 0;
+        return acc;
+      },
+      { podcasts: 0, stories: 0, chronicle: 0 },
+    );
+  }, [regions]);
+
+  const fullPopulatedCount = useMemo(() => regions.filter((r) => r.hasContent).length, [regions]);
+
+  const [submissionOpen, setSubmissionOpen] = useState(false);
+  const [submissionSeed, setSubmissionSeed] = useState({
+    regionCode: null,
+    regionName: null,
+  });
+
+  function openSubmission(seed = {}) {
+    setSubmissionSeed({
+      regionCode: seed.regionCode || activeCode || "moscow",
+      regionName:
+        seed.regionName ||
+        regions.find((r) => r.code === (seed.regionCode || activeCode))?.name ||
+        "регион России",
+    });
+    setSubmissionOpen(true);
+  }
+
   function handleSelect(code) {
     updateParams({ region: code });
   }
@@ -111,7 +144,32 @@ function IstokiMapPage({ deepLink = false }) {
           чтобы услышать голоса участников, прочитать истории жизненных изменений и увидеть летопись
           заездов, которая там состоялась.
         </p>
+        <div className="istoki-hero-cta">
+          <button type="button" className="istoki-cta-primary" onClick={() => openSubmission()}>
+            Поделиться своей историей →
+          </button>
+          <span className="istoki-hero-cta-hint">Ваш материал попадёт на модерацию редакции</span>
+        </div>
       </section>
+
+      <div className="istoki-stats-strip">
+        <div className="istoki-stat">
+          <span className="istoki-stat-value">89</span>
+          <span className="istoki-stat-label">субъектов</span>
+        </div>
+        <div className="istoki-stat">
+          <span className="istoki-stat-value">{fullPopulatedCount}</span>
+          <span className="istoki-stat-label">регионов с контентом</span>
+        </div>
+        <div className="istoki-stat">
+          <span className="istoki-stat-value">{totalCounts.podcasts}</span>
+          <span className="istoki-stat-label">подкастов</span>
+        </div>
+        <div className="istoki-stat">
+          <span className="istoki-stat-value">{totalCounts.stories}</span>
+          <span className="istoki-stat-label">историй</span>
+        </div>
+      </div>
 
       <div className="istoki-search-bar" role="search">
         <label className="istoki-search-input-wrap">
@@ -172,8 +230,24 @@ function IstokiMapPage({ deepLink = false }) {
       )}
 
       {activeCode && activeRegion && (
-        <RegionPortalDrawer region={activeRegion} onClose={handleClose} />
+        <RegionPortalDrawer
+          region={activeRegion}
+          onClose={handleClose}
+          onSubmitContent={() =>
+            openSubmission({
+              regionCode: activeRegion.code,
+              regionName: activeRegion.name,
+            })
+          }
+        />
       )}
+
+      <SubmissionModal
+        open={submissionOpen}
+        onClose={() => setSubmissionOpen(false)}
+        regionCode={submissionSeed.regionCode}
+        regionName={submissionSeed.regionName}
+      />
     </main>
   );
 }

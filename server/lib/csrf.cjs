@@ -14,6 +14,10 @@ const CSRF_EXEMPT_PATHS = new Set([
   "/api/auth/magic-links/consume",
   "/api/setup/admin",
   "/api/participants/register",
+  // Public anonymous endpoints — no session, no cookie. Protected by
+  // their own rate-limits, Zod validation, and per-request hashing.
+  "/api/public/istoki/events",
+  "/api/public/istoki/submissions",
 ]);
 
 function generateCsrfToken() {

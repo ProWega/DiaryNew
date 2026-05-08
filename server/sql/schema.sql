@@ -540,6 +540,25 @@ create table if not exists istoki_events (
 create index if not exists idx_istoki_events_type_date   on istoki_events(event_type, created_at desc);
 create index if not exists idx_istoki_events_region_date on istoki_events(region_code, created_at desc);
 
+create table if not exists istoki_submissions (
+  id                  text primary key,
+  kind                text not null,
+  region_code         text references istoki_regions(code) on delete set null,
+  status              text not null default 'pending',
+  submitter_name      text not null,
+  submitter_email     text not null,
+  draft_payload       jsonb not null default '{}'::jsonb,
+  moderation_note     text,
+  reviewed_at         timestamptz,
+  reviewed_by_user_id text references users(id) on delete set null,
+  status_token        text unique not null,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+create index if not exists idx_istoki_submissions_status on istoki_submissions(status, created_at desc);
+create index if not exists idx_istoki_submissions_region on istoki_submissions(region_code, created_at desc);
+
 -- Phase 5.1: точки возврата. Туpoints вычисляются лениво от sessions.end_date;
 -- эта таблица хранит только написанные участником «дополнения» к смене.
 -- См. docs/architecture/methodology-mapping.md §2.6.

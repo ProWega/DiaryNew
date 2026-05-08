@@ -1004,6 +1004,141 @@ const istokiHandlers = [
       }),
     ];
   })(),
+
+  // Phase F — public submissions + admin moderation queue.
+  ...(() => {
+    const submissions = [];
+    function findByToken(token) {
+      return submissions.find((s) => s.statusToken === token);
+    }
+    function findById(id) {
+      return submissions.find((s) => s.id === id);
+    }
+    function publicView(submission) {
+      return {
+        id: submission.id,
+        kind: submission.kind,
+        regionCode: submission.regionCode,
+        status: submission.status,
+        moderationNote: submission.status === "rejected" ? submission.moderationNote : null,
+        createdAt: submission.createdAt,
+        reviewedAt: submission.reviewedAt,
+      };
+    }
+    return [
+      http.post("/api/public/istoki/submissions", async ({ request }) => {
+        await delay(MS);
+        const body = await request.json();
+        const id = `sub-${Math.random().toString(36).slice(2, 10)}`;
+        const statusToken = btoa(`${id}-${Date.now()}`).replace(/[+/=]/g, "").slice(0, 32);
+        const submission = {
+          id,
+          kind: body.kind,
+          regionCode: body.regionCode,
+          status: "pending",
+          submitterName: body.submitterName,
+          submitterEmail: body.submitterEmail,
+          draft: body.draft,
+          moderationNote: null,
+          reviewedAt: null,
+          reviewedByUserId: null,
+          statusToken,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        submissions.push(submission);
+        return HttpResponse.json(
+          { id, statusToken, statusUrl: `/istoki/submission/${statusToken}` },
+          { status: 201 },
+        );
+      }),
+
+      http.get("/api/public/istoki/submissions/by-token/:token", async ({ params }) => {
+        await delay(MS);
+        const submission = findByToken(params.token);
+        if (!submission)
+          return HttpResponse.json({ message: "Заявка не найдена" }, { status: 404 });
+        return ok(publicView(submission));
+      }),
+
+      http.get("/api/admin/istoki/submissions", async ({ request }) => {
+        await delay(MS);
+        const url = new URL(request.url);
+        const status = url.searchParams.get("status");
+        const items = submissions
+          .filter((s) => !status || s.status === status)
+          .sort((a, b) => {
+            const order = { pending: 0, approved: 1, rejected: 2 };
+            if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+            return b.createdAt.localeCompare(a.createdAt);
+          });
+        return ok({ items });
+      }),
+
+      http.get("/api/admin/istoki/submissions/counts", async () => {
+        await delay(MS);
+        const out = { pending: 0, approved: 0, rejected: 0 };
+        for (const s of submissions) out[s.status] = (out[s.status] || 0) + 1;
+        return ok(out);
+      }),
+
+      http.get("/api/admin/istoki/submissions/:id", async ({ params }) => {
+        await delay(MS);
+        const submission = findById(params.id);
+        if (!submission)
+          return HttpResponse.json({ message: "Заявка не найдена" }, { status: 404 });
+        return ok(submission);
+      }),
+
+      http.post("/api/admin/istoki/submissions/:id/approve", async ({ params, request }) => {
+        await delay(MS);
+        const body = await request.json().catch(() => ({}));
+        const submission = findById(params.id);
+        if (!submission)
+          return HttpResponse.json({ message: "Заявка не найдена" }, { status: 404 });
+        if (submission.status !== "pending")
+          return HttpResponse.json({ message: `Заявка уже ${submission.status}` }, { status: 409 });
+        // Fan out into the region's content list (mock store mirrors backend).
+        const region = istokiRegionsByCode.get(submission.regionCode);
+        if (region) {
+          const childKey =
+            submission.kind === "podcast"
+              ? "podcasts"
+              : submission.kind === "story"
+                ? "stories"
+                : "chronicle";
+          const newId = `${submission.kind}-${Math.random().toString(36).slice(2, 10)}`;
+          const draft = { ...submission.draft, id: newId };
+          istokiRegionsByCode.set(submission.regionCode, {
+            ...region,
+            [childKey]: [...(region[childKey] || []), draft],
+          });
+        }
+        submission.status = "approved";
+        submission.moderationNote = body.note ?? null;
+        submission.reviewedAt = new Date().toISOString();
+        submission.updatedAt = submission.reviewedAt;
+        return ok(submission);
+      }),
+
+      http.post("/api/admin/istoki/submissions/:id/reject", async ({ params, request }) => {
+        await delay(MS);
+        const body = await request.json().catch(() => ({}));
+        const submission = findById(params.id);
+        if (!submission)
+          return HttpResponse.json({ message: "Заявка не найдена" }, { status: 404 });
+        if (submission.status !== "pending")
+          return HttpResponse.json({ message: `Заявка уже ${submission.status}` }, { status: 409 });
+        if (!body.note?.trim())
+          return HttpResponse.json({ message: "Причина отказа обязательна" }, { status: 400 });
+        submission.status = "rejected";
+        submission.moderationNote = body.note.trim();
+        submission.reviewedAt = new Date().toISOString();
+        submission.updatedAt = submission.reviewedAt;
+        return ok(submission);
+      }),
+    ];
+  })(),
 ];
 
 // ─── Export ───────────────────────────────────────────────────────────────────

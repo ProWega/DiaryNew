@@ -47,7 +47,13 @@ test.describe("Истоки · Голоса регионов", () => {
 
   test("тоггл «только с контентом» сохраняется в URL", async ({ page }) => {
     await page.goto("/istoki/map");
-    await page.getByRole("checkbox", { name: "Только с контентом" }).check();
+    // Wait for regions to load — otherwise clicking the checkbox can race
+    // with the initial render and the URL update is dropped.
+    await page.waitForSelector('[data-region-code="moscow"]');
+    // Use click() rather than check() — the controlled <input>'s state
+    // round-trips through useSearchParams, which Playwright's check()
+    // doesn't always see as a state change in time.
+    await page.getByRole("checkbox", { name: "Только с контентом" }).click();
     await expect(page).toHaveURL(/filter=content/);
   });
 });

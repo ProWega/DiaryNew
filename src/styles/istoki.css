@@ -1,17 +1,8 @@
 /* ──────────────────────────────────────────────────────────────
    Истоки · Голоса регионов — публичная витрина проекта
    Бренд-локед оформление, перекрывает токены light/dark темы.
+   @font-face для Archimandrite и TT Norms — в src/styles/fonts.css
    ────────────────────────────────────────────────────────────── */
-
-@font-face {
-  font-family: "Archimandrite";
-  src:
-    local("Archimandrite"),
-    url("/fonts/archimandrite.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 400;
-  font-style: normal;
-}
 
 [data-istoki-theme] {
   --istoki-page-bg: #1a0d10;
@@ -983,4 +974,745 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
+}
+
+/* ── Phase F · Hero CTA + stats-strip ──────────────────────── */
+
+.istoki-hero-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.istoki-cta-primary {
+  border: none;
+  background: linear-gradient(135deg, var(--istoki-burgundy), var(--istoki-cabernet));
+  color: var(--istoki-sand);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 14px 32px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 200ms ease;
+  box-shadow:
+    0 12px 28px rgba(74, 17, 27, 0.45),
+    inset 0 0 0 1px rgba(229, 213, 184, 0.2);
+}
+
+.istoki-cta-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 32px rgba(201, 92, 54, 0.5),
+    inset 0 0 0 1px var(--istoki-gold);
+  color: #fff;
+}
+
+.istoki-cta-primary:active {
+  transform: translateY(0);
+}
+
+.istoki-hero-cta-hint {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--istoki-text-mute);
+}
+
+.istoki-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  max-width: 1100px;
+  margin: 32px auto 0;
+  padding: 0 clamp(16px, 4vw, 48px);
+}
+
+.istoki-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 12px;
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.istoki-stat-value {
+  font-family: var(--font-display-decor);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--istoki-gold);
+}
+
+.istoki-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--istoki-text-mute);
+}
+
+/* ── Phase F · Drawer CTA ──────────────────────────────────── */
+
+.istoki-drawer-cta {
+  margin-top: 14px;
+  width: 100%;
+  border: 1px dashed var(--istoki-gold);
+  background: transparent;
+  color: var(--istoki-gold);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.istoki-drawer-cta:hover {
+  background: rgba(154, 122, 50, 0.1);
+  border-style: solid;
+  color: var(--istoki-sand);
+}
+
+/* ── Phase F · Submission modal ────────────────────────────── */
+
+.istoki-submit {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--istoki-text-on-dark, #2a2522);
+}
+
+.istoki-submit-steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.istoki-submit-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft, rgba(79, 87, 89, 0.18));
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft, #5a514c);
+  transition: all 180ms ease;
+}
+
+.istoki-submit-step[data-state="active"] {
+  border-color: var(--istoki-burgundy);
+  background: var(--istoki-burgundy);
+  color: var(--istoki-sand);
+}
+
+.istoki-submit-step[data-state="done"] {
+  border-color: var(--istoki-gold);
+  color: var(--istoki-gold);
+}
+
+.istoki-submit-step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.istoki-submit-step[data-state="active"] .istoki-submit-step-num {
+  background: var(--istoki-gold);
+  color: var(--istoki-burgundy-dark, #2a1416);
+}
+
+.istoki-submit-kinds {
+  display: grid;
+  gap: 12px;
+}
+
+.istoki-submit-kind-card {
+  border: 1px solid var(--line-soft, rgba(79, 87, 89, 0.18));
+  background: var(--bg-card, rgba(255, 252, 244, 0.94));
+  text-align: left;
+  border-radius: 12px;
+  padding: 16px 18px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 180ms ease;
+}
+
+.istoki-submit-kind-card:hover {
+  border-color: var(--istoki-gold);
+}
+
+.istoki-submit-kind-card[data-active="true"] {
+  border-color: var(--istoki-burgundy);
+  box-shadow: 0 0 0 2px rgba(107, 31, 42, 0.15);
+}
+
+.istoki-submit-kind-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text-strong, #221c19);
+}
+
+.istoki-submit-kind-summary {
+  font-size: 13px;
+  color: var(--text-soft, #5a514c);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.istoki-submit-kind-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.istoki-submit-kind-fields li {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  background: rgba(107, 31, 42, 0.08);
+  border-radius: 999px;
+  color: var(--istoki-burgundy);
+}
+
+.istoki-submit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.istoki-submit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .istoki-submit-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.istoki-submit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.istoki-submit-field > span {
+  font-weight: 600;
+  color: var(--text-strong, #221c19);
+}
+
+.istoki-submit-field input,
+.istoki-submit-field textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft, rgba(79, 87, 89, 0.22));
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-main, #2a2522);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.istoki-submit-field input:focus,
+.istoki-submit-field textarea:focus {
+  outline: none;
+  border-color: var(--istoki-burgundy);
+  box-shadow: 0 0 0 3px rgba(107, 31, 42, 0.12);
+}
+
+.istoki-submit-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.istoki-submit-consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft, #5a514c);
+}
+
+.istoki-submit-consent input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--istoki-burgundy);
+}
+
+.istoki-submit-error {
+  font-size: 13px;
+  padding: 10px 12px;
+  background: rgba(201, 92, 54, 0.1);
+  border: 1px solid rgba(201, 92, 54, 0.3);
+  border-radius: 8px;
+  color: var(--istoki-terracotta);
+}
+
+.istoki-submit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft, rgba(79, 87, 89, 0.12));
+}
+
+.istoki-submit-button {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--istoki-burgundy);
+  color: var(--istoki-sand);
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.istoki-submit-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: var(--istoki-cabernet);
+}
+
+.istoki-submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.istoki-submit-button.is-ghost {
+  background: transparent;
+  color: var(--text-strong, #221c19);
+  border-color: var(--line-soft, rgba(79, 87, 89, 0.25));
+}
+
+.istoki-submit-button.is-ghost:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.istoki-submit-button.is-primary {
+  background: linear-gradient(135deg, var(--istoki-burgundy), var(--istoki-cabernet));
+  color: var(--istoki-sand);
+  box-shadow: 0 8px 18px rgba(74, 17, 27, 0.35);
+}
+
+.istoki-submit-button.is-danger {
+  background: transparent;
+  color: var(--istoki-terracotta);
+  border-color: var(--istoki-terracotta);
+}
+
+.istoki-submit-button.is-danger:hover:not(:disabled) {
+  background: rgba(201, 92, 54, 0.08);
+}
+
+.istoki-submit-success {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.istoki-submit-success-hint {
+  color: var(--text-soft, #5a514c);
+  font-size: 13px;
+}
+
+.istoki-submit-status-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--istoki-burgundy-dark, #2a1416);
+  border-radius: 8px;
+  color: var(--istoki-sand);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.istoki-submit-status-url code {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+/* ── Phase F · Submission status page ──────────────────────── */
+
+.istoki-status-shell {
+  padding: clamp(40px, 8vw, 80px) clamp(16px, 4vw, 48px);
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+}
+
+.istoki-status-card {
+  width: 100%;
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 16px;
+  padding: 36px clamp(24px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.istoki-status-title {
+  font-family: var(--font-display-decor);
+  font-size: 36px;
+  font-weight: 400;
+  margin: 0;
+  color: var(--istoki-sand);
+}
+
+.istoki-status-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--istoki-text-soft);
+}
+
+.istoki-status-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.istoki-status-meta-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--istoki-text-mute);
+}
+
+.istoki-status-badge {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.istoki-status-badge[data-tone="pending"] {
+  background: rgba(154, 122, 50, 0.18);
+  color: var(--istoki-gold);
+  border: 1px solid var(--istoki-gold);
+}
+
+.istoki-status-badge[data-tone="approved"] {
+  background: rgba(120, 115, 61, 0.18);
+  color: var(--istoki-olive);
+  border: 1px solid var(--istoki-olive);
+}
+
+.istoki-status-badge[data-tone="rejected"] {
+  background: rgba(201, 92, 54, 0.18);
+  color: var(--istoki-terracotta);
+  border: 1px solid var(--istoki-terracotta);
+}
+
+.istoki-status-note {
+  background: rgba(201, 92, 54, 0.08);
+  border-left: 3px solid var(--istoki-terracotta);
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+
+.istoki-status-note-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--istoki-terracotta);
+  margin-bottom: 6px;
+}
+
+.istoki-status-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--istoki-text-on-dark);
+}
+
+.istoki-status-hint {
+  font-size: 14px;
+  color: var(--istoki-text-soft);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.istoki-status-loading,
+.istoki-status-error {
+  font-size: 14px;
+  color: var(--istoki-text-soft);
+}
+
+/* ── Phase F · Admin moderation queue ──────────────────────── */
+
+.istoki-admin-tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--istoki-terracotta);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.istoki-admin-queue {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .istoki-admin-queue {
+    grid-template-columns: 1fr;
+  }
+}
+
+.istoki-admin-queue-sidebar {
+  border-right: 1px solid var(--line-soft, rgba(79, 87, 89, 0.18));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px;
+}
+
+.istoki-admin-queue-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.istoki-admin-queue-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-soft, #5a514c);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 160ms ease;
+}
+
+.istoki-admin-queue-tab[aria-selected="true"] {
+  background: #fff;
+  color: var(--istoki-burgundy);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.istoki-admin-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.istoki-admin-queue-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: inherit;
+  transition: all 160ms ease;
+}
+
+.istoki-admin-queue-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.istoki-admin-queue-item[data-active="true"] {
+  border-color: var(--istoki-burgundy);
+  background: rgba(107, 31, 42, 0.06);
+}
+
+.istoki-admin-queue-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft, #5a514c);
+}
+
+.istoki-admin-queue-kind {
+  color: var(--istoki-burgundy);
+  font-weight: 600;
+}
+
+.istoki-admin-queue-region {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong, #221c19);
+}
+
+.istoki-admin-queue-submitter {
+  font-size: 12px;
+  color: var(--text-soft, #5a514c);
+}
+
+.istoki-admin-queue-main {
+  overflow-y: auto;
+  max-height: calc(100vh - 60px);
+}
+
+.istoki-admin-submission {
+  padding: 28px clamp(20px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.istoki-admin-submission-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.istoki-admin-submission-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--istoki-text-mute);
+  margin-bottom: 6px;
+}
+
+.istoki-admin-submission-title {
+  font-family: var(--font-display-decor);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--istoki-sand);
+  margin: 0;
+}
+
+.istoki-admin-submission-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--istoki-text-soft);
+}
+
+.istoki-admin-submission-status {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.istoki-admin-submission-status[data-tone="pending"] {
+  background: rgba(154, 122, 50, 0.18);
+  color: var(--istoki-gold);
+  border: 1px solid var(--istoki-gold);
+}
+
+.istoki-admin-submission-status[data-tone="approved"] {
+  background: rgba(120, 115, 61, 0.18);
+  color: var(--istoki-olive);
+  border: 1px solid var(--istoki-olive);
+}
+
+.istoki-admin-submission-status[data-tone="rejected"] {
+  background: rgba(201, 92, 54, 0.18);
+  color: var(--istoki-terracotta);
+  border: 1px solid var(--istoki-terracotta);
+}
+
+.istoki-admin-submission-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.istoki-admin-submission-preview-body {
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.istoki-admin-submission-moderation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--istoki-card-bg);
+  border: 1px solid var(--istoki-card-border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.istoki-admin-submission-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.istoki-admin-submission-historic-note {
+  background: rgba(201, 92, 54, 0.08);
+  border-left: 3px solid var(--istoki-terracotta);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--istoki-text-on-dark);
 }

@@ -1,14 +1,85 @@
 import { useEffect, useState } from "react";
-import { useAdminRegion, useAdminRegions } from "./api";
+import { useAdminRegion, useAdminRegions, useAdminSubmissionsCount } from "./api";
 import RegionEditor from "./RegionEditor";
 import AnalyticsDashboard from "./AnalyticsDashboard";
+import SubmissionsQueue from "./SubmissionsQueue";
+
+const TABS = [
+  { id: "regions", label: "Контент" },
+  { id: "submissions", label: "Заявки" },
+  { id: "analytics", label: "Аналитика" },
+];
+
+function TabSwitcher({ tab, setTab, pendingCount }) {
+  return (
+    <div className="istoki-admin-tabs" role="tablist">
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.id}
+          className="istoki-admin-tab"
+          onClick={() => setTab(t.id)}
+        >
+          {t.label}
+          {t.id === "submissions" && pendingCount > 0 && (
+            <span className="istoki-admin-tab-badge">{pendingCount}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function IstokiAdminPage() {
+  const [tab, setTab] = useState("regions");
+  const submissionsCounts = useAdminSubmissionsCount();
+  const pendingCount = submissionsCounts.data?.pending ?? 0;
+
+  if (tab === "analytics") {
+    return (
+      <div className="istoki-admin-shell">
+        <aside className="istoki-admin-sidebar">
+          <div className="istoki-admin-sidebar-head">
+            <h1 className="istoki-admin-title">Истоки</h1>
+            <TabSwitcher tab={tab} setTab={setTab} pendingCount={pendingCount} />
+          </div>
+        </aside>
+        <main className="istoki-admin-main">
+          <AnalyticsDashboard />
+        </main>
+      </div>
+    );
+  }
+
+  if (tab === "submissions") {
+    return (
+      <div className="istoki-admin-shell">
+        <aside className="istoki-admin-sidebar">
+          <div className="istoki-admin-sidebar-head">
+            <h1 className="istoki-admin-title">Истоки · Заявки</h1>
+            <p className="istoki-admin-subtitle">
+              {pendingCount > 0 ? `Ждут проверки: ${pendingCount}` : "Очередь модерации пуста"}
+            </p>
+            <TabSwitcher tab={tab} setTab={setTab} pendingCount={pendingCount} />
+          </div>
+        </aside>
+        <main className="istoki-admin-main">
+          <SubmissionsQueue />
+        </main>
+      </div>
+    );
+  }
+
+  return <RegionsTab tab={tab} setTab={setTab} pendingCount={pendingCount} />;
+}
+
+function RegionsTab({ tab, setTab, pendingCount }) {
   const regionsQuery = useAdminRegions();
   const regions = regionsQuery.data?.regions ?? [];
   const [filter, setFilter] = useState("");
   const [activeCode, setActiveCode] = useState(null);
-  const [tab, setTab] = useState("regions");
 
   useEffect(() => {
     if (!activeCode && regions.length) {
@@ -24,41 +95,6 @@ function IstokiAdminPage() {
 
   const regionDetail = useAdminRegion(activeCode);
 
-  if (tab === "analytics") {
-    return (
-      <div className="istoki-admin-shell">
-        <aside className="istoki-admin-sidebar">
-          <div className="istoki-admin-sidebar-head">
-            <h1 className="istoki-admin-title">Истоки</h1>
-            <div className="istoki-admin-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={false}
-                className="istoki-admin-tab"
-                onClick={() => setTab("regions")}
-              >
-                Контент
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={true}
-                className="istoki-admin-tab"
-                onClick={() => setTab("analytics")}
-              >
-                Аналитика
-              </button>
-            </div>
-          </div>
-        </aside>
-        <main className="istoki-admin-main">
-          <AnalyticsDashboard />
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="istoki-admin-shell">
       <aside className="istoki-admin-sidebar">
@@ -67,26 +103,7 @@ function IstokiAdminPage() {
           <p className="istoki-admin-subtitle">
             {regions.length} регионов · {regions.filter((r) => r.hasContent).length} с контентом
           </p>
-          <div className="istoki-admin-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={true}
-              className="istoki-admin-tab"
-              onClick={() => setTab("regions")}
-            >
-              Контент
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={false}
-              className="istoki-admin-tab"
-              onClick={() => setTab("analytics")}
-            >
-              Аналитика
-            </button>
-          </div>
+          <TabSwitcher tab={tab} setTab={setTab} pendingCount={pendingCount} />
         </div>
 
         <input

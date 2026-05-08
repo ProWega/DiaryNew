@@ -15,6 +15,11 @@ const {
   getRegionByCode: getIstokiRegionByCode,
 } = require("../db/repositories/istokiStore.cjs");
 const { insertEvents: insertIstokiEvents } = require("../db/repositories/istokiAnalyticsStore.cjs");
+const {
+  createSubmission: createIstokiSubmission,
+  getSubmissionByToken: getIstokiSubmissionByToken,
+  publicSubmissionView,
+} = require("../db/repositories/istokiSubmissionsStore.cjs");
 const { hashIp } = require("../lib/ipHash.cjs");
 const rateLimit = require("express-rate-limit");
 const { validateBody } = require("../validation/middleware.cjs");
@@ -22,6 +27,7 @@ const {
   registerParticipantSchema,
   setupAdminSchema,
   istokiEventsBatchSchema,
+  createIstokiSubmissionSchema,
 } = require("../validation/schemas.cjs");
 
 // 60 events POSTs per minute per IP. The frontend batches up to 50
@@ -33,6 +39,16 @@ const istokiEventsRateLimit = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { message: "Слишком много событий. Попробуйте через минуту." },
+});
+
+// 5 submissions per hour per IP — moderation queue would drown otherwise
+// and a real submitter never needs more than two attempts.
+const istokiSubmissionsRateLimit = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Слишком много заявок. Попробуйте через час." },
 });
 const {
   asyncHandler,
@@ -182,6 +198,35 @@ router.post(
       userAgent,
     });
     res.status(202).json({ inserted });
+  }),
+);
+
+// POST /api/public/istoki/submissions — anonymous content submission
+router.post(
+  "/public/istoki/submissions",
+  istokiSubmissionsRateLimit,
+  validateBody(createIstokiSubmissionSchema),
+  asyncHandler(async (req, res) => {
+    const submission = await createIstokiSubmission(req.body);
+    // Build a relative status URL — the host is whatever served this
+    // request (works behind proxy + same-origin frontend).
+    res.status(201).json({
+      id: submission.id,
+      statusToken: submission.statusToken,
+      statusUrl: `/istoki/submission/${submission.statusToken}`,
+    });
+  }),
+);
+
+// GET /api/public/istoki/submissions/by-token/:token
+router.get(
+  "/public/istoki/submissions/by-token/:token",
+  asyncHandler(async (req, res) => {
+    const token = String(req.params.token || "").trim();
+    if (!token) throw createHttpError(400, "Не указан токен заявки");
+    const submission = await getIstokiSubmissionByToken(token);
+    if (!submission) throw createHttpError(404, "Заявка не найдена");
+    res.json(publicSubmissionView(submission));
   }),
 );
 
