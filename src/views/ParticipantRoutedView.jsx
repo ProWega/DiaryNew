@@ -526,22 +526,6 @@ function ParticipantRoutedView({
     });
   }
 
-  function handleEventConfidenceToggle(event) {
-    setEventDrafts((previous) => {
-      const currentDraft = createEventDraft(event, previous[event.id]);
-      const nextConfidence = currentDraft.confidence === "low" ? "high" : "low";
-
-      return {
-        ...previous,
-        [event.id]: {
-          ...currentDraft,
-          confidence: nextConfidence,
-          isConfidenceDirty: nextConfidence !== (event.confidence || "high"),
-        },
-      };
-    });
-  }
-
   async function commitEventDraft(dayId, event, options = {}) {
     if (isEventLocked(event)) {
       return false;
@@ -722,7 +706,6 @@ function ParticipantRoutedView({
                 const draft = getEventDraft(event);
                 const effectiveStateId = draft.stateId || event.stateId || "";
                 const effectiveState = effectiveStateId ? getStateInfo(effectiveStateId) : null;
-                const effectiveConfidence = draft.confidence || "high";
                 const hasStateSelection = Boolean(effectiveStateId);
                 const eventReflectionQuestions = safeReflectionQuestions(event.reflectionQuestions);
                 const eventReflectionAnswers = safeReflectionAnswers(draft.reflectionAnswers);
@@ -732,8 +715,7 @@ function ParticipantRoutedView({
                 const hasDeferredDraftChanges =
                   draft.comment !== (event.comment || "") ||
                   JSON.stringify(eventReflectionAnswers) !==
-                    JSON.stringify(safeReflectionAnswers(event.reflectionAnswers)) ||
-                  effectiveConfidence !== (event.confidence || "high");
+                    JSON.stringify(safeReflectionAnswers(event.reflectionAnswers));
                 const stateSaveStatus = eventSaveStatuses[event.id] || null;
                 const isStateSaving = stateSaveStatus?.status === "saving";
                 const isEventSaving = savingEventId === event.id || isStateSaving;
@@ -743,12 +725,8 @@ function ParticipantRoutedView({
                 const confidenceNote = isEventSaving
                   ? "\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f"
                   : hasDeferredDraftChanges
-                    ? effectiveConfidence === "low"
-                      ? "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0435 \u0434\u0430\u043b\u044c\u0448\u0435. \u041e\u0446\u0435\u043d\u043a\u0430 \u0431\u0443\u0434\u0435\u0442 \u043e\u0442\u043c\u0435\u0447\u0435\u043d\u0430 \u043a\u0430\u043a \u043f\u0440\u0438\u043c\u0435\u0440\u043d\u0430\u044f"
-                      : "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0435 \u0434\u0430\u043b\u044c\u0448\u0435"
-                    : effectiveConfidence === "low"
-                      ? "\u041e\u0442\u043c\u0435\u0442\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0430 \u043a\u0430\u043a \u043f\u0440\u0438\u043c\u0435\u0440\u043d\u0430\u044f"
-                      : "\u041e\u0442\u043c\u0435\u0442\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0430";
+                    ? "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0435\u0445\u043e\u0434\u0435 \u0434\u0430\u043b\u044c\u0448\u0435"
+                    : "\u041e\u0442\u043c\u0435\u0442\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0430";
                 const isOpen = event.id === openEventId;
                 const panelId = `participant-event-panel-${event.id}`;
                 const buttonId = `participant-event-button-${event.id}`;
@@ -834,28 +812,36 @@ function ParticipantRoutedView({
                           <>
                             <div className="participant-event-workspace">
                               <div className="participant-event-arc-shell">
-                                <div
-                                  className="participant-state-variant-tabs"
-                                  role="tablist"
-                                  aria-label="Вид шкалы состояния"
-                                >
-                                  {STATE_SCALE_VARIANT_OPTIONS.map((option) => (
-                                    <button
-                                      key={option.id}
-                                      type="button"
-                                      role="tab"
-                                      aria-selected={stateScaleVariant === option.id}
-                                      className={
-                                        stateScaleVariant === option.id
-                                          ? "mini-tab is-active"
-                                          : "mini-tab"
-                                      }
-                                      onClick={() => setStateScaleVariant(option.id)}
-                                    >
-                                      {option.label}
-                                    </button>
-                                  ))}
-                                </div>
+                                <details className="participant-state-variant-toggle">
+                                  <summary>
+                                    Вид шкалы:{" "}
+                                    {STATE_SCALE_VARIANT_OPTIONS.find(
+                                      (opt) => opt.id === stateScaleVariant,
+                                    )?.label || ""}
+                                  </summary>
+                                  <div
+                                    className="participant-state-variant-tabs"
+                                    role="tablist"
+                                    aria-label="Вид шкалы состояния"
+                                  >
+                                    {STATE_SCALE_VARIANT_OPTIONS.map((option) => (
+                                      <button
+                                        key={option.id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={stateScaleVariant === option.id}
+                                        className={
+                                          stateScaleVariant === option.id
+                                            ? "mini-tab is-active"
+                                            : "mini-tab"
+                                        }
+                                        onClick={() => setStateScaleVariant(option.id)}
+                                      >
+                                        {option.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </details>
                                 <StateScalePicker
                                   value={effectiveStateId}
                                   onChange={(stateId) =>
@@ -888,7 +874,9 @@ function ParticipantRoutedView({
                                 </button>
                                 <button
                                   type="button"
-                                  className="primary-button participant-step-primary"
+                                  className={`primary-button participant-step-primary ${
+                                    !nextAvailableEvent ? "is-final" : ""
+                                  }`}
                                   disabled={isEventSaving || hasRequiredReflectionGap}
                                   aria-label={
                                     isEventSaving
@@ -966,26 +954,11 @@ function ParticipantRoutedView({
                                 ) : null}
 
                                 <div className="event-foot">
-                                  <button
-                                    type="button"
-                                    aria-pressed={effectiveConfidence === "low"}
-                                    disabled={isEventSaving}
-                                    className={
-                                      effectiveConfidence === "low"
-                                        ? "ghost-button is-active"
-                                        : "ghost-button"
-                                    }
-                                    onClick={() => handleEventConfidenceToggle(event)}
-                                  >
-                                    Сложно оценить
-                                  </button>
                                   <span className="confidence-note participant-draft-note">
                                     {confidenceNote}
                                   </span>
                                   <span className="confidence-note" aria-hidden="true">
-                                    {event.confidence === "low"
-                                      ? "Отметка сохранена как примерная"
-                                      : "Отметка сохранена"}
+                                    Отметка сохранена
                                   </span>
                                 </div>
                               </>
@@ -1075,58 +1048,7 @@ function ParticipantRoutedView({
                   </div>
 
                   <div className="reflection-list participant-reflection-list">
-                    {dayReflectionQuestions.length ? (
-                      <>
-                        {dayReflectionQuestions.map((question) => {
-                          const answers = safeReflectionAnswers(reflection.answers);
-
-                          return (
-                            <label key={question.id} className="reflection-item">
-                              <span>
-                                {question.text}
-                                {question.required ? " *" : ""}
-                              </span>
-                              <textarea
-                                rows="2"
-                                value={answers[question.id] || ""}
-                                placeholder="Напишите 1–2 предложения"
-                                aria-required={question.required}
-                                onChange={(event) =>
-                                  setReflection(activeDayId, (previous) => ({
-                                    ...previous,
-                                    answers: {
-                                      ...safeReflectionAnswers(previous.answers),
-                                      [question.id]: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                          );
-                        })}
-
-                        {hasDayRequiredReflectionGap ? (
-                          <p className="confidence-note participant-required-note" role="alert">
-                            Ответьте на обязательные вопросы, чтобы итог дня считался заполненным.
-                          </p>
-                        ) : null}
-
-                        <label className="reflection-item">
-                          <span>Дополнить, если важно</span>
-                          <textarea
-                            rows="4"
-                            value={reflection.freeText}
-                            placeholder="Что ещё важно зафиксировать?"
-                            onChange={(event) =>
-                              setReflection(activeDayId, (previous) => ({
-                                ...previous,
-                                freeText: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                      </>
-                    ) : showArchivedReflection ? (
+                    {showArchivedReflection ? (
                       <div className="reflection-archived" aria-label="Архивная запись">
                         <p className="eyebrow">Архивная запись (формат прошлого заезда)</p>
                         {visibleReflectionPrompts.map((prompt, index) => {
@@ -1149,22 +1071,65 @@ function ParticipantRoutedView({
                         ) : null}
                       </div>
                     ) : (
-                      <ReflectionEditor
-                        value={{
-                          mind: reflection.mind || "",
-                          heart: reflection.heart || "",
-                          will: reflection.will || "",
-                          freeText: reflection.freeText || "",
-                        }}
-                        journeyStage={journeyStage}
-                        isCarefulMode={isCarefulMode}
-                        onChange={(next) =>
-                          setReflection(activeDayId, (previous) => ({
-                            ...previous,
-                            ...next,
-                          }))
-                        }
-                      />
+                      <>
+                        <ReflectionEditor
+                          value={{
+                            mind: reflection.mind || "",
+                            heart: reflection.heart || "",
+                            will: reflection.will || "",
+                            freeText: reflection.freeText || "",
+                          }}
+                          journeyStage={journeyStage}
+                          isCarefulMode={isCarefulMode}
+                          onChange={(next) =>
+                            setReflection(activeDayId, (previous) => ({
+                              ...previous,
+                              ...next,
+                            }))
+                          }
+                        />
+
+                        {dayReflectionQuestions.length ? (
+                          <details className="participant-reflection-extra">
+                            <summary>
+                              Дополнительные вопросы от организатора
+                              {hasDayRequiredReflectionGap ? " · есть обязательные" : ""}
+                            </summary>
+                            {dayReflectionQuestions.map((question) => {
+                              const answers = safeReflectionAnswers(reflection.answers);
+                              return (
+                                <label key={question.id} className="reflection-item">
+                                  <span>
+                                    {question.text}
+                                    {question.required ? " *" : ""}
+                                  </span>
+                                  <textarea
+                                    rows="2"
+                                    value={answers[question.id] || ""}
+                                    placeholder="Напишите 1–2 предложения"
+                                    aria-required={question.required}
+                                    onChange={(event) =>
+                                      setReflection(activeDayId, (previous) => ({
+                                        ...previous,
+                                        answers: {
+                                          ...safeReflectionAnswers(previous.answers),
+                                          [question.id]: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                </label>
+                              );
+                            })}
+                            {hasDayRequiredReflectionGap ? (
+                              <p className="confidence-note participant-required-note" role="alert">
+                                Ответьте на обязательные вопросы, чтобы итог дня считался
+                                заполненным.
+                              </p>
+                            ) : null}
+                          </details>
+                        ) : null}
+                      </>
                     )}
                   </div>
                 </>

@@ -114,7 +114,7 @@ function ReturnPointCard({ point, onSubmit, submitting }) {
   );
 }
 
-function ReturnPointsView({ data, onSubmit, submitting }) {
+function ReturnPointsView({ data, onSubmit, submitting, hasActiveSession = false }) {
   const points = data?.points || [];
 
   if (!points.length) {
@@ -124,9 +124,9 @@ function ReturnPointsView({ data, onSubmit, submitting }) {
           <p className="eyebrow">Жизнь после смены</p>
           <h2>Точки возврата</h2>
           <p className="subtle">
-            Когда смена закончится, здесь появятся приглашения дополнить запись — через неделю,
-            месяц, три месяца, полгода и год. Это мягкие напоминания, не задание: пишите, когда само
-            вспомнится.
+            {hasActiveSession
+              ? "Сейчас вы в смене. Когда она закончится, здесь появятся мягкие приглашения дополнить запись — через неделю, месяц, три месяца, полгода и год. Это не задание: пишите, когда само вспомнится."
+              : "Когда смена закончится, здесь появятся приглашения дополнить запись — через неделю, месяц, три месяца, полгода и год. Это мягкие напоминания, не задание: пишите, когда само вспомнится."}
           </p>
         </header>
       </section>

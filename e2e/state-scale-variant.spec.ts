@@ -12,8 +12,11 @@ test.describe("state scale variant tabs (methodology v4)", () => {
     // Onboarding modal traps pointer events.
     await dismissJourneyStageOnboarding(page);
 
-    // Default tab — "Дуга" (arc-5)
-    const tabsRow = page.locator(".participant-state-variant-tabs").first();
+    // Variant tabs are wrapped in <details> "Вид шкалы" — open it first.
+    const variantToggle = page.locator(".participant-state-variant-toggle").first();
+    await variantToggle.locator("summary").click();
+
+    const tabsRow = variantToggle.locator(".participant-state-variant-tabs");
     await expect(tabsRow).toBeVisible();
     await expect(tabsRow.getByRole("tab", { name: "Дуга" })).toHaveAttribute(
       "aria-selected",
@@ -27,9 +30,11 @@ test.describe("state scale variant tabs (methodology v4)", () => {
       "true",
     );
 
-    // Reload — выбор сохраняется.
+    // Reload — выбор сохраняется. Открываем details снова, чтобы прочесть aria-selected.
     await page.reload();
-    const tabsRowAfterReload = page.locator(".participant-state-variant-tabs").first();
+    const variantToggleAfterReload = page.locator(".participant-state-variant-toggle").first();
+    await variantToggleAfterReload.locator("summary").click();
+    const tabsRowAfterReload = variantToggleAfterReload.locator(".participant-state-variant-tabs");
     await expect(tabsRowAfterReload.getByRole("tab", { name: "Слайдер" })).toHaveAttribute(
       "aria-selected",
       "true",

@@ -57,6 +57,15 @@ export const Empty = {
   args: { data: { points: [] }, onSubmit: () => {}, submitting: false },
 };
 
+export const EmptyDuringActiveSession = {
+  args: {
+    data: { points: [] },
+    onSubmit: () => {},
+    submitting: false,
+    hasActiveSession: true,
+  },
+};
+
 export const SubmittingState = {
   args: { data: sample, onSubmit: () => {}, submitting: true },
 };

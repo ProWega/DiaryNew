@@ -32,6 +32,8 @@ export function ParticipantTopbar({
   onLogout,
   theme,
   onToggleTheme,
+  showJourneyStageChip = false,
+  onReopenJourneyStage,
 }) {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const accountRef = useRef(null);
@@ -78,6 +80,15 @@ export function ParticipantTopbar({
         <p className="eyebrow">Личный кабинет</p>
         <h1>{sessionInfo.name}</h1>
         {sessionMeta.length ? <p className="subtle">{sessionMeta.join(" · ")}</p> : null}
+        {showJourneyStageChip && onReopenJourneyStage ? (
+          <button
+            type="button"
+            className="participant-journey-stage-chip"
+            onClick={onReopenJourneyStage}
+          >
+            Этап пути не выбран — настроить
+          </button>
+        ) : null}
       </div>
 
       <nav className="participant-nav" aria-label="Разделы участника">
@@ -141,41 +152,25 @@ export function ParticipantTopbar({
  * Gate-компонент: показывает onboarding-модал participant'у когда journey_stage
  * ещё не выбран И не помечено «решу позже». После сохранения bootstrap
  * рефрешится → journeyStage становится не-null → модал больше не появляется.
- * После «пропустить» помечается localStorage-ключ для текущего sessionId.
+ * Состояние «решу позже» (skip) теперь живёт в AppLayout, чтобы topbar мог
+ * показать чип «Этап пути не выбран — настроить», который сбрасывает skip.
  */
-function ParticipantJourneyStageGate({ bootstrap }) {
-  const sessionId = bootstrap?.sessionInfo?.id ?? null;
-  const journeyStage = bootstrap?.journeyStage ?? null;
-  const isCarefulMode = bootstrap?.isCarefulMode ?? false;
+function ParticipantJourneyStageGate({ open, onSkip, sessionId }) {
   const { saving, updateJourneyStage } = useJourneyStageMutation();
-  const [skipped, setSkipped] = useState(() => {
-    if (!sessionId || typeof window === "undefined") return false;
-    return window.localStorage.getItem(journeyStageSkipKey(sessionId)) === "1";
-  });
-
-  // Не показываем если уже выбрано или скрыто пользователем.
-  const shouldShow = !skipped && journeyStage === null && !isCarefulMode;
 
   async function handleSubmit(patch) {
     const result = await updateJourneyStage(patch);
     if (result && sessionId && typeof window !== "undefined") {
-      // Если пользователь сохранил — значит выбрал. Но на всякий случай сбрасываем skip-флаг.
+      // Если пользователь сохранил — значит выбрал. Сбрасываем skip-флаг.
       window.localStorage.removeItem(journeyStageSkipKey(sessionId));
     }
   }
 
-  function handleSkip() {
-    if (sessionId && typeof window !== "undefined") {
-      window.localStorage.setItem(journeyStageSkipKey(sessionId), "1");
-    }
-    setSkipped(true);
-  }
-
   return (
     <JourneyStageOnboardingModal
-      open={shouldShow}
+      open={open}
       onSubmit={handleSubmit}
-      onSkip={handleSkip}
+      onSkip={onSkip}
       saving={saving}
     />
   );
@@ -187,6 +182,21 @@ function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const { currentUser, logout, bootstrap, loading, usersError, bootstrapError } = useAuth();
 
+  const sessionId = bootstrap?.sessionInfo?.id ?? null;
+  const journeyStage = bootstrap?.journeyStage ?? null;
+  const isCarefulMode = bootstrap?.isCarefulMode ?? false;
+
+  // Lifted from the Gate so the topbar chip can also flip it back.
+  const [journeyStageSkipped, setJourneyStageSkipped] = useState(() => {
+    if (!sessionId || typeof window === "undefined") return false;
+    return window.localStorage.getItem(journeyStageSkipKey(sessionId)) === "1";
+  });
+
+  useEffect(() => {
+    if (!sessionId || typeof window === "undefined") return;
+    setJourneyStageSkipped(window.localStorage.getItem(journeyStageSkipKey(sessionId)) === "1");
+  }, [sessionId]);
+
   useEffect(() => {
     if (currentUser && location.pathname === "/") {
       navigate(getDefaultRoute(currentUser), { replace: true });
@@ -197,6 +207,24 @@ function AppLayout() {
     logout();
     navigate("/register", { replace: true });
   }
+
+  function handleJourneyStageSkip() {
+    if (sessionId && typeof window !== "undefined") {
+      window.localStorage.setItem(journeyStageSkipKey(sessionId), "1");
+    }
+    setJourneyStageSkipped(true);
+  }
+
+  function handleReopenJourneyStage() {
+    if (sessionId && typeof window !== "undefined") {
+      window.localStorage.removeItem(journeyStageSkipKey(sessionId));
+    }
+    setJourneyStageSkipped(false);
+  }
+
+  const journeyStageNotChosen = journeyStage === null && !isCarefulMode;
+  const showJourneyStageGate = journeyStageNotChosen && !journeyStageSkipped;
+  const showJourneyStageChip = journeyStageNotChosen && journeyStageSkipped;
 
   if (usersError || bootstrapError) {
     return (
@@ -225,7 +253,13 @@ function AppLayout() {
 
   return (
     <div className="app-shell">
-      {isParticipantShell ? <ParticipantJourneyStageGate bootstrap={bootstrap} /> : null}
+      {isParticipantShell ? (
+        <ParticipantJourneyStageGate
+          open={showJourneyStageGate}
+          onSkip={handleJourneyStageSkip}
+          sessionId={sessionId}
+        />
+      ) : null}
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
 
@@ -237,6 +271,8 @@ function AppLayout() {
           onLogout={handleLogout}
           theme={theme}
           onToggleTheme={toggleTheme}
+          showJourneyStageChip={showJourneyStageChip}
+          onReopenJourneyStage={handleReopenJourneyStage}
         />
       ) : (
         <>

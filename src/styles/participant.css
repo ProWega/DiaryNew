@@ -1386,12 +1386,28 @@
   align-items: center;
   justify-content: center;
   font-size: 0;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .participant-step-primary::after {
   content: attr(data-step-label);
   font-size: 15px;
   line-height: 1.2;
+}
+
+/* Финальная кнопка дня — акцентный оттенок и более сильное свечение,
+   чтобы переход «Далее» → «Сохранить» был заметнее. */
+.participant-step-primary.is-final {
+  background: linear-gradient(180deg, var(--color-accent), var(--color-accent-dark));
+  box-shadow: 0 6px 18px rgba(95, 134, 56, 0.28);
+}
+
+.participant-step-primary.is-final:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(95, 134, 56, 0.32);
 }
 
 .participant-draft-note + .confidence-note {
@@ -1998,4 +2014,124 @@
 .return-point-saved-at {
   margin: 0;
   font-size: 0.78rem;
+}
+
+/* UX-полировка: чип «Этап пути не выбран — настроить» в topbar.
+   Появляется только когда участник нажал «Решу позже» в онбординге
+   и journey_stage всё ещё не выбран. */
+.participant-journey-stage-chip {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--color-accent-border);
+  background: var(--color-accent-bg);
+  color: var(--color-accent-dark);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.participant-journey-stage-chip:hover {
+  border-style: solid;
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+}
+
+/* Видимые details для выбора варианта шкалы.
+   Свёрнуто по умолчанию — кнопки появляются по запросу. */
+.participant-state-variant-toggle {
+  margin-bottom: 12px;
+}
+
+.participant-state-variant-toggle > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-soft);
+  font-size: 0.78rem;
+  user-select: none;
+}
+
+.participant-state-variant-toggle > summary::-webkit-details-marker {
+  display: none;
+}
+
+.participant-state-variant-toggle > summary::before {
+  content: "▾";
+  font-size: 0.7rem;
+  transition: transform 120ms ease;
+}
+
+.participant-state-variant-toggle[open] > summary::before {
+  transform: rotate(180deg);
+}
+
+.participant-state-variant-toggle[open] > summary {
+  margin-bottom: 8px;
+  border-color: var(--color-text);
+  color: var(--color-text);
+}
+
+/* Дополнительные вопросы дня — раскрываемый блок под основным
+   ReflectionEditor (Ум/Сердце/Воля). */
+.participant-reflection-extra {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface-soft, rgba(0, 0, 0, 0.02));
+}
+
+.participant-reflection-extra > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--color-text-soft);
+  user-select: none;
+}
+
+.participant-reflection-extra > summary::-webkit-details-marker {
+  display: none;
+}
+
+.participant-reflection-extra > summary::before {
+  content: "+ ";
+  color: var(--color-text);
+}
+
+.participant-reflection-extra[open] > summary::before {
+  content: "− ";
+}
+
+.participant-reflection-extra[open] {
+  background: var(--color-surface, transparent);
+}
+
+.participant-reflection-extra .reflection-item {
+  margin-top: 10px;
+}
+
+/* Cross-fade между состояниями reflection-card (locked → ready → open). */
+.participant-reflection-card .participant-reflection-gate,
+.participant-reflection-card .participant-reflection-ritual {
+  animation: participantReflectionFade 220ms ease both;
+}
+
+@keyframes participantReflectionFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
