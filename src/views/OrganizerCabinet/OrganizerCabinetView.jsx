@@ -18,12 +18,14 @@ import {
 import ProgramTabPanel from "./ProgramTabPanel";
 import SessionsTabPanel from "./SessionsTabPanel";
 import ParticipantsTabPanel from "./ParticipantsTabPanel";
+import AiAssistantTabPanel from "./AiAssistantTabPanel";
 
 const TAB_OPTIONS = [
   { id: "sessions", label: "Мои заезды" },
   { id: "program", label: "Программа" },
   { id: "groups", label: "Группы" },
   { id: "participants", label: "Участники" },
+  { id: "ai-assistant", label: "ИИ-помощник" },
 ];
 
 function OrganizerCabinetView({
@@ -747,6 +749,7 @@ function OrganizerCabinetView({
       {activeTab === "program" ? (
         <ProgramTabPanel
           programWorkspace={programWorkspace}
+          sessionId={safeWorkspace.sessionId}
           currentProgram={currentProgram}
           currentDay={currentDay}
           currentFlowColumns={currentFlowColumns}
@@ -877,6 +880,16 @@ function OrganizerCabinetView({
           onQueryChange={setParticipantQuery}
           onSelectParticipant={setSelectedParticipantId}
           onAssignGroup={onAssignGroupParticipants}
+        />
+      ) : null}
+
+      {activeTab === "ai-assistant" ? (
+        <AiAssistantTabPanel
+          sessionId={safeWorkspace.sessionId}
+          groups={safeWorkspace.groupsSummary.groups}
+          llmSettings={safeWorkspace.llmSettings}
+          saving={saving}
+          onUpdateSessionSettings={onUpdateSessionSettings}
         />
       ) : null}
     </section>

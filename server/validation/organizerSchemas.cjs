@@ -20,25 +20,26 @@ const optionalText = (max) => trimmed(max).optional().default("");
 // POST /api/organizer/sessions
 // PATCH /api/organizer/sessions/:sessionId
 // Fields pulled by pickOrganizerSessionPayload; admins may also send organizerId.
-const createSessionSchema = z
-  .object({
-    name: requiredText(300),
-    description: optionalText(2000),
-    startDate: z.string().optional().nullable(),
-    endDate: z.string().optional().nullable(),
-    registrationStartsAt: z.string().optional().nullable(),
-    registrationEndsAt: z.string().optional().nullable(),
-    registrationCapacity: z.number().int().min(0).optional().nullable(),
-    registrationStatus: z.enum(["draft", "open", "closed", "archived"]).optional(),
-    // Admin-only field (ignored for non-admins by the handler)
-    organizerId: trimmed(128).optional().nullable(),
-  })
-  .strict();
+// NB: schema is intentionally NOT .strict() — the frontend sends a full session
+// draft (id, registrationPolicy, participantsCount, etc.) and the handler picks
+// only the allowed keys via pickOrganizerSessionPayload. Strict here would 400
+// the request before the handler gets a chance to filter.
+const createSessionSchema = z.object({
+  name: requiredText(300),
+  description: optionalText(2000),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  registrationStartsAt: z.string().optional().nullable(),
+  registrationEndsAt: z.string().optional().nullable(),
+  registrationCapacity: z.number().int().min(0).optional().nullable(),
+  registrationStatus: z.enum(["draft", "open", "closed", "archived"]).optional(),
+  // Admin-only field (ignored for non-admins by the handler)
+  organizerId: trimmed(128).optional().nullable(),
+});
 
 const updateSessionSchema = createSessionSchema
   .omit({ name: true })
-  .extend({ name: requiredText(300).optional() })
-  .strict();
+  .extend({ name: requiredText(300).optional() });
 
 // PATCH /api/organizer/sessions/:sessionId/registration
 // Delegates to updateRegistration() which handles the same registration fields.
@@ -53,10 +54,33 @@ const updateRegistrationSchema = z
   .strict();
 
 // PATCH /api/organizer/sessions/:sessionId/settings
-// Only field consumed is participantEventAccessMode (normalizeParticipantEventAccessMode).
+// Поддерживает participantEventAccessMode (settings) и llm-секцию
+// (отдельный jsonb-блок, нормализуется через services/llmSettings.cjs).
+const MODEL_ENUM = z.enum([
+  "claude-haiku-4-5",
+  "claude-sonnet-4-5",
+  "claude-opus-4-7",
+  "gpt-5-mini",
+  "gpt-5",
+  "gpt-4o-mini",
+  "gpt-4o",
+]);
+
+const llmSettingsPatchSchema = z
+  .object({
+    defaultModel: MODEL_ENUM.optional(),
+    allowedModels: z.array(MODEL_ENUM).optional(),
+    maxTokensPerCall: z.number().int().min(64).max(8000).optional(),
+    curatorDailyTokenBudget: z.number().int().min(0).max(10_000_000).optional(),
+    curatorChatEnabled: z.boolean().optional(),
+    conceptExtractionLimit: z.number().int().min(1000).max(50000).optional(),
+  })
+  .strict();
+
 const updateSessionSettingsSchema = z
   .object({
     participantEventAccessMode: z.enum(["always", "from_start_time"]).optional(),
+    llm: llmSettingsPatchSchema.optional(),
   })
   .strict();
 

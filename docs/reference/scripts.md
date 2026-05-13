@@ -25,28 +25,11 @@
 | `db:check`          | `node server/scripts/checkDatabase.cjs`  | Проверяет состояние таблиц и подключения.                                                   |
 | `prod:init`         | `npm run db:migrate`                     | Production init перед стартом контейнера: запускает миграции (db:migrate).                  |
 
-## Сборка и UI
-
-| Script            | Команда                                     | Назначение                               |
-| ----------------- | ------------------------------------------- | ---------------------------------------- |
-| `build`           | `vite build`                                | Собирает production frontend через Vite. |
-| `storybook`       | `storybook dev -p 6006 --disable-telemetry` | Запускает Storybook в dev-режиме.        |
-| `build-storybook` | `storybook build --disable-telemetry`       | Собирает статический Storybook.          |
-
-## Документация
-
-| Script          | Команда                                           | Назначение                                                         |
-| --------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
-| `docs:dev`      | `vitepress dev docs`                              | Запускает VitePress docs-site локально.                            |
-| `docs:generate` | `node scripts/docs/generateReference.cjs`         | Пересобирает generated reference-страницы документации.            |
-| `docs:build`    | `vitepress build docs`                            | Собирает статический docs-site.                                    |
-| `docs:preview`  | `vitepress preview docs`                          | Показывает локально собранный docs-site.                           |
-| `docs:check`    | `node scripts/docs/generateReference.cjs --check` | Проверяет, что generated docs не устарели относительно исходников. |
-
 ## Прочее
 
 | Script              | Команда                                                                                                                                                                        | Назначение                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `build:istoki-map`  | `node scripts/buildRussiaPaths.mjs`                                                                                                                                            | Пользовательский script проекта.                                                             |
 | `typecheck`         | `tsc --noEmit`                                                                                                                                                                 | Проверка TypeScript --noEmit. Запускается в pre-commit и CI.                                 |
 | `test`              | `vitest run`                                                                                                                                                                   | Vitest run: unit-тесты фронта + supertest-интеграция бэка. NODE_ENV=test глушит pino и OTel. |
 | `test:watch`        | `vitest`                                                                                                                                                                       | Vitest в режиме watch — на время локальной разработки.                                       |
@@ -61,3 +44,21 @@
 | `format`            | `prettier --write .`                                                                                                                                                           | Prettier --write по всему проекту.                                                           |
 | `format:check`      | `prettier --check .`                                                                                                                                                           | Prettier --check без правок (CI guard).                                                      |
 | `prepare`           | `husky`                                                                                                                                                                        | Пользовательский script проекта.                                                             |
+
+## Сборка и UI
+
+| Script            | Команда                                     | Назначение                               |
+| ----------------- | ------------------------------------------- | ---------------------------------------- |
+| `build`           | `vite build`                                | Собирает production frontend через Vite. |
+| `storybook`       | `storybook dev -p 6006 --disable-telemetry` | Запускает Storybook в dev-режиме.        |
+| `build-storybook` | `storybook build --disable-telemetry`       | Собирает статический Storybook.          |
+
+## Документация
+
+| Script          | Команда                                           | Назначение                                                         |
+| --------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
+| `docs:dev`      | `vitepress dev docs --host 0.0.0.0`               | Запускает VitePress docs-site локально.                            |
+| `docs:generate` | `node scripts/docs/generateReference.cjs`         | Пересобирает generated reference-страницы документации.            |
+| `docs:build`    | `vitepress build docs`                            | Собирает статический docs-site.                                    |
+| `docs:preview`  | `vitepress preview docs --host 0.0.0.0`           | Показывает локально собранный docs-site.                           |
+| `docs:check`    | `node scripts/docs/generateReference.cjs --check` | Проверяет, что generated docs не устарели относительно исходников. |

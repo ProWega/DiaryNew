@@ -244,6 +244,26 @@ async function getBootstrap(viewerId) {
   const stateScale = await getStateScale(viewer.sessionId);
   const settings = session?.settings || {};
 
+  // Methodology v4: journey_stage / careful_mode live in session_users for
+  // participants. Loaded here so AppLayout can decide whether to show the
+  // onboarding modal without a separate round-trip; refresh is triggered by
+  // refreshBootstrap() after the participant saves their choice.
+  let journeyStage = null;
+  let isCarefulMode = false;
+  if (viewer.role === "participant" && viewer.sessionId) {
+    const row = await query(
+      `SELECT journey_stage, is_careful_mode
+         FROM session_users
+         WHERE session_id = $1 AND user_id = $2
+         LIMIT 1`,
+      [viewer.sessionId, viewer.id],
+    );
+    if (row.rows.length) {
+      journeyStage = row.rows[0].journey_stage;
+      isCarefulMode = Boolean(row.rows[0].is_careful_mode);
+    }
+  }
+
   return {
     viewer,
     sessionInfo: session
@@ -264,6 +284,8 @@ async function getBootstrap(viewerId) {
     ],
     navigation: getNavigationItems(viewer),
     scopeBadges: getScopeBadges(viewer),
+    journeyStage,
+    isCarefulMode,
   };
 }
 

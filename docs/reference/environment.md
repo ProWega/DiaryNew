@@ -51,3 +51,9 @@
 | `SETUP_TOKEN`            | `replace-with-first-admin-setup-token`       | Токен для первого администратора на /setup/admin.                                         |
 | `MAGIC_LINK_TTL_MINUTES` | `60`                                         | Срок жизни magic link в минутах.                                                          |
 | `ALLOW_DEMO_SEED`        | `false`                                      | Разрешение на seed демо-данных. В production должен оставаться false.                     |
+| `ANTHROPIC_API_KEY`      | -                                            | Anthropic (Claude Haiku/Sonnet/Opus)                                                      |
+| `ANTHROPIC_BASE_URL`     | -                                            | Релей для регионов с ограничениями (oneprovider.dev и т.п.):                              |
+| `ANTHROPIC_PROXY_URL`    | -                                            | Прокси к api.anthropic.com (http://user:pass@host:port или socks5://...):                 |
+| `OPENAI_API_KEY`         | -                                            | OpenAI (GPT-5 mini / GPT-5 / GPT-4o)                                                      |
+| `OPENAI_BASE_URL`        | -                                            | Без дополнительного описания.                                                             |
+| `OPENAI_PROXY_URL`       | -                                            | Если пуст — используется ANTHROPIC_PROXY_URL как fallback.                                |

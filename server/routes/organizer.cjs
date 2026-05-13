@@ -12,7 +12,9 @@ const {
   updateOrganizerGroup,
 } = require("../db/repositories/organizerStore.cjs");
 const {
+  applyLlmSettingsPatch,
   createSession,
+  getSessionLlmSettings,
   listSessions,
   updateRegistration,
   updateSession,
@@ -51,6 +53,15 @@ const flow = require("../services/programFlowService.cjs");
 const norm = require("../services/programNormalizers.cjs");
 const workspace = require("../services/programWorkspaceService.cjs");
 const audience = require("../services/surveyAudienceService.cjs");
+const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
+const { documentUploader, persistUpload } = require("../lib/uploads.cjs");
+const { extractText } = require("../services/documentExtraction.cjs");
+const { logAuditEvent } = require("../services/auditLog.cjs");
+const { getSessionUsageReport } = require("../services/curatorLlmGuard.cjs");
+const { listCuratorsForGroup } = require("../services/groupCuratorsService.cjs");
+const chatPresetsStore = require("../db/repositories/curatorChatPresetsStore.cjs");
+const { previewChatContext } = require("../services/curatorChatService.cjs");
+const chatContext = require("../services/curatorChatContext.cjs");
 
 const router = Router();
 
@@ -156,15 +167,26 @@ router.patch(
   requireOrganizer,
   validateBody(updateSessionSettingsSchema),
   asyncHandler(async (req, res) => {
-    const settingsPatch = norm.normalizeOrganizerSessionSettingsPatch(req.body || {});
-    const result = await updateWorkspace(req.params.sessionId, (draft) => {
+    const body = req.body || {};
+
+    // llm-патч идёт в отдельную колонку sessions.llm_settings (минует workspace),
+    // т.к. это админ-настройки, а workspace.settings — конфигурация UX участника.
+    if (body.llm) {
+      await applyLlmSettingsPatch(req.params.sessionId, body.llm);
+    }
+
+    const settingsPatch = norm.normalizeOrganizerSessionSettingsPatch(body);
+    const workspaceResult = await updateWorkspace(req.params.sessionId, (draft) => {
       draft.sessionSettings = {
         ...(draft.sessionSettings || {}),
         ...settingsPatch,
       };
       return workspace.syncWorkspace(draft);
     });
-    res.json(result);
+
+    // Возвращаем актуальный llmSettings вместе с workspace чтобы UI обновился атомарно.
+    const llmSettings = await getSessionLlmSettings(req.params.sessionId);
+    res.json({ ...workspaceResult, llmSettings });
   }),
 );
 
@@ -173,8 +195,11 @@ router.get(
   "/sessions/:sessionId/workspace",
   requireOrganizer,
   asyncHandler(async (req, res) => {
-    const draft = await getWorkspace(req.params.sessionId);
-    res.json(workspace.syncWorkspace(draft));
+    const [draft, llmSettings] = await Promise.all([
+      getWorkspace(req.params.sessionId),
+      getSessionLlmSettings(req.params.sessionId),
+    ]);
+    res.json({ ...workspace.syncWorkspace(draft), llmSettings });
   }),
 );
 
@@ -851,6 +876,282 @@ router.post(
     });
 
     res.json(result);
+  }),
+);
+
+// GET /api/organizer/sessions/:sessionId/usage
+// Агрегат расхода LLM-токенов по всем кураторам сессии за сегодня.
+router.get(
+  "/sessions/:sessionId/usage",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    res.json(await getSessionUsageReport({ sessionId: req.params.sessionId }));
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Event concepts (PDF/DOCX/TXT/MD) — Curator AI v2 Phase 4
+// ---------------------------------------------------------------------------
+
+// POST /api/organizer/sessions/:sessionId/events/:eventId/concepts
+// multipart/form-data, поле "file". Сохраняет файл на диск, извлекает
+// текстовый слой и пишет в program_event_concepts.
+router.post(
+  "/sessions/:sessionId/events/:eventId/concepts",
+  requireOrganizer,
+  documentUploader,
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw createHttpError(400, "Файл не получен");
+    }
+
+    const settings = await getSessionLlmSettings(req.params.sessionId);
+    const persisted = persistUpload({ kind: "document", file: req.file });
+    const { text, truncated, originalChars } = await extractText(
+      req.file.buffer,
+      req.file.mimetype,
+      { limitChars: settings.conceptExtractionLimit },
+    );
+
+    const concept = await eventConceptsStore.insertConcept({
+      sessionId: req.params.sessionId,
+      eventId: req.params.eventId,
+      sourceFilename: req.file.originalname || persisted.filename,
+      storageFilename: persisted.filename,
+      mime: persisted.mime,
+      sizeBytes: persisted.sizeBytes,
+      extractedText: text,
+      extractedChars: originalChars,
+      uploadedBy: req.viewer.id,
+    });
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "program_event.concept.upload",
+      entityType: "program_event",
+      entityId: req.params.eventId,
+      payload: {
+        conceptId: concept.id,
+        filename: concept.sourceFilename,
+        mime: concept.mime,
+        sizeBytes: concept.sizeBytes,
+        extractedChars: concept.extractedChars,
+        truncated,
+      },
+    });
+
+    res.status(201).json({
+      ...concept,
+      downloadUrl: persisted.url,
+      truncated,
+    });
+  }),
+);
+
+// GET /api/organizer/sessions/:sessionId/events/:eventId/concepts
+router.get(
+  "/sessions/:sessionId/events/:eventId/concepts",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const concepts = await eventConceptsStore.listByEvent(req.params.eventId);
+    res.json(
+      concepts.map((concept) => ({
+        ...concept,
+        downloadUrl: `/uploads/documents/${concept.storageFilename}`,
+      })),
+    );
+  }),
+);
+
+// DELETE /api/organizer/sessions/:sessionId/events/:eventId/concepts/:conceptId
+router.delete(
+  "/sessions/:sessionId/events/:eventId/concepts/:conceptId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const concept = await eventConceptsStore.getById(req.params.conceptId);
+    if (!concept || concept.eventId !== req.params.eventId) {
+      throw createHttpError(404, "Концепция не найдена");
+    }
+    await eventConceptsStore.deleteById(req.params.conceptId);
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "program_event.concept.delete",
+      entityType: "program_event",
+      entityId: req.params.eventId,
+      payload: {
+        conceptId: req.params.conceptId,
+        filename: concept.sourceFilename,
+      },
+    });
+    res.status(204).send();
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Curator chat presets — конструктор контекста (Curator AI v2.1)
+//
+// Organizer-side зеркало для /api/curator/.../chat/presets и /preview.
+// Позволяет организатору посмотреть как собран контекст для каждого куратора
+// группы, создать/изменить preset'ы, назначить дефолт «за» куратора.
+// ---------------------------------------------------------------------------
+
+// GET /api/organizer/sessions/:sessionId/groups/:groupId/curators
+router.get(
+  "/sessions/:sessionId/groups/:groupId/curators",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    res.json(
+      await listCuratorsForGroup({
+        sessionId: req.params.sessionId,
+        groupId: req.params.groupId,
+      }),
+    );
+  }),
+);
+
+// GET .../groups/:groupId/curators/:curatorId/chat/presets
+router.get(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/chat/presets",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    res.json(
+      await chatPresetsStore.listByCuratorGroup({
+        sessionId: req.params.sessionId,
+        groupId: req.params.groupId,
+        curatorId: req.params.curatorId,
+      }),
+    );
+  }),
+);
+
+// POST .../groups/:groupId/curators/:curatorId/chat/presets
+router.post(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/chat/presets",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const label = String(req.body?.label || "").trim();
+    if (!label) throw createHttpError(400, "Название preset'а обязательно");
+    const created = await chatPresetsStore.createPreset({
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+      curatorId: req.params.curatorId,
+      label: label.slice(0, 120),
+      filter: req.body?.filter,
+      isDefault: Boolean(req.body?.isDefault),
+      createdBy: req.viewer.id,
+    });
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "curator_ai.preset.create",
+      entityType: "curator_chat_preset",
+      entityId: created.id,
+      payload: {
+        curatorId: req.params.curatorId,
+        label: created.label,
+        isDefault: created.isDefault,
+      },
+    });
+    res.status(201).json(created);
+  }),
+);
+
+// PATCH .../curators/:curatorId/chat/presets/:presetId
+router.patch(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/chat/presets/:presetId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const existing = await chatPresetsStore.getById(req.params.presetId);
+    if (
+      !existing ||
+      existing.curatorId !== req.params.curatorId ||
+      existing.sessionId !== req.params.sessionId ||
+      existing.groupId !== req.params.groupId
+    ) {
+      throw createHttpError(404, "Preset не найден");
+    }
+    const patch = {};
+    if (req.body?.label !== undefined) {
+      const label = String(req.body.label).trim();
+      if (!label) throw createHttpError(400, "Название preset'а не должно быть пустым");
+      patch.label = label.slice(0, 120);
+    }
+    if (req.body?.filter !== undefined) patch.filter = req.body.filter;
+    if (req.body?.isDefault !== undefined) patch.isDefault = Boolean(req.body.isDefault);
+    const updated = await chatPresetsStore.updatePreset(req.params.presetId, patch);
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action:
+        patch.isDefault === true ? "curator_ai.preset.set_default" : "curator_ai.preset.update",
+      entityType: "curator_chat_preset",
+      entityId: updated.id,
+      payload: { curatorId: req.params.curatorId, patch },
+    });
+    res.json(updated);
+  }),
+);
+
+// DELETE .../curators/:curatorId/chat/presets/:presetId
+router.delete(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/chat/presets/:presetId",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const existing = await chatPresetsStore.getById(req.params.presetId);
+    if (
+      !existing ||
+      existing.curatorId !== req.params.curatorId ||
+      existing.sessionId !== req.params.sessionId ||
+      existing.groupId !== req.params.groupId
+    ) {
+      throw createHttpError(404, "Preset не найден");
+    }
+    await chatPresetsStore.deletePreset(req.params.presetId);
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "curator_ai.preset.delete",
+      entityType: "curator_chat_preset",
+      entityId: req.params.presetId,
+      payload: { curatorId: req.params.curatorId, label: existing.label },
+    });
+    res.status(204).send();
+  }),
+);
+
+// POST .../curators/:curatorId/chat/preview
+// body: { filter? }  → preview как увидит ИИ куратор
+router.post(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/chat/preview",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const result = await previewChatContext({
+      viewerId: req.params.curatorId,
+      sessionId: req.params.sessionId,
+      groupId: req.params.groupId,
+      filter: req.body?.filter,
+      // organizer уже прошёл requireOrganizer — пропускаем ensureCuratorAccess
+      // чтобы не падать на отсутствии у организатора curator-роли в группе.
+      skipAccess: true,
+    });
+    res.json(result);
+  }),
+);
+
+// GET .../groups/:groupId/chat/context-options
+// Чек-листы для picker'а в кабинете организатора.
+router.get(
+  "/sessions/:sessionId/groups/:groupId/chat/context-options",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    res.json(
+      await chatContext.listContextOptions({
+        sessionId: req.params.sessionId,
+        groupId: req.params.groupId,
+      }),
+    );
   }),
 );
 

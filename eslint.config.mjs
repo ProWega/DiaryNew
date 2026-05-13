@@ -182,6 +182,7 @@ export default [
         beforeEach: "readonly",
         afterEach: "readonly",
         vi: "readonly",
+        jest: "readonly",
       },
     },
   },

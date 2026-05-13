@@ -1,6 +1,7 @@
 const { query } = require("../postgres.cjs");
 const { createId, getSessionInfo, normalizeDateInput, toIsoDate } = require("./common.cjs");
 const { buildBootstrapProgramDays } = require("./programDays.cjs");
+const { normalizeLlmSettings, mergeLlmSettings } = require("../../services/llmSettings.cjs");
 
 const REGISTRATION_STATUSES = new Set(["draft", "open", "closed", "archived"]);
 
@@ -73,9 +74,8 @@ function getComparableTime(value, dateOnly = false) {
     return null;
   }
 
-  const normalizedValue = dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(String(value))
-    ? `${value}T00:00`
-    : value;
+  const normalizedValue =
+    dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? `${value}T00:00` : value;
   const time = new Date(normalizedValue).getTime();
   return Number.isNaN(time) ? null : time;
 }
@@ -94,9 +94,10 @@ function mapSession(row) {
   }
 
   const participants = Number(row.participants_count || 0);
-  const capacity = row.registration_capacity === null || row.registration_capacity === undefined
-    ? null
-    : Number(row.registration_capacity);
+  const capacity =
+    row.registration_capacity === null || row.registration_capacity === undefined
+      ? null
+      : Number(row.registration_capacity);
 
   return {
     id: row.id,
@@ -233,7 +234,10 @@ async function assertRegistrationAvailable(sessionId) {
     throw error;
   }
 
-  if (session.registrationCapacity !== null && session.participantsCount >= session.registrationCapacity) {
+  if (
+    session.registrationCapacity !== null &&
+    session.participantsCount >= session.registrationCapacity
+  ) {
     const error = new Error("На это событие уже нет свободных мест");
     error.status = 409;
     throw error;
@@ -250,8 +254,17 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
   const endsAt = normalizeDateTime(payload.registrationEndsAt);
   const registrationStatus = normalizeRegistrationStatus(payload.registrationStatus);
   const capacity = normalizeCapacity(payload.registrationCapacity);
-  validateDateOrder(startDate, endDate, "Дата окончания заезда не может быть раньше даты начала", true);
-  validateDateOrder(startsAt, endsAt, "Дата окончания регистрации не может быть раньше даты начала регистрации");
+  validateDateOrder(
+    startDate,
+    endDate,
+    "Дата окончания заезда не может быть раньше даты начала",
+    true,
+  );
+  validateDateOrder(
+    startsAt,
+    endsAt,
+    "Дата окончания регистрации не может быть раньше даты начала регистрации",
+  );
 
   await query(
     `
@@ -304,7 +317,12 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
       on conflict (id)
       do update set name = excluded.name, description = excluded.description, updated_at = now()
     `,
-    [groupId, sessionId, payload.defaultGroupName || "Группа 1", "Автоматически созданная группа для регистрации."],
+    [
+      groupId,
+      sessionId,
+      payload.defaultGroupName || "Группа 1",
+      "Автоматически созданная группа для регистрации.",
+    ],
   );
 
   const programId = payload.defaultProgramId || `program-${sessionId.replace(/^session-/, "")}`;
@@ -402,10 +420,18 @@ async function createSession({ actorId, payload = {}, assignOrganizerId } = {}) 
       insert into audit_log (id, actor_id, session_id, action, entity_type, entity_id, payload)
       values ($1,$2,$3,$4,'session',$3,$5::jsonb)
     `,
-    [createId("audit"), actorId || null, sessionId, "create session", JSON.stringify({ registrationStatus })],
+    [
+      createId("audit"),
+      actorId || null,
+      sessionId,
+      "create session",
+      JSON.stringify({ registrationStatus }),
+    ],
   );
 
-  const visibleSessions = await listSessions(assignOrganizerId ? { organizerId: assignOrganizerId } : {});
+  const visibleSessions = await listSessions(
+    assignOrganizerId ? { organizerId: assignOrganizerId } : {},
+  );
   return visibleSessions.find((session) => session.id === sessionId);
 }
 
@@ -435,17 +461,24 @@ async function updateSession({
   const nextRegistrationEndsAt = hasPayloadField(payload, "registrationEndsAt", "endsAt")
     ? normalizeDateTime(getPayloadField(payload, "registrationEndsAt", "endsAt"))
     : current.registration_ends_at;
-  const nextRegistrationCapacity = allowExtendedRegistrationFields && hasPayloadField(payload, "registrationCapacity", "capacity")
-    ? normalizeCapacity(getPayloadField(payload, "registrationCapacity", "capacity"))
-    : current.registration_capacity;
-  const nextRegistrationPolicy = allowExtendedRegistrationFields && hasPayloadField(payload, "registrationPolicy", "policy")
-    ? getPayloadField(payload, "registrationPolicy", "policy") || {}
-    : current.registration_policy || {};
+  const nextRegistrationCapacity =
+    allowExtendedRegistrationFields && hasPayloadField(payload, "registrationCapacity", "capacity")
+      ? normalizeCapacity(getPayloadField(payload, "registrationCapacity", "capacity"))
+      : current.registration_capacity;
+  const nextRegistrationPolicy =
+    allowExtendedRegistrationFields && hasPayloadField(payload, "registrationPolicy", "policy")
+      ? getPayloadField(payload, "registrationPolicy", "policy") || {}
+      : current.registration_policy || {};
   const nextRegistrationStatus = hasPayloadField(payload, "registrationStatus", "status")
     ? normalizeRegistrationStatus(getPayloadField(payload, "registrationStatus", "status"))
     : current.registration_status || "draft";
 
-  validateDateOrder(nextStartDate, nextEndDate, "Дата окончания заезда не может быть раньше даты начала", true);
+  validateDateOrder(
+    nextStartDate,
+    nextEndDate,
+    "Дата окончания заезда не может быть раньше даты начала",
+    true,
+  );
   validateDateOrder(
     nextRegistrationStartsAt,
     nextRegistrationEndsAt,
@@ -506,7 +539,11 @@ async function updateRegistration({ actorId, sessionId, payload = {} }) {
   const capacity = normalizeCapacity(payload.registrationCapacity ?? payload.capacity);
   const startsAt = normalizeDateTime(payload.registrationStartsAt ?? payload.startsAt);
   const endsAt = normalizeDateTime(payload.registrationEndsAt ?? payload.endsAt);
-  validateDateOrder(startsAt, endsAt, "Дата окончания регистрации не может быть раньше даты начала регистрации");
+  validateDateOrder(
+    startsAt,
+    endsAt,
+    "Дата окончания регистрации не может быть раньше даты начала регистрации",
+  );
 
   await query(
     `
@@ -543,10 +580,59 @@ async function updateRegistration({ actorId, sessionId, payload = {} }) {
   return (await listSessions()).find((session) => session.id === sessionId);
 }
 
+/**
+ * LLM-настройки сессии: читает `sessions.llm_settings`, нормализует через
+ * сервис-слой. Возвращает всегда полностью валидную форму с дефолтами.
+ *
+ * Defensive: если колонка `llm_settings` ещё не создана (миграция 1753
+ * не накатилась), возвращаем дефолты — иначе вся curator-тропа упадёт с 500.
+ * Это нужно для smoother rollout на проде когда app-контейнер уже с новым
+ * кодом, а миграции ещё бегут.
+ */
+async function getSessionLlmSettings(sessionId) {
+  try {
+    const result = await query(`select llm_settings from sessions where id = $1 limit 1`, [
+      sessionId,
+    ]);
+    if (!result.rows.length) return normalizeLlmSettings({});
+    return normalizeLlmSettings(result.rows[0].llm_settings);
+  } catch (error) {
+    // 42703 = undefined_column. Других ошибок не глотаем.
+    if (error?.code === "42703") {
+      return normalizeLlmSettings({});
+    }
+    throw error;
+  }
+}
+
+/**
+ * Применяет partial-патч к llm_settings: merge с текущим состоянием через
+ * сервис-слой, потом UPDATE. Возвращает нормализованный итог.
+ * Если patch — null/empty, всё равно возвращает текущий нормализованный набор.
+ */
+async function applyLlmSettingsPatch(sessionId, patch) {
+  const current = await getSessionLlmSettings(sessionId);
+  const next = mergeLlmSettings(current, patch || {});
+  try {
+    await query(`update sessions set llm_settings = $2::jsonb, updated_at = now() where id = $1`, [
+      sessionId,
+      JSON.stringify(next),
+    ]);
+  } catch (error) {
+    // Колонка не создана — миграция ещё не накатилась. Тихо no-op (UI получит
+    // нормализованные дефолты, которые «настоящего» эффекта на сервер не дают,
+    // но и крэшить organizer-сохранение зря не надо). После миграции работает.
+    if (error?.code !== "42703") throw error;
+  }
+  return next;
+}
+
 module.exports = {
   assertRegistrationAvailable,
+  applyLlmSettingsPatch,
   createSession,
   getSessionInfoById,
+  getSessionLlmSettings,
   listPublicEvents,
   listSessions,
   mapSession,

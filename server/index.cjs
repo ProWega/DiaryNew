@@ -60,6 +60,13 @@ app.use(
         callback(null, true);
         return;
       }
+      // Dev-mode shortcut: разрешаем любой origin, чтобы Vite-dev на меняющемся
+      // LAN-IP (или через Caddy reverse proxy) не упирался в allowlist каждый
+      // раз. В production проверка allowlist обязательна.
+      if (!isProductionMode()) {
+        callback(null, true);
+        return;
+      }
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
         return;

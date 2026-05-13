@@ -795,7 +795,7 @@ function ParticipantRoutedView({
                       aria-labelledby={buttonId}
                       aria-hidden={!isOpen}
                       className="participant-event-panel"
-                      {...(!isOpen ? { inert: "" } : {})}
+                      {...(!isOpen ? { inert: true } : {})}
                     >
                       <div className="participant-event-body">
                         {isLocked ? (

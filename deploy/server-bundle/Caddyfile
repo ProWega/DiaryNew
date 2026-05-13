@@ -1,0 +1,27 @@
+# Caddy v2 — автоматический Let's Encrypt + HTTP→HTTPS redirect.
+# Поменяйте example.com на ваш реальный домен (без https://).
+# Email в `tls` указывает Let's Encrypt куда слать уведомления о просрочке.
+
+example.com {
+    encode zstd gzip
+
+    # Reverse-proxy всех запросов в Express-app (контейнер `app` слушает 4000).
+    # Caddy сам выставляет X-Forwarded-* — Express trust proxy 1 уже настроен.
+    reverse_proxy app:4000
+
+    # Заголовки безопасности. CSP отключён — SPA использует inline-стили
+    # (Vite chunks), CSP надо настраивать отдельным проходом.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}

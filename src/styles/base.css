@@ -55,12 +55,3 @@ textarea {
   white-space: nowrap;
   border: 0;
 }
-
-.theme-toggle {
-  font-size: var(--font-size-xs);
-  opacity: 0.72;
-}
-
-.theme-toggle:hover {
-  opacity: 1;
-}

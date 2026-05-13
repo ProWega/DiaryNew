@@ -1401,13 +1401,13 @@
 /* Финальная кнопка дня — акцентный оттенок и более сильное свечение,
    чтобы переход «Далее» → «Сохранить» был заметнее. */
 .participant-step-primary.is-final {
-  background: linear-gradient(180deg, var(--color-accent), var(--color-accent-dark));
-  box-shadow: 0 6px 18px rgba(95, 134, 56, 0.28);
+  background: linear-gradient(180deg, var(--istoki-burgundy), var(--istoki-burgundy-dark));
+  box-shadow: 0 6px 18px rgba(181, 16, 68, 0.28);
 }
 
 .participant-step-primary.is-final:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(95, 134, 56, 0.32);
+  box-shadow: 0 10px 22px rgba(181, 16, 68, 0.34);
 }
 
 .participant-draft-note + .confidence-note {
@@ -1494,7 +1494,7 @@
 
 .participant-analytics-drawer summary strong {
   display: block;
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: var(--font-display);
   font-size: 1.12rem;
 }
 
@@ -1540,7 +1540,7 @@
 .participant-self-card h2,
 .participant-self-panel h3 {
   margin: 0;
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.02em;
 }

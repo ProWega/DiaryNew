@@ -8,6 +8,7 @@ import {
   validateScheduleCandidate,
 } from "./_helpers";
 import { ProgramEventForm } from "./ProgramEventForm";
+import EventConceptsPanel from "./EventConceptsPanel";
 
 export function ProgramScheduleInspector({
   mode = "empty",
@@ -15,6 +16,7 @@ export function ProgramScheduleInspector({
   day,
   event,
   draftEvent,
+  sessionId,
   eventTypes = [],
   speakersCatalog = [],
   statusOptions = DEFAULT_EVENT_STATUS_OPTIONS,
@@ -147,6 +149,10 @@ export function ProgramScheduleInspector({
         onSubmit={handleSubmit}
         submitLabel={submitLabel}
       />
+
+      {effectiveMode === "edit" && sessionId && event?.id ? (
+        <EventConceptsPanel sessionId={sessionId} eventId={event.id} disabled={disabled} />
+      ) : null}
     </article>
   );
 }

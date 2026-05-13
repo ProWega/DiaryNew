@@ -317,6 +317,162 @@ const curatorHandlers = [
       }
     },
   ),
+
+  // Curator AI v2: перегенерировать brief (mock возвращает текущий с пометкой)
+  http.post(
+    "/api/curator/sessions/:sessionId/groups/:groupId/brief/regenerate",
+    async ({ request, params }) => {
+      await delay(MS);
+      const viewerId = request.headers.get("x-viewer-id");
+      const { sessionId, groupId } = params;
+      const db = readDatabase();
+
+      try {
+        ensureAccess(db, viewerId, "group.analytics.read", { sessionId, groupId });
+        const brief = db.curatorBriefByGroupId?.[groupId];
+        if (!brief)
+          return HttpResponse.json({ message: "Записка пока не готова" }, { status: 404 });
+        const next = {
+          ...cloneJson(brief),
+          narrative: {
+            text: brief.narrative?.text || "(mock) свежесгенерированная записка",
+            source: "llm",
+            model: "claude-haiku-4-5",
+          },
+        };
+        return HttpResponse.json(next, { status: 201 });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  ),
+
+  // Curator AI v2: чат — mock thread с парой sample-сообщений
+  http.get("/api/curator/sessions/:sessionId/groups/:groupId/chat/thread", async ({ request }) => {
+    await delay(MS);
+    const viewerId = request.headers.get("x-viewer-id");
+    const db = readDatabase();
+    try {
+      ensureAccess(db, viewerId, "group.analytics.read", {});
+      return ok({
+        id: "mock-thread",
+        status: "active",
+        createdAt: new Date().toISOString(),
+        lastMessageAt: null,
+        messages: [],
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  }),
+
+  http.post(
+    "/api/curator/sessions/:sessionId/groups/:groupId/chat/messages",
+    async ({ request }) => {
+      await delay(MS);
+      const viewerId = request.headers.get("x-viewer-id");
+      const body = await request.json();
+      const db = readDatabase();
+      try {
+        ensureAccess(db, viewerId, "group.analytics.read", {});
+        const now = new Date().toISOString();
+        return HttpResponse.json(
+          {
+            threadId: "mock-thread",
+            userMessage: {
+              id: `u-${Date.now()}`,
+              role: "user",
+              content: body.text,
+              createdAt: now,
+            },
+            assistantMessage: {
+              id: `a-${Date.now()}`,
+              role: "assistant",
+              content: "(mock) Это пример ответа ИИ — на проде здесь будет реальный анализ.",
+              model: body.model || "claude-haiku-4-5",
+              createdAt: now,
+            },
+            usage: { inputTokens: 0, outputTokens: 0 },
+          },
+          { status: 201 },
+        );
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  ),
+
+  http.post("/api/curator/sessions/:sessionId/groups/:groupId/chat/reset", async ({ request }) => {
+    await delay(MS);
+    const viewerId = request.headers.get("x-viewer-id");
+    const db = readDatabase();
+    try {
+      ensureAccess(db, viewerId, "group.analytics.read", {});
+      return HttpResponse.json(
+        {
+          id: `mock-thread-${Date.now()}`,
+          status: "active",
+          createdAt: new Date().toISOString(),
+          lastMessageAt: null,
+          messages: [],
+        },
+        { status: 201 },
+      );
+    } catch (error) {
+      return fail(error);
+    }
+  }),
+
+  // Curator AI v2: usage report для куратора
+  http.get("/api/curator/sessions/:sessionId/usage/me", async ({ request }) => {
+    await delay(MS);
+    const viewerId = request.headers.get("x-viewer-id");
+    const db = readDatabase();
+    try {
+      ensureAccess(db, viewerId, "group.analytics.read", {});
+      return ok({
+        spentToday: 0,
+        budget: 0,
+        resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        byKind: {},
+        settings: {
+          defaultModel: "claude-haiku-4-5",
+          allowedModels: ["claude-haiku-4-5"],
+          maxTokensPerCall: 500,
+          curatorChatEnabled: false,
+        },
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  }),
+
+  // Curator AI v2: список дней сессии для day-picker'а
+  http.get("/api/curator/sessions/:sessionId/groups/:groupId/days", async ({ request, params }) => {
+    await delay(MS);
+    const viewerId = request.headers.get("x-viewer-id");
+    const { sessionId, groupId } = params;
+    const db = readDatabase();
+
+    try {
+      ensureAccess(db, viewerId, "group.analytics.read", { sessionId, groupId });
+      // Берём programDays из brief'а если есть, иначе пустой список —
+      // mock-БД не хранит полную программу отдельно.
+      const brief = db.curatorBriefByGroupId?.[groupId];
+      const programDays = brief?.programArc?.days || brief?.programDays || [];
+      const days = programDays.map((day, index) => ({
+        id: day.id,
+        label: day.label || `День ${index + 1}`,
+        dateLabel: day.dateLabel || day.date_label || null,
+        dayNumber: day.dayNumber || day.ordinal || index + 1,
+        hasEntries: Boolean(day.respondedCount || day.entriesCount),
+        entriesCount: day.respondedCount || day.entriesCount || 0,
+      }));
+      return ok(days);
+    } catch (error) {
+      return fail(error);
+    }
+  }),
 ];
 
 // ─── Organizer ────────────────────────────────────────────────────────────────

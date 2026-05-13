@@ -54,26 +54,61 @@ describe("enrichWithNarrative — fallback when API key missing", () => {
 describe("fingerprint", () => {
   beforeEach(() => __resetCache());
 
-  it("is stable for identical brief content", () => {
-    const a = fingerprint(sampleBrief);
-    const b = fingerprint({ ...sampleBrief });
+  const sampleSignals = {
+    sessionId: "s-1",
+    groupId: "g-1",
+    dayId: "day-1",
+    members: [
+      { id: "u-1", journeyStage: "search", isCarefulMode: false },
+      { id: "u-2", journeyStage: "support", isCarefulMode: true },
+    ],
+    entries: [
+      {
+        id: "entry-1",
+        userId: "u-1",
+        eventId: "e-1",
+        stateId: "harmony",
+        isAnonymous: false,
+        isHiddenFromCurator: false,
+        comment: "all good",
+      },
+    ],
+    events: [{ id: "e-1", sortOrder: 0 }],
+    concepts: [],
+  };
+
+  it("is stable for identical signals content", () => {
+    const a = fingerprint(sampleSignals);
+    const b = fingerprint({ ...sampleSignals });
     expect(a).toBe(b);
   });
 
-  it("changes when picture changes", () => {
-    const a = fingerprint(sampleBrief);
+  it("changes when an entry's stateId changes", () => {
+    const a = fingerprint(sampleSignals);
     const b = fingerprint({
-      ...sampleBrief,
-      picture: { ...sampleBrief.picture, dominantState: "breakdown" },
+      ...sampleSignals,
+      entries: [{ ...sampleSignals.entries[0], stateId: "breakdown" }],
     });
     expect(a).not.toBe(b);
   });
 
-  it("changes when conversationPoints reasons change", () => {
-    const a = fingerprint(sampleBrief);
+  it("changes when a member's journeyStage changes", () => {
+    const a = fingerprint(sampleSignals);
     const b = fingerprint({
-      ...sampleBrief,
-      conversationPoints: [{ participantId: "u-1", reason: "shift_down", note: "..." }],
+      ...sampleSignals,
+      members: [
+        { ...sampleSignals.members[0], journeyStage: "transmission" },
+        sampleSignals.members[1],
+      ],
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it("changes when concepts are added", () => {
+    const a = fingerprint(sampleSignals);
+    const b = fingerprint({
+      ...sampleSignals,
+      concepts: [{ eventId: "e-1", storageFilename: "abc.pdf" }],
     });
     expect(a).not.toBe(b);
   });

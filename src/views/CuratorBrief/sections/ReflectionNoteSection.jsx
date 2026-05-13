@@ -1,4 +1,7 @@
+import { useState, useEffect } from "react";
 import { STATE_LABEL_META } from "../../../data/methodology";
+import { useRegenerateCuratorBrief, useCuratorUsage } from "../../../api/hooks";
+import UsageBadge from "../../../components/curator/UsageBadge";
 
 const REASON_LABEL = {
   careful_mode: "Бережно",
@@ -6,11 +9,52 @@ const REASON_LABEL = {
   silence_streak: "Тишина подряд",
 };
 
-function ReflectionNoteSection({ brief }) {
+function formatCachedAt(iso) {
+  if (!iso) return null;
+  try {
+    const date = new Date(iso);
+    return date.toLocaleString("ru-RU", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
+}
+
+const MODEL_LABEL = {
+  "claude-haiku-4-5": "Haiku",
+  "claude-sonnet-4-5": "Sonnet",
+  "claude-opus-4-7": "Opus",
+  "gpt-5-mini": "GPT-5 mini",
+  "gpt-5": "GPT-5",
+  "gpt-4o-mini": "GPT-4o mini",
+  "gpt-4o": "GPT-4o",
+};
+
+function ReflectionNoteSection({ brief, sessionId, groupId }) {
+  const dayId = brief?.dayId || null;
+  const { regenerate, saving } = useRegenerateCuratorBrief(sessionId, groupId);
+  const { data: usage } = useCuratorUsage(sessionId);
+  const allowedModels = usage?.settings?.allowedModels || [];
+  const defaultModel = usage?.settings?.defaultModel || allowedModels[0] || null;
+
+  const [selectedModel, setSelectedModel] = useState(defaultModel);
+  useEffect(() => {
+    if (defaultModel && !selectedModel) setSelectedModel(defaultModel);
+  }, [defaultModel, selectedModel]);
+
   if (!brief) return null;
   const { picture, stageResonance, conversationPoints, events, dayLabel, narrative } = brief;
   const dominant = picture?.dominantState ? STATE_LABEL_META[picture.dominantState] : null;
-  const hasLlmNarrative = narrative?.source === "llm" && narrative?.text;
+  const hasNarrativeText = Boolean(narrative?.text);
+  const isFromCache = narrative?.source === "db-cache";
+  const cachedAtLabel = isFromCache ? formatCachedAt(narrative?.cachedAt) : null;
+
+  const canRegenerate = Boolean(sessionId && groupId && dayId);
+  const showModelSelect = allowedModels.length > 1;
 
   return (
     <article className="panel-card curator-brief-section curator-brief-note">
@@ -18,13 +62,47 @@ function ReflectionNoteSection({ brief }) {
         <div>
           <p className="eyebrow">Записка к вечерней рефлексии</p>
           <h3>{dayLabel || "Сегодня"}</h3>
+          {cachedAtLabel ? (
+            <p className="curator-brief-note-meta subtle">из кеша от {cachedAtLabel}</p>
+          ) : null}
         </div>
-        <span className="confidence-tag">
-          {picture?.respondedToday ?? 0} из {picture?.totalParticipants ?? 0} отозвались
-        </span>
+        <div className="curator-brief-note-controls">
+          <span className="confidence-tag">
+            {picture?.respondedToday ?? 0} из {picture?.totalParticipants ?? 0} отозвались
+          </span>
+          <UsageBadge sessionId={sessionId} compact />
+          {canRegenerate ? (
+            <div className="curator-brief-regen-group">
+              {showModelSelect ? (
+                <select
+                  className="curator-brief-model-select"
+                  value={selectedModel || ""}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={saving}
+                  aria-label="Модель для генерации"
+                >
+                  {allowedModels.map((m) => (
+                    <option key={m} value={m}>
+                      {MODEL_LABEL[m] || m}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                type="button"
+                className="ghost-button curator-brief-regen"
+                onClick={() => regenerate({ dayId, model: selectedModel || undefined })}
+                disabled={saving}
+                title="Сгенерировать записку заново — обходит кеш"
+              >
+                {saving ? "Генерируем..." : "Перегенерировать"}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </header>
 
-      {hasLlmNarrative ? <p className="curator-brief-narrative">{narrative.text}</p> : null}
+      {hasNarrativeText ? <p className="curator-brief-narrative">{narrative.text}</p> : null}
 
       <div className="curator-brief-picture">
         {dominant ? (

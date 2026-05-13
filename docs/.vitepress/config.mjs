@@ -70,6 +70,7 @@ export default defineConfig({
           { text: "Безопасность", link: "/architecture/security" },
           { text: "Тестирование", link: "/architecture/testing" },
           { text: "Methodology mapping", link: "/architecture/methodology-mapping" },
+          { text: "Curator AI v2", link: "/architecture/curator-ai" },
           { text: "Контур документации", link: "/architecture/documentation-workflow" },
         ],
       },

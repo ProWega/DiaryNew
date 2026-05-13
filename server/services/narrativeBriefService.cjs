@@ -18,6 +18,8 @@ const { query } = require("../db/postgres.cjs");
 const { applyToList } = require("../lib/privacy.cjs");
 const { ensureCuratorAccess } = require("../db/repositories/analyticsStore.cjs");
 const { enrichWithNarrative } = require("./narrativeBriefLLM.cjs");
+const guard = require("./curatorLlmGuard.cjs");
+const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
 
 // 7-id stateId → 5 methodology labels (mirrors src/data/methodology.ts).
 const STATE_TO_METHODOLOGY = Object.freeze({
@@ -291,7 +293,7 @@ async function fetchTargetDay(sessionId, dayId) {
     `select id, label, date_label, date_value
      from program_days
      where session_id = $1
-     order by ordinal asc`,
+     order by day_number asc`,
     [sessionId],
   );
   return result.rows[result.rows.length - 1] || null;
@@ -316,7 +318,9 @@ async function fetchMembersForGroup(sessionId, groupId) {
 
 async function fetchEventsForDay(sessionId, dayId) {
   const result = await query(
-    `select id, title from events where session_id = $1 and day_id = $2 order by ordinal`,
+    `select id, title from program_events
+     where session_id = $1 and day_id = $2
+     order by sort_order`,
     [sessionId, dayId],
   );
   return result.rows;
@@ -330,15 +334,15 @@ function previousDayId(allDays, currentDayId) {
 
 async function fetchAllDays(sessionId) {
   const result = await query(
-    `select id, label, date_label, ordinal
-     from program_days where session_id = $1 order by ordinal asc`,
+    `select id, label, date_label, day_number
+     from program_days where session_id = $1 order by day_number asc`,
     [sessionId],
   );
   return result.rows.map((row) => ({
     id: row.id,
     label: row.label,
     dateLabel: row.date_label,
-    ordinal: row.ordinal,
+    ordinal: row.day_number,
   }));
 }
 
@@ -348,7 +352,7 @@ async function fetchEntriesAcrossDays(sessionId, groupId) {
             de.comment, de.is_anonymous, de.is_hidden_from_curator,
             de.responded_at, e.day_id
      from diary_entries de
-     join events e on e.id = de.event_id
+     join program_events e on e.id = de.event_id
      join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
      where de.session_id = $1 and su.group_id = $2`,
     [sessionId, groupId],
@@ -371,15 +375,58 @@ function normaliseEntry(row) {
   };
 }
 
-async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = null }) {
+async function getCuratorNarrativeBrief({
+  viewerId,
+  sessionId,
+  groupId,
+  dayId = null,
+  force = false,
+  model: requestedModel,
+  maxTokens: requestedMaxTokens,
+}) {
   await ensureCuratorAccess(viewerId, sessionId, groupId);
+
+  // Резолвим модель и max_tokens из sessions.llm_settings. Если requested
+  // не входит в allowedModels — мягко падаем на default.
+  const { model, maxTokens } = await guard.resolveModel({
+    sessionId,
+    requestedModel,
+  });
+  const effectiveMaxTokens = requestedMaxTokens || maxTokens;
+
+  // Бюджет проверяем только если будет реальный LLM-вызов: для force всегда,
+  // для GET-пути — если кеш miss приведёт к вызову. Проще — проверять всегда:
+  // 402 при превышении даже на cache-hit это нежелательно, поэтому пропустим
+  // тут и проверим внутри enrich перед самим вызовом… но enrich не знает
+  // про бюджет. Компромисс: для force всегда; для обычного — заведём проверку
+  // только когда action явно дорогой (regen). Для обычного brief позволим
+  // даже при превышенном бюджете отдавать кеш-версию.
+  if (force) {
+    await guard.ensureBudget({ sessionId, curatorId: viewerId });
+  }
 
   const allDays = await fetchAllDays(sessionId);
   const targetDay = (await fetchTargetDay(sessionId, dayId)) || allDays[allDays.length - 1] || null;
 
   if (!targetDay) {
     const empty = buildNarrativeBrief({});
-    return enrichWithNarrative(empty, { groupId });
+    const enriched = await enrichWithNarrative(empty, {
+      sessionId,
+      groupId,
+      viewerId,
+      force,
+      model,
+      maxTokens: effectiveMaxTokens,
+    });
+    await recordIfLlmCall({
+      enriched,
+      sessionId,
+      curatorId: viewerId,
+      groupId,
+      kind: force ? "regen" : "brief",
+      model,
+    });
+    return enriched;
   }
 
   const yesterdayId = previousDayId(allDays, targetDay.id);
@@ -412,12 +459,124 @@ async function getCuratorNarrativeBrief({ viewerId, sessionId, groupId, dayId = 
     entriesByDay,
   });
 
-  return enrichWithNarrative(brief, { groupId });
+  // Concepts для signals: для каждого события дня — список загруженных
+  // концепций (storage_filename = sha256-prefix контента, меняется при
+  // замене файла → fingerprint автоматически инвалидирует кеш).
+  const eventIds = events.map((e) => e.id);
+  const concepts = await collectConceptSignals(eventIds);
+
+  const signalEntries = [...todayEntries, ...yesterdayEntries].map((entry) => ({
+    id: entry.id,
+    userId: entry.userId,
+    eventId: entry.eventId,
+    stateId: entry.stateId,
+    isAnonymous: entry.isAnonymous,
+    isHiddenFromCurator: entry.isHiddenFromCurator,
+    comment: entry.comment,
+  }));
+
+  const enriched = await enrichWithNarrative(brief, {
+    sessionId,
+    groupId,
+    dayId: targetDay.id,
+    viewerId,
+    force,
+    model,
+    maxTokens: effectiveMaxTokens,
+    signals: {
+      sessionId,
+      groupId,
+      dayId: targetDay.id,
+      members,
+      entries: signalEntries,
+      events: events.map((e, idx) => ({ id: e.id, sortOrder: idx })),
+      concepts,
+    },
+  });
+
+  await recordIfLlmCall({
+    enriched,
+    sessionId,
+    curatorId: viewerId,
+    groupId,
+    kind: force ? "regen" : "brief",
+    model,
+  });
+
+  return enriched;
+}
+
+async function collectConceptSignals(eventIds) {
+  if (!eventIds || !eventIds.length) return [];
+  const all = [];
+  for (const eventId of eventIds) {
+    try {
+      const rows = await eventConceptsStore.listByEvent(eventId);
+      for (const row of rows) {
+        all.push({ eventId, storageFilename: row.storageFilename });
+      }
+    } catch (error) {
+      // 42P01 = undefined_table (миграция 1753 ещё не накатилась). Концепции
+      // не критичны для brief — продолжаем с пустым набором.
+      if (error?.code !== "42P01") throw error;
+      return [];
+    }
+  }
+  return all;
+}
+
+async function recordIfLlmCall({ enriched, sessionId, curatorId, groupId, kind, model }) {
+  // Только когда был реальный SDK-вызов (source === "llm"); cache-hit и
+  // fallback не считаем — токены не тратили.
+  const usage = enriched?.narrative?.usage;
+  if (enriched?.narrative?.source !== "llm" || !usage) return;
+  await guard.recordUsage({
+    sessionId,
+    curatorId,
+    groupId,
+    kind,
+    model,
+    usage,
+  });
+}
+
+/**
+ * Список дней программы для куратора: тот же `fetchAllDays`, плюс флаг
+ * `hasEntries` для каждого дня (есть ли хоть одна `diary_entry` от
+ * участников этой группы). Нужен фронту для day-picker'а: подсвечивает
+ * дни с активностью, не-активные показывает приглушённо.
+ */
+async function listSessionDaysForCurator({ viewerId, sessionId, groupId }) {
+  await ensureCuratorAccess(viewerId, sessionId, groupId);
+
+  const days = await fetchAllDays(sessionId);
+  if (!days.length) return [];
+
+  const statsResult = await query(
+    `select e.day_id, count(distinct de.id)::int as entry_count
+     from diary_entries de
+     join program_events e on e.id = de.event_id
+     join session_users su on su.user_id = de.user_id and su.session_id = de.session_id
+     where de.session_id = $1 and su.group_id = $2
+     group by e.day_id`,
+    [sessionId, groupId],
+  );
+  const entriesByDay = new Map(statsResult.rows.map((row) => [row.day_id, row.entry_count]));
+
+  return days.map((day) => ({
+    id: day.id,
+    label: day.label,
+    dateLabel: day.dateLabel,
+    dayNumber: day.ordinal,
+    hasEntries: (entriesByDay.get(day.id) || 0) > 0,
+    entriesCount: entriesByDay.get(day.id) || 0,
+  }));
 }
 
 module.exports = {
   buildNarrativeBrief,
   getCuratorNarrativeBrief,
+  listSessionDaysForCurator,
   // Exposed for tests:
   STATE_TO_METHODOLOGY,
   METHODOLOGY_LABEL_RU,

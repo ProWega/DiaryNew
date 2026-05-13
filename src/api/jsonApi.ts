@@ -18,9 +18,14 @@ interface RequestOptions {
 
 const MUTATING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-async function requestJson(path: string, options: RequestOptions = {}): Promise<unknown> {
+async function requestJson(
+  path: string,
+  options: RequestOptions = {},
+  retryOnCsrfFail = true,
+): Promise<unknown> {
   const method = (options.method ?? "GET").toUpperCase();
-  const csrfHeader: Record<string, string> = MUTATING_METHODS.has(method)
+  const isMutating = MUTATING_METHODS.has(method);
+  const csrfHeader: Record<string, string> = isMutating
     ? { "X-CSRF-Token": getCsrfToken() ?? "" }
     : {};
 
@@ -37,12 +42,26 @@ async function requestJson(path: string, options: RequestOptions = {}): Promise<
 
   if (!response.ok) {
     let message = "API request failed";
-
+    let payload: { message?: string; error?: string } = {};
     try {
-      const payload = (await response.json()) as { message?: string };
+      payload = (await response.json()) as { message?: string; error?: string };
       message = payload.message ?? message;
     } catch {
       message = response.statusText || message;
+    }
+
+    // Auto-recovery: 403 CSRF mismatch на mutating-запросе обычно означает
+    // что cookie newdiary_csrf потерян (logout в соседней вкладке, чистка
+    // браузером, dev-restart). Дёргаем /me — он минтит свежий CSRF cookie —
+    // и повторяем запрос ровно один раз. Это спасает большинство случаев
+    // «Ошибка сохранения: CSRF token mismatch» без ручного hard-refresh.
+    if (isMutating && response.status === 403 && /csrf/i.test(message) && retryOnCsrfFail) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // если /me тоже упал — продолжаем выбрасывать оригинальную ошибку
+      }
+      return requestJson(path, options, false);
     }
 
     throw new ApiError(message, response.status);
@@ -188,6 +207,314 @@ export const jsonApi = {
     return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/brief${search}`, {
       headers: viewerHeaders(viewerId),
     });
+  },
+
+  getCuratorSessionDays(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/days`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  getCuratorUsage(viewerId: string | number, sessionId: string | number) {
+    return requestJson(`/api/curator/sessions/${sessionId}/usage/me`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  getCuratorChatThread(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/thread`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  sendCuratorChatMessage(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { text: string; model?: string; filter?: unknown },
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/messages`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  resetCuratorChatThread(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/reset`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: {},
+    });
+  },
+
+  previewCuratorChatContext(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    filter?: unknown,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/preview`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: { filter },
+    });
+  },
+
+  getCuratorChatContextOptions(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(
+      `/api/curator/sessions/${sessionId}/groups/${groupId}/chat/context-options`,
+      { headers: viewerHeaders(viewerId) },
+    );
+  },
+
+  getOrganizerChatContextOptions(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/chat/context-options`,
+      { headers: viewerHeaders(viewerId) },
+    );
+  },
+
+  listCuratorChatPresets(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/presets`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  createCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { label: string; filter?: unknown; isDefault?: boolean },
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/chat/presets`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  updateCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    presetId: string | number,
+    payload: { label?: string; filter?: unknown; isDefault?: boolean },
+  ) {
+    return requestJson(
+      `/api/curator/sessions/${sessionId}/groups/${groupId}/chat/presets/${presetId}`,
+      {
+        method: "PATCH",
+        headers: viewerHeaders(viewerId),
+        body: payload,
+      },
+    );
+  },
+
+  deleteCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    presetId: string | number,
+  ) {
+    return requestJson(
+      `/api/curator/sessions/${sessionId}/groups/${groupId}/chat/presets/${presetId}`,
+      {
+        method: "DELETE",
+        headers: viewerHeaders(viewerId),
+      },
+    );
+  },
+
+  listOrganizerCuratorsForGroup(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/curators`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  listOrganizerCuratorChatPresets(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/chat/presets`,
+      { headers: viewerHeaders(viewerId) },
+    );
+  },
+
+  createOrganizerCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+    payload: { label: string; filter?: unknown; isDefault?: boolean },
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/chat/presets`,
+      {
+        method: "POST",
+        headers: viewerHeaders(viewerId),
+        body: payload,
+      },
+    );
+  },
+
+  updateOrganizerCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+    presetId: string | number,
+    payload: { label?: string; filter?: unknown; isDefault?: boolean },
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/chat/presets/${presetId}`,
+      {
+        method: "PATCH",
+        headers: viewerHeaders(viewerId),
+        body: payload,
+      },
+    );
+  },
+
+  deleteOrganizerCuratorChatPreset(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+    presetId: string | number,
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/chat/presets/${presetId}`,
+      {
+        method: "DELETE",
+        headers: viewerHeaders(viewerId),
+      },
+    );
+  },
+
+  previewOrganizerCuratorChatContext(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+    filter?: unknown,
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/chat/preview`,
+      {
+        method: "POST",
+        headers: viewerHeaders(viewerId),
+        body: { filter },
+      },
+    );
+  },
+
+  getOrganizerUsage(viewerId: string | number, sessionId: string | number) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/usage`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  regenerateCuratorBrief(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { dayId?: string | null; model?: string },
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/brief/regenerate`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload || {},
+    });
+  },
+
+  async uploadEventConcept(
+    viewerId: string | number,
+    sessionId: string | number,
+    eventId: string | number,
+    file: File,
+  ) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(
+      `/api/organizer/sessions/${sessionId}/events/${eventId}/concepts`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: formData,
+      },
+    );
+    if (!response.ok) {
+      let message = "Не удалось загрузить файл";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json();
+  },
+
+  listEventConcepts(
+    viewerId: string | number,
+    sessionId: string | number,
+    eventId: string | number,
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/events/${eventId}/concepts`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  deleteEventConcept(
+    viewerId: string | number,
+    sessionId: string | number,
+    eventId: string | number,
+    conceptId: string | number,
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/events/${eventId}/concepts/${conceptId}`,
+      {
+        method: "DELETE",
+        headers: viewerHeaders(viewerId),
+      },
+    );
   },
 
   getOrganizerWorkspace(viewerId: string | number, sessionId: string | number) {

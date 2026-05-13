@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { useCuratorBrief, useCuratorDashboard } from "../api/hooks";
+import { useCuratorBrief, useCuratorDashboard, useCuratorSessionDays } from "../api/hooks";
 import FeedbackState from "../components/FeedbackState";
 import CuratorBriefView from "../views/CuratorBrief/CuratorBriefView";
 import CuratorDashboardView from "../views/CuratorDashboardView";
+import ChatPanel from "../views/CuratorBrief/ChatPanel";
 
 const VIEW_BRIEF = "brief";
+const VIEW_CHAT = "chat";
 const VIEW_LEGACY = "dashboard";
-const VIEW_OPTIONS = [VIEW_BRIEF, VIEW_LEGACY];
+const VIEW_OPTIONS = [VIEW_BRIEF, VIEW_CHAT, VIEW_LEGACY];
 const DEFAULT_VIEW = VIEW_BRIEF;
 
 function getViewStorageKey(userId) {
@@ -27,6 +29,22 @@ function readStoredView(userId) {
   }
 }
 
+function getDayStorageKey(sessionId, groupId) {
+  if (!sessionId || !groupId) return "";
+  return `newdiary-curator-day-${sessionId}-${groupId}`;
+}
+
+function readStoredDay(sessionId, groupId) {
+  if (typeof window === "undefined") return null;
+  const key = getDayStorageKey(sessionId, groupId);
+  if (!key) return null;
+  try {
+    return window.localStorage.getItem(key) || null;
+  } catch {
+    return null;
+  }
+}
+
 function CuratorViewToggle({ view, onChange }) {
   return (
     <div className="curator-view-toggle" role="tablist" aria-label="Вид кабинета куратора">
@@ -42,6 +60,15 @@ function CuratorViewToggle({ view, onChange }) {
       <button
         type="button"
         role="tab"
+        aria-selected={view === VIEW_CHAT}
+        className={view === VIEW_CHAT ? "mini-tab is-active" : "mini-tab"}
+        onClick={() => onChange(VIEW_CHAT)}
+      >
+        Разговор с ИИ
+      </button>
+      <button
+        type="button"
+        role="tab"
         aria-selected={view === VIEW_LEGACY}
         className={view === VIEW_LEGACY ? "mini-tab is-active" : "mini-tab"}
         onClick={() => onChange(VIEW_LEGACY)}
@@ -53,7 +80,38 @@ function CuratorViewToggle({ view, onChange }) {
 }
 
 function BriefContent({ sessionId, groupId }) {
-  const { data, loading, error, refresh } = useCuratorBrief(sessionId, groupId);
+  const [selectedDayId, setSelectedDayId] = useState(() => readStoredDay(sessionId, groupId));
+
+  // Перечитываем сохранённый выбор когда меняется session/group — иначе
+  // переход на другую группу мог бы остаться на «памяти» от предыдущей.
+  useEffect(() => {
+    setSelectedDayId(readStoredDay(sessionId, groupId));
+  }, [sessionId, groupId]);
+
+  const { data: availableDays = [], loading: daysLoading } = useCuratorSessionDays(
+    sessionId,
+    groupId,
+  );
+  const { data, loading, error, refresh } = useCuratorBrief(sessionId, groupId, selectedDayId);
+
+  const handleDaySelect = useCallback(
+    (dayId) => {
+      setSelectedDayId(dayId);
+      if (typeof window === "undefined") return;
+      const key = getDayStorageKey(sessionId, groupId);
+      if (!key) return;
+      try {
+        if (dayId) {
+          window.localStorage.setItem(key, dayId);
+        } else {
+          window.localStorage.removeItem(key);
+        }
+      } catch {
+        // ignore quota / private mode failures
+      }
+    },
+    [sessionId, groupId],
+  );
 
   if (loading && !data) {
     return (
@@ -75,7 +133,17 @@ function BriefContent({ sessionId, groupId }) {
     );
   }
 
-  return <CuratorBriefView brief={data} />;
+  return (
+    <CuratorBriefView
+      brief={data}
+      sessionId={sessionId}
+      groupId={groupId}
+      availableDays={availableDays}
+      selectedDayId={selectedDayId}
+      daysLoading={daysLoading}
+      onDaySelect={handleDaySelect}
+    />
+  );
 }
 
 function LegacyContent({ sessionId, groupId }) {
@@ -130,6 +198,8 @@ function CuratorBriefPage() {
       <CuratorViewToggle view={view} onChange={setView} />
       {view === VIEW_LEGACY ? (
         <LegacyContent sessionId={sessionId} groupId={groupId} />
+      ) : view === VIEW_CHAT ? (
+        <ChatPanel sessionId={sessionId} groupId={groupId} />
       ) : (
         <BriefContent sessionId={sessionId} groupId={groupId} />
       )}

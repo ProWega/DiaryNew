@@ -11,6 +11,7 @@ import ProgramTableErrorBoundary from "./ProgramTableErrorBoundary";
 
 function ProgramTabPanel({
   programWorkspace,
+  sessionId,
   currentProgram,
   currentDay,
   currentFlowColumns,
@@ -169,6 +170,7 @@ function ProgramTabPanel({
                 day={currentDay}
                 event={selectedScheduleEvent}
                 draftEvent={scheduleDraftEvent}
+                sessionId={sessionId}
                 eventTypes={eventTypes}
                 speakersCatalog={speakersCatalog}
                 parallelGroupOptions={currentFlowColumns}

@@ -3,9 +3,11 @@
 Глубже по слоям:
 
 - [Backend и сервисы](./backend-services.md) — структура `routes/` → `services/` → `repositories/`, audit log;
-- [Frontend stack](./frontend-stack.md) — TypeScript, React Query, MSW, тёмная тема, декомпозиция view;
+- [Frontend stack](./frontend-stack.md) — TypeScript, React Query, MSW, декомпозиция view;
 - [Миграции БД](./migrations.md) — workflow `node-pg-migrate`;
-- [Безопасность](./security.md) — helmet, CORS, rate-limit, zod-валидация, CSRF, audit log.
+- [Безопасность](./security.md) — helmet, CORS, rate-limit, zod-валидация, CSRF, audit log;
+- [Methodology mapping](./methodology-mapping.md) — связь между методологией и доменом (journey_stage, careful_mode, рефлексия, точки возврата);
+- [Curator AI v2](./curator-ai.md) — narrative-brief, кеш, чат «Разговор с ИИ», концепции мероприятий, бюджет токенов, выбор Anthropic / OpenAI.
 
 ## Контуры приложения
 
@@ -24,7 +26,6 @@
 - `src/types/domain.ts` — общие TS-типы домена
 - `src/styles/` — модульный CSS (tokens, base, layout, navigation, components, participant, organizer, curator, admin)
 - `src/mocks/` — MSW handlers + fixtures + in-memory db (`VITE_USE_MOCK=true`)
-- `src/hooks/useTheme.js` — переключение светлой/тёмной темы
 
 ### Backend
 

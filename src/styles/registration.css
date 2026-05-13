@@ -22,9 +22,10 @@
 
 .registration-card h1 {
   margin: 0;
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: var(--font-display-decor);
   font-size: clamp(1.8rem, 3vw, 2.6rem);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  color: var(--istoki-burgundy);
 }
 
 .registration-form,
@@ -60,12 +61,9 @@
 .registration-card {
   border-top: 4px solid var(--istoki-burgundy);
   width: min(760px, calc(100vw - 48px));
-}
-
-.registration-option.is-active {
-  border-color: rgba(120, 115, 61, 0.36);
-  background: rgba(244, 239, 219, 0.9);
-  box-shadow: 0 8px 18px rgba(120, 115, 61, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(181, 16, 68, 0.06), transparent 55%),
+    rgba(255, 252, 244, 0.94);
 }
 
 @media (max-width: 860px) {

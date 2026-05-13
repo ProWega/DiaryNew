@@ -3,14 +3,28 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 
+# More aggressive network resilience — npm registry from some networks
+# (RU/corporate) needs longer timeouts and more retries.
+ENV NPM_CONFIG_FETCH_TIMEOUT=600000 \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
 COPY package*.json ./
-RUN npm ci
+# --ignore-scripts: skip husky `prepare` (no .git in build context) and any other
+# postinstall hooks. They're dev-time conveniences, not needed for the build.
+RUN npm ci --legacy-peer-deps --ignore-scripts
 
 FROM deps AS build
 WORKDIR /app
 
 COPY index.html vite.config.mjs ./
 COPY src ./src
+COPY public ./public
+# RussiaMap imports a JSON registry from server/seed/data — frontend reaches
+# across the layout boundary. Copy just the data subtree so vite can resolve
+# the import without dragging the whole server tree into the build stage.
+COPY server/seed/data ./server/seed/data
 RUN npm run build
 
 FROM node:22-alpine AS runtime
@@ -19,10 +33,14 @@ WORKDIR /app
 ENV NODE_ENV=production \
     APP_MODE=production \
     HOST=0.0.0.0 \
-    PORT=4000
+    PORT=4000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000 \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts && npm cache clean --force
 
 COPY server ./server
 COPY --from=build /app/dist ./dist

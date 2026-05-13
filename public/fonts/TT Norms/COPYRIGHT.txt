@@ -1,0 +1,1 @@
+Copyright (c) 2017 by TypeType. Designers Ivan Gladkikh, Pavel Emelyanov. Technical designers Olexa Volochay, Nadyr Rakhimov, Dmitriy Greshnev. All rights reserved.

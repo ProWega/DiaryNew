@@ -186,24 +186,26 @@ describe("Zod validation gate", () => {
   });
 });
 
-describe("CSRF cookie recovery via /api/auth/me", () => {
-  it("does not set a CSRF cookie when no user is authenticated", async () => {
+describe("CSRF cookie rotation via /api/auth/me", () => {
+  it("mints a CSRF cookie on every /me hit (anonymous viewer)", async () => {
     const res = await request(app).get("/api/auth/me");
     expect(res.status).toBe(200);
     const setCookie = res.headers["set-cookie"] || [];
     const cookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
     const csrfCookie = cookieList.find((c) => c.startsWith("newdiary_csrf="));
-    expect(csrfCookie).toBeUndefined();
+    expect(csrfCookie).toBeDefined();
+    expect(csrfCookie).toMatch(/newdiary_csrf=[a-f0-9]{32,}/);
   });
 
-  it("does not overwrite an existing CSRF cookie", async () => {
+  it("rotates the CSRF cookie even when one already exists", async () => {
     const res = await request(app)
       .get("/api/auth/me")
       .set("Cookie", "newdiary_csrf=existing-token-12345");
     const setCookie = res.headers["set-cookie"] || [];
     const cookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
     const csrfCookie = cookieList.find((c) => c.startsWith("newdiary_csrf="));
-    expect(csrfCookie).toBeUndefined();
+    expect(csrfCookie).toBeDefined();
+    expect(csrfCookie).not.toContain("existing-token-12345");
   });
 });
 

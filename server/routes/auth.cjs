@@ -12,27 +12,25 @@ const {
   resolveViewer,
   setAuthCookie,
 } = require("../lib/routeHelpers.cjs");
-const {
-  clearCsrfCookie,
-  generateCsrfToken,
-  getCsrfCookieValue,
-  setCsrfCookie,
-} = require("../lib/csrf.cjs");
+const { clearCsrfCookie, generateCsrfToken, setCsrfCookie } = require("../lib/csrf.cjs");
 const { issueMagicLink } = require("../services/magicLinkService.cjs");
 
 const router = Router();
 
 // GET /api/auth/me
-// Side-effect: if the user is authenticated but missing the CSRF cookie
-// (e.g. it was cleared by the browser, or the auth-session predates the
-// CSRF rollout), mint a fresh one so subsequent PATCH/POST calls don't
-// 403 on a missing double-submit token.
+// Side-effect: rotate the CSRF cookie on every /me hit. The token is opaque
+// random (32 bytes) — it carries no identity, only proves same-origin in the
+// double-submit check. We rotate unconditionally so this endpoint becomes
+// the universal CSRF-recovery path for *all* viewer flavours:
+//   • magic-link / registration / setup auth (req.authUser populated)
+//   • dev user-switcher (no auth cookie, viewer comes from x-viewer-id)
+//   • cleared / stale / mismatched cookie state
+// Without rotation here, a dev-switched admin would have no CSRF cookie at
+// all and every mutating request would 403.
 router.get(
   "/me",
   asyncHandler(async (req, res) => {
-    if (req.authUser?.id && !getCsrfCookieValue(req)) {
-      setCsrfCookie(res, generateCsrfToken());
-    }
+    setCsrfCookie(res, generateCsrfToken());
     res.json({
       user: req.authUser || null,
       features: getClientFeatures(),

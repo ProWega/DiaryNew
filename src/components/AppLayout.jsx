@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { getDefaultRoute } from "../rbac/permissions";
 import FeedbackState from "./FeedbackState";
-import { useTheme } from "../hooks/useTheme";
 import JourneyStageOnboardingModal from "./methodology/JourneyStageOnboardingModal";
 import { useJourneyStageMutation } from "../api/hooks";
 
@@ -30,8 +29,6 @@ export function ParticipantTopbar({
   bootstrap,
   navigation = [],
   onLogout,
-  theme,
-  onToggleTheme,
   showJourneyStageChip = false,
   onReopenJourneyStage,
 }) {
@@ -108,17 +105,6 @@ export function ParticipantTopbar({
       <div className="participant-account" ref={accountRef}>
         <button
           type="button"
-          className="ghost-button theme-toggle"
-          aria-label={
-            theme === "dark" ? "Переключить на светлую тему" : "Переключить на тёмную тему"
-          }
-          onClick={onToggleTheme}
-        >
-          {theme === "dark" ? "Светлая" : "Тёмная"}
-        </button>
-
-        <button
-          type="button"
           className={
             isAccountOpen ? "participant-account-button is-open" : "participant-account-button"
           }
@@ -179,7 +165,6 @@ function ParticipantJourneyStageGate({ open, onSkip, sessionId }) {
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme, toggleTheme } = useTheme();
   const { currentUser, logout, bootstrap, loading, usersError, bootstrapError } = useAuth();
 
   const sessionId = bootstrap?.sessionInfo?.id ?? null;
@@ -269,8 +254,6 @@ function AppLayout() {
           bootstrap={bootstrap}
           navigation={bootstrap.navigation}
           onLogout={handleLogout}
-          theme={theme}
-          onToggleTheme={toggleTheme}
           showJourneyStageChip={showJourneyStageChip}
           onReopenJourneyStage={handleReopenJourneyStage}
         />
@@ -279,7 +262,8 @@ function AppLayout() {
           <header className="topbar">
             <div className="brand-block">
               <div className="brand-mark" aria-label="Истоки">
-                И
+                <span className="brand-mark-i">и</span>
+                <span className="brand-mark-stoki">стоки</span>
               </div>
               <div>
                 <p className="eyebrow">Истоки · цифровой кабинет</p>
@@ -301,16 +285,6 @@ function AppLayout() {
                 <span className="role-pill is-active">
                   {currentUser.roleLabel}: {currentUser.fullName}
                 </span>
-                <button
-                  type="button"
-                  className="ghost-button theme-toggle"
-                  aria-label={
-                    theme === "dark" ? "Переключить на светлую тему" : "Переключить на тёмную тему"
-                  }
-                  onClick={toggleTheme}
-                >
-                  {theme === "dark" ? "Светлая" : "Тёмная"}
-                </button>
                 <button type="button" className="ghost-button" onClick={handleLogout}>
                   Новая регистрация
                 </button>

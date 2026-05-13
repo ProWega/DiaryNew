@@ -22,6 +22,13 @@ const qk = {
     groupId,
     dayId || "default",
   ],
+  curatorSessionDays: (userId, sessionId, groupId) => [
+    "curator",
+    "days",
+    userId,
+    sessionId,
+    groupId,
+  ],
   returnPoints: (userId) => ["participant", "return-points", userId],
   organizerWorkspace: (userId, sessionId) => ["organizer", "workspace", userId, sessionId],
   adminDashboard: (userId) => ["admin", "dashboard", userId],
@@ -233,6 +240,223 @@ export function useCuratorBrief(sessionId, groupId, dayId = null) {
   });
 
   return queryShape(query, queryKey, queryClient);
+}
+
+export function useCuratorSessionDays(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = qk.curatorSessionDays(userId, sessionId, groupId);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorSessionDays(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+/**
+ * Чат «Разговор с ИИ» для куратора. Один активный thread на (curator, group),
+ * полная история в DB. Optimistic update — сразу показываем user-сообщение
+ * пока ждём ответ ассистента.
+ */
+export function useCuratorChat(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "chat", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorChatThread(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  const sendMutation = useCommandMutation({ error: "Не удалось отправить сообщение" });
+  const resetMutation = useCommandMutation({
+    success: "Разговор начат заново",
+    error: "Не удалось сбросить разговор",
+  });
+
+  const send = useCallback(
+    async ({ text, model, filter } = {}) => {
+      if (!userId || !sessionId || !groupId || !text?.trim()) return null;
+      const optimisticUser = {
+        id: `tmp-${Date.now()}`,
+        role: "user",
+        content: text,
+        createdAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData(queryKey, (prev) =>
+        prev ? { ...prev, messages: [...(prev.messages || []), optimisticUser] } : prev,
+      );
+      const result = await sendMutation.runMutation(() =>
+        jsonApi.sendCuratorChatMessage(userId, sessionId, groupId, { text, model, filter }),
+      );
+      if (result) {
+        queryClient.setQueryData(queryKey, (prev) => {
+          if (!prev) return prev;
+          // Заменяем оптимистичное user-сообщение на server-saved + добавляем assistant.
+          const without = (prev.messages || []).filter((m) => m.id !== optimisticUser.id);
+          return {
+            ...prev,
+            messages: [...without, result.userMessage, result.assistantMessage],
+            lastMessageAt: result.assistantMessage.createdAt,
+          };
+        });
+        queryClient.invalidateQueries({ queryKey: ["curator", "usage", userId, sessionId] });
+      } else {
+        // Не успело — снимаем оптимистичное.
+        queryClient.setQueryData(queryKey, (prev) =>
+          prev
+            ? { ...prev, messages: (prev.messages || []).filter((m) => m.id !== optimisticUser.id) }
+            : prev,
+        );
+      }
+      return result;
+    },
+    [userId, sessionId, groupId, queryClient, queryKey, sendMutation],
+  );
+
+  const reset = useCallback(async () => {
+    if (!userId || !sessionId || !groupId) return null;
+    const result = await resetMutation.runMutation(() =>
+      jsonApi.resetCuratorChatThread(userId, sessionId, groupId),
+    );
+    if (result) queryClient.setQueryData(queryKey, result);
+    return result;
+  }, [userId, sessionId, groupId, queryClient, queryKey, resetMutation]);
+
+  return {
+    ...queryShape(query, queryKey, queryClient),
+    send,
+    reset,
+    sending: sendMutation.saving,
+    resetting: resetMutation.saving,
+  };
+}
+
+export function useCuratorUsage(sessionId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "usage", userId, sessionId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorUsage(userId, sessionId),
+    enabled: Boolean(userId && sessionId),
+    staleTime: 30_000,
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+export function useOrganizerUsage(sessionId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "usage", userId, sessionId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getOrganizerUsage(userId, sessionId),
+    enabled: Boolean(userId && sessionId),
+    staleTime: 30_000,
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+/**
+ * Концепции мероприятия (PDF/DOCX/TXT/MD) — Curator AI v2 Phase 4.
+ * Возвращает список + методы upload/delete с инвалидацией.
+ */
+export function useEventConcepts(sessionId, eventId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "event-concepts", userId, sessionId, eventId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.listEventConcepts(userId, sessionId, eventId),
+    enabled: Boolean(userId && sessionId && eventId),
+  });
+
+  const uploadMutation = useCommandMutation({
+    success: "Концепция загружена",
+    error: "Не удалось загрузить файл",
+  });
+  const deleteMutation = useCommandMutation({
+    success: "Концепция удалена",
+    error: "Не удалось удалить",
+  });
+
+  const upload = useCallback(
+    async (file) => {
+      if (!userId || !sessionId || !eventId || !file) return null;
+      const result = await uploadMutation.runMutation(() =>
+        jsonApi.uploadEventConcept(userId, sessionId, eventId, file),
+      );
+      if (result) queryClient.invalidateQueries({ queryKey });
+      return result;
+    },
+    [uploadMutation, userId, sessionId, eventId, queryClient, queryKey],
+  );
+
+  const remove = useCallback(
+    async (conceptId) => {
+      if (!userId || !sessionId || !eventId || !conceptId) return null;
+      const result = await deleteMutation.runMutation(() =>
+        jsonApi.deleteEventConcept(userId, sessionId, eventId, conceptId),
+      );
+      if (result !== null) queryClient.invalidateQueries({ queryKey });
+      return result;
+    },
+    [deleteMutation, userId, sessionId, eventId, queryClient, queryKey],
+  );
+
+  return {
+    ...queryShape(query, queryKey, queryClient),
+    upload,
+    remove,
+    uploading: uploadMutation.saving,
+    removing: deleteMutation.saving,
+  };
+}
+
+/**
+ * Мутация «Перегенерировать записку»: вызывает POST .../brief/regenerate,
+ * после успеха обновляет react-query кеш brief'а для указанного dayId.
+ */
+export function useRegenerateCuratorBrief(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const mutation = useCommandMutation({
+    success: "Записка обновлена",
+    error: "Не удалось перегенерировать",
+  });
+
+  const regenerate = useCallback(
+    async ({ dayId, model } = {}) => {
+      if (!userId || !sessionId || !groupId) return null;
+      const result = await mutation.runMutation(() =>
+        jsonApi.regenerateCuratorBrief(userId, sessionId, groupId, { dayId, model }),
+      );
+      if (result) {
+        const key = qk.curatorBrief(userId, sessionId, groupId, dayId || null);
+        queryClient.setQueryData(key, result);
+      }
+      return result;
+    },
+    [mutation, userId, sessionId, groupId, queryClient],
+  );
+
+  return { regenerate, saving: mutation.saving, error: mutation.mutationError };
 }
 
 export function useReturnPoints() {
@@ -470,4 +694,251 @@ export function useJourneyStageMutation() {
   );
 
   return { saving: mutation.saving, error: mutation.mutationError, updateJourneyStage };
+}
+
+// Curator AI v2.1: context-presets для чата «Разговор с ИИ».
+export function useCuratorChatPresets(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "chat-presets", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.listCuratorChatPresets(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  const createMutation = useCommandMutation({
+    success: "Preset создан",
+    error: "Не удалось создать preset",
+  });
+  const updateMutation = useCommandMutation({
+    success: "Preset обновлён",
+    error: "Не удалось обновить preset",
+  });
+  const deleteMutation = useCommandMutation({
+    success: "Preset удалён",
+    error: "Не удалось удалить preset",
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+
+  const createPreset = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId || !groupId) return null;
+      const result = await createMutation.runMutation(() =>
+        jsonApi.createCuratorChatPreset(userId, sessionId, groupId, payload),
+      );
+      if (result) invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, createMutation],
+  );
+
+  const updatePreset = useCallback(
+    async (presetId, payload) => {
+      if (!userId || !sessionId || !groupId || !presetId) return null;
+      const result = await updateMutation.runMutation(() =>
+        jsonApi.updateCuratorChatPreset(userId, sessionId, groupId, presetId, payload),
+      );
+      if (result) invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, updateMutation],
+  );
+
+  const deletePreset = useCallback(
+    async (presetId) => {
+      if (!userId || !sessionId || !groupId || !presetId) return null;
+      const result = await deleteMutation.runMutation(() =>
+        jsonApi.deleteCuratorChatPreset(userId, sessionId, groupId, presetId),
+      );
+      invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, deleteMutation],
+  );
+
+  return {
+    ...queryShape(query, queryKey, queryClient),
+    createPreset,
+    updatePreset,
+    deletePreset,
+    saving: createMutation.saving || updateMutation.saving || deleteMutation.saving,
+  };
+}
+
+// Curator AI v2.1: участники + события для chat-picker'а.
+export function useCuratorChatContextOptions(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "chat-context-options", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorChatContextOptions(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+export function useOrganizerChatContextOptions(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "chat-context-options", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getOrganizerChatContextOptions(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+// Curator AI v2.1: live preview собранного preamble.
+// Возвращает mutation-объект, чтобы вызывающий мог дебаунсить вызовы вручную.
+export function useChatContextPreview(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id;
+  const { mutateAsync, isPending, error, data, reset } = useMutation({
+    mutationFn: (filter) => jsonApi.previewCuratorChatContext(userId, sessionId, groupId, filter),
+  });
+  const fetchPreview = useCallback(
+    (filter) => {
+      if (!userId || !sessionId || !groupId) return Promise.resolve(null);
+      return mutateAsync(filter);
+    },
+    [userId, sessionId, groupId, mutateAsync],
+  );
+  return { preview: data ?? null, loading: isPending, error, fetchPreview, reset };
+}
+
+// Organizer side: список кураторов группы с preset-статистикой.
+export function useOrganizerCuratorsForGroup(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "group-curators", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.listOrganizerCuratorsForGroup(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+// Organizer side: preset'ы конкретного куратора в группе + CRUD от лица организатора.
+export function useOrganizerCuratorChatPresets(sessionId, groupId, curatorId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "curator-chat-presets", userId, sessionId, groupId, curatorId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.listOrganizerCuratorChatPresets(userId, sessionId, groupId, curatorId),
+    enabled: Boolean(userId && sessionId && groupId && curatorId),
+  });
+
+  const createMutation = useCommandMutation({
+    success: "Preset создан",
+    error: "Не удалось создать preset",
+  });
+  const updateMutation = useCommandMutation({
+    success: "Preset обновлён",
+    error: "Не удалось обновить preset",
+  });
+  const deleteMutation = useCommandMutation({
+    success: "Preset удалён",
+    error: "Не удалось удалить preset",
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({
+      queryKey: ["organizer", "group-curators", userId, sessionId, groupId],
+    });
+  };
+
+  const createPreset = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId || !groupId || !curatorId) return null;
+      const result = await createMutation.runMutation(() =>
+        jsonApi.createOrganizerCuratorChatPreset(userId, sessionId, groupId, curatorId, payload),
+      );
+      if (result) invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, curatorId, createMutation],
+  );
+
+  const updatePreset = useCallback(
+    async (presetId, payload) => {
+      if (!userId || !sessionId || !groupId || !curatorId || !presetId) return null;
+      const result = await updateMutation.runMutation(() =>
+        jsonApi.updateOrganizerCuratorChatPreset(
+          userId,
+          sessionId,
+          groupId,
+          curatorId,
+          presetId,
+          payload,
+        ),
+      );
+      if (result) invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, curatorId, updateMutation],
+  );
+
+  const deletePreset = useCallback(
+    async (presetId) => {
+      if (!userId || !sessionId || !groupId || !curatorId || !presetId) return null;
+      const result = await deleteMutation.runMutation(() =>
+        jsonApi.deleteOrganizerCuratorChatPreset(userId, sessionId, groupId, curatorId, presetId),
+      );
+      invalidate();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, curatorId, deleteMutation],
+  );
+
+  return {
+    ...queryShape(query, queryKey, queryClient),
+    createPreset,
+    updatePreset,
+    deletePreset,
+    saving: createMutation.saving || updateMutation.saving || deleteMutation.saving,
+  };
+}
+
+// Organizer-side preview контекста для конкретного куратора.
+export function useOrganizerChatContextPreview(sessionId, groupId, curatorId) {
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id;
+  const { mutateAsync, isPending, error, data, reset } = useMutation({
+    mutationFn: (filter) =>
+      jsonApi.previewOrganizerCuratorChatContext(userId, sessionId, groupId, curatorId, filter),
+  });
+  const fetchPreview = useCallback(
+    (filter) => {
+      if (!userId || !sessionId || !groupId || !curatorId) return Promise.resolve(null);
+      return mutateAsync(filter);
+    },
+    [userId, sessionId, groupId, curatorId, mutateAsync],
+  );
+  return { preview: data ?? null, loading: isPending, error, fetchPreview, reset };
 }
