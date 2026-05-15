@@ -34,7 +34,10 @@ const Anthropic = require("@anthropic-ai/sdk");
 const OpenAI = require("openai");
 const { buildProxyDispatcher } = require("../lib/proxyDispatcher.cjs");
 
-const REQUEST_TIMEOUT_MS = 30_000;
+// Default request timeout. Поднят с 30→120s т.к. парсинг больших расписаний
+// Opus-моделями может занимать минуту. Per-call можно переопределить через
+// `callLlm({ timeoutMs })`.
+const REQUEST_TIMEOUT_MS = 120_000;
 
 function detectProvider(model) {
   if (!model) return "anthropic";
@@ -49,12 +52,12 @@ function isProviderConfigured(provider) {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
-async function callLlm({ model, maxTokens, systemBlocks = [], messages = [] }) {
+async function callLlm({ model, maxTokens, systemBlocks = [], messages = [], timeoutMs }) {
   const provider = detectProvider(model);
   if (provider === "openai") {
-    return callOpenAI({ model, maxTokens, systemBlocks, messages });
+    return callOpenAI({ model, maxTokens, systemBlocks, messages, timeoutMs });
   }
-  return callAnthropic({ model, maxTokens, systemBlocks, messages });
+  return callAnthropic({ model, maxTokens, systemBlocks, messages, timeoutMs });
 }
 
 // ── Anthropic adapter ──────────────────────────────────────────────────────
@@ -82,7 +85,7 @@ function getAnthropicClient() {
   return anthropicClient;
 }
 
-async function callAnthropic({ model, maxTokens, systemBlocks, messages }) {
+async function callAnthropic({ model, maxTokens, systemBlocks, messages, timeoutMs }) {
   const client = getAnthropicClient();
   if (!client) throwHttp(503, "Anthropic API не настроен (нет ANTHROPIC_API_KEY)");
 
@@ -93,12 +96,15 @@ async function callAnthropic({ model, maxTokens, systemBlocks, messages }) {
     ...(block.cacheable ? { cache_control: { type: "ephemeral" } } : {}),
   }));
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    system,
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
-  });
+  const response = await client.messages.create(
+    {
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    },
+    timeoutMs ? { timeout: timeoutMs } : undefined,
+  );
 
   const textBlock = response.content.find((b) => b.type === "text");
   return {
@@ -141,7 +147,7 @@ function getOpenAIClient() {
   return openaiClient;
 }
 
-async function callOpenAI({ model, maxTokens, systemBlocks, messages }) {
+async function callOpenAI({ model, maxTokens, systemBlocks, messages, timeoutMs }) {
   const client = getOpenAIClient();
   if (!client) throwHttp(503, "OpenAI API не настроен (нет OPENAI_API_KEY)");
 
@@ -161,11 +167,14 @@ async function callOpenAI({ model, maxTokens, systemBlocks, messages }) {
 
   // gpt-5*/o-series требуют max_completion_tokens; gpt-4* умеют и старый max_tokens.
   // Берём max_completion_tokens — современный путь, совместим с обоими.
-  const response = await client.chat.completions.create({
-    model,
-    max_completion_tokens: maxTokens,
-    messages: openAiMessages,
-  });
+  const response = await client.chat.completions.create(
+    {
+      model,
+      max_completion_tokens: maxTokens,
+      messages: openAiMessages,
+    },
+    timeoutMs ? { timeout: timeoutMs } : undefined,
+  );
 
   const choice = response.choices?.[0];
   const text = choice?.message?.content?.trim() || "";

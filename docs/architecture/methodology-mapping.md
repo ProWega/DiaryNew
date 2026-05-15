@@ -266,6 +266,32 @@ diary_entries: state_id, state_level, comment, confidence, meta jsonb, responded
 
 ---
 
+## §3 Параллельные блоки
+
+Программа может предлагать на один временной слот несколько вариантов: на 09:00 одновременно «Круг А» и «Прогулка Б». Участник идёт только на один — выбор он делает явно.
+
+**Хранение.** Параллельность кодируется колонкой `program_events.parallel_group` (default `'A'`). События с одинаковыми `(session_id, day_id, start_time)` и **разными** значениями `parallel_group` — это альтернативы в одном слоте.
+
+**Выбор участника.** Таблица `participant_parallel_selections` (миграция 1755) хранит один UPSERT-запрос на (user, session, day, slot_key). Слот-ключ = `start_time` строкой. UNIQUE на (user, session, day, slot_key) гарантирует не больше одного выбора на слот.
+
+Endpoint: `POST /api/participant/sessions/:sessionId/parallel-selection` с `{ dayId, slotKey, eventId }`. Сервис проверяет, что event действительно в этом слоте и что слот параллельный (>=2 разных parallel_group).
+
+**Семантика «без выбора».** Если участник ещё не выбрал блок — ни одна из альтернатив не считается «активной» в его ленте. В UI карточка слота показывает picker, без кнопок состояния/комментариев. После выбора альтернатива превращается в обычную карточку события + ссылку «↔ Сменить блок».
+
+**Audit.** Запись `participant.parallel_choice.changed` пишется при **изменении** выбора (не при первичном), чтобы не засорять ledger.
+
+**Статистика куратора.** Для параллельного события completion считается от `selectedCount` (тех, кто выбрал именно этот блок), а не от всего состава группы. Поля в `eventPulse`:
+
+- `isParallel: boolean`
+- `selectedCount: number` — сколько выбрали этот блок
+- `groupTotal: number` — общий состав группы (для пилла «N/M выбрали»)
+- `participantsCount: number` — эффективный знаменатель для `completion` (= selectedCount если параллельный, = groupTotal если нет)
+- `parallelGroup: string` — буква потока
+
+UI: в карточке события у куратора показывается `⚡ <буква>` рядом с заголовком и метрика «N/M выбрали блок» в строке метрик.
+
+---
+
 ## Связанные документы
 
 - [Backend и сервисы](./backend-services.md) — слой `routes/services/repositories`, куда упадёт `narrativeBriefService.cjs`

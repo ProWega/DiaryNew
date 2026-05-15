@@ -118,6 +118,17 @@ const updateJourneyStageSchema = z
   })
   .strict();
 
+// POST /api/participant/sessions/:sessionId/parallel-selection
+// Участник выбирает одно из параллельных мероприятий в слоте (start_time)
+// конкретного дня.
+const updateParallelSelectionSchema = z
+  .object({
+    dayId: requiredText(128),
+    slotKey: requiredText(16),
+    eventId: requiredText(128),
+  })
+  .strict();
+
 // POST /api/participant/diary/return-points/:sessionId/:touchpointIndex
 // Phase 5.1 — записывает «дополнение к смене» в одной из 5 точек возврата.
 const submitReturnEntrySchema = z
@@ -362,6 +373,7 @@ module.exports = {
   createUserSchema,
   registerParticipantSchema,
   updateJourneyStageSchema,
+  updateParallelSelectionSchema,
   submitReturnEntrySchema,
   setupAdminSchema,
   updateDiaryEntrySchema,

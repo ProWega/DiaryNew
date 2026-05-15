@@ -64,10 +64,27 @@
   background: rgba(255, 252, 244, 0.58);
 }
 
+.soft-pill.is-parallel {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  background: rgba(181, 16, 68, 0.12);
+  color: var(--istoki-burgundy, #b51044);
+  border: 1px solid rgba(181, 16, 68, 0.25);
+}
+
+.curator-comment-metric.is-parallel-selection strong {
+  color: var(--istoki-burgundy, #b51044);
+}
+
 .role-pill,
 .subnav-pill,
 .mini-tab {
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .role-pill:hover,

@@ -29,6 +29,8 @@ const PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const DOCUMENT_MIME = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
   "text/plain",
   "text/markdown",
 ]);
@@ -64,6 +66,10 @@ function extensionFor(mime, fallback) {
       return ".pdf";
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
       return ".docx";
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      return ".xlsx";
+    case "application/vnd.ms-excel":
+      return ".xls";
     case "text/plain":
       return ".txt";
     case "text/markdown":

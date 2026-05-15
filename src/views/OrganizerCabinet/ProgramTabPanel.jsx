@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AccessToggle } from "../../components/access/AccessComponents";
 import { AlertCard } from "../../components/ui/Pills";
 import {
@@ -7,6 +8,7 @@ import {
   ProgramScheduleToolbar,
   ReflectionQuestionEditor,
 } from "../../components/organizer/index";
+import ProgramImportModal from "../../components/organizer/ProgramImportModal";
 import ProgramTableErrorBoundary from "./ProgramTableErrorBoundary";
 
 function ProgramTabPanel({
@@ -46,6 +48,7 @@ function ProgramTabPanel({
   onCreateEvent,
   onCancelInspector,
   onCreateProgram,
+  llmSettings,
 }) {
   function renderTableFallback(error) {
     return (
@@ -61,9 +64,30 @@ function ProgramTabPanel({
 
   const eventTypes = programWorkspace.reference?.eventTypes || [];
   const speakersCatalog = programWorkspace.speakersCatalog || [];
+  const [importOpen, setImportOpen] = useState(false);
 
   return (
     <div className="organizer-section-stack">
+      <div className="program-import-trigger">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => setImportOpen(true)}
+          disabled={!sessionId}
+          title="Загрузить программу из Excel-файла"
+        >
+          📋 Загрузить программу из Excel
+        </button>
+      </div>
+
+      <ProgramImportModal
+        sessionId={sessionId}
+        existingProgram={currentProgram}
+        llmSettings={llmSettings}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
+
       <ProgramTableErrorBoundary
         resetKey={`${currentProgram?.id || "none"}:${currentDay?.id || "none"}`}
         fallback={renderTableFallback}

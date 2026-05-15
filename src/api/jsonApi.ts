@@ -168,6 +168,18 @@ export const jsonApi = {
     });
   },
 
+  setParallelSelection(
+    viewerId: string | number,
+    sessionId: string | number,
+    payload: { dayId: string; slotKey: string; eventId: string },
+  ) {
+    return requestJson(`/api/participant/sessions/${sessionId}/parallel-selection`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
   getReturnPoints(viewerId: string | number) {
     return requestJson(`/api/participant/diary/return-points`, {
       headers: viewerHeaders(viewerId),
@@ -456,6 +468,90 @@ export const jsonApi = {
       method: "POST",
       headers: viewerHeaders(viewerId),
       body: payload || {},
+    });
+  },
+
+  async importProgramPreview(
+    viewerId: string | number,
+    sessionId: string | number,
+    file: File,
+    options: {
+      mode: "heuristic" | "llm";
+      model?: string;
+      stopWords?: string[];
+      sheetName?: string;
+    },
+  ) {
+    const buildFormData = () => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mode", options.mode);
+      if (options.model) fd.append("model", options.model);
+      if (Array.isArray(options.stopWords)) {
+        fd.append("stopWords", JSON.stringify(options.stopWords));
+      }
+      if (options.sheetName) fd.append("sheetName", options.sheetName);
+      return fd;
+    };
+    const path = `/api/organizer/sessions/${sessionId}/programs/import-preview`;
+    const send = () =>
+      fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: buildFormData(),
+      });
+
+    let response = await send();
+    // Auto-recovery от 403 CSRF mismatch — миним свежий CSRF cookie через
+    // /api/auth/me и retry. Тот же паттерн, что в requestJson выше.
+    if (response.status === 403) {
+      let payload: { message?: string } = {};
+      try {
+        payload = (await response.clone().json()) as { message?: string };
+      } catch {
+        // ignore
+      }
+      if (payload.message && /csrf/i.test(payload.message)) {
+        try {
+          await fetch("/api/auth/me", { credentials: "include" });
+        } catch {
+          // продолжаем
+        }
+        response = await send();
+      }
+    }
+    if (!response.ok) {
+      let message = "Не удалось разобрать файл";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json();
+  },
+
+  importProgramCommit(
+    viewerId: string | number,
+    sessionId: string | number,
+    payload: {
+      draft: unknown;
+      fileName?: string | null;
+      mode?: "heuristic" | "llm";
+      model?: string;
+      conflictResolution: "create_new" | "replace_draft";
+    },
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/programs/import-commit`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
     });
   },
 

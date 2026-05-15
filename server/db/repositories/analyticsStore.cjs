@@ -1,6 +1,10 @@
 const { query } = require("../postgres.cjs");
 const { getRawUser } = require("./userStore.cjs");
 const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
+const {
+  groupEventsBySlot,
+  countSelectionsByEvent,
+} = require("../../services/parallelSlotsService.cjs");
 
 function average(values) {
   const finite = values.map(Number).filter(Number.isFinite);
@@ -122,8 +126,34 @@ function riskWeight(status) {
   }
 }
 
-function buildEventPulse({ events, members, entriesByEvent }) {
+/**
+ * Подсчёт пульса по каждому event'у.
+ *
+ * Параметры:
+ *  - events: program_events (с day_id, start_time, parallel_group);
+ *  - members: участники группы (массив с id);
+ *  - entriesByEvent: Map<eventId, entries[]> — ответы на каждое событие;
+ *  - parallelSelectionsByEvent (optional): Map<eventId, count> — сколько
+ *    участников выбрали ИМЕННО это событие в параллельном слоте. Если не
+ *    передан, событие считается непараллельным (старое поведение — знаменатель
+ *    = весь состав).
+ *
+ * Для параллельных событий completion считается от `selectedCount` (тех, кто
+ * выбрал именно этот блок), а не от всех участников группы.
+ */
+function buildEventPulse({
+  events,
+  members,
+  entriesByEvent,
+  parallelSelectionsByEvent = new Map(),
+}) {
   let previousAverage = null;
+  const isParallelById = new Map();
+  for (const slot of groupEventsBySlot(events)) {
+    if (slot.isParallel) {
+      for (const evt of slot.events) isParallelById.set(evt.id, true);
+    }
+  }
 
   return events.map((event, index) => {
     const entries = entriesByEvent.get(event.id) || [];
@@ -138,6 +168,13 @@ function buildEventPulse({ events, members, entriesByEvent }) {
       previousAverage = averageStateLevel;
     }
 
+    const isParallel = Boolean(isParallelById.get(event.id));
+    const selectedCount = isParallel
+      ? parallelSelectionsByEvent.get(event.id) || 0
+      : members.length;
+    const denominator = isParallel ? selectedCount : members.length;
+    const completion = denominator ? Math.round((entries.length / denominator) * 100) : 0;
+
     return {
       id: event.id,
       dayId: event.day_id,
@@ -149,10 +186,14 @@ function buildEventPulse({ events, members, entriesByEvent }) {
       timeLabel: formatTimeRange(event),
       location: event.location || "",
       track: event.track || "",
+      parallelGroup: event.parallel_group || "A",
       tags: event.tags || [],
       answersCount: entries.length,
-      participantsCount: members.length,
-      completion: members.length ? Math.round((entries.length / members.length) * 100) : 0,
+      participantsCount: denominator,
+      groupTotal: members.length,
+      selectedCount,
+      isParallel,
+      completion,
       averageStateLevel: roundMetric(averageStateLevel),
       minStateLevel: levels.length ? Math.min(...levels) : null,
       maxStateLevel: levels.length ? Math.max(...levels) : null,
@@ -563,6 +604,7 @@ function buildCuratorReportScope({
   reports,
   alerts,
   groupId,
+  parallelSelectionsByEvent = new Map(),
 }) {
   const eventRows = day
     ? participation.events.filter((event) => event.day_id === day.id)
@@ -624,6 +666,7 @@ function buildCuratorReportScope({
     events: eventRows,
     members,
     entriesByEvent,
+    parallelSelectionsByEvent,
   });
   const participantRows = [...members].sort((left, right) => {
     const riskDifference = riskWeight(right.status) - riskWeight(left.status);
@@ -804,6 +847,12 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
     count: cluster.count,
     dayIds: cluster.day_ids || [],
   }));
+  // Загружаем выборы участников в параллельных слотах — один запрос на все
+  // events сессии, потом раздаём в каждый scope.
+  const parallelSelectionsByEvent = await countSelectionsByEvent({
+    sessionId,
+    eventIds: participation.events.map((event) => event.id),
+  });
   const allScope = buildCuratorReportScope({
     scopeId: "all",
     label: "Все дни",
@@ -815,6 +864,7 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
     reports: reportResult.rows,
     alerts,
     groupId,
+    parallelSelectionsByEvent,
   });
   const dayScopes = participation.days.map((day) =>
     buildCuratorReportScope({
@@ -829,6 +879,7 @@ async function getCuratorDashboard({ viewerId, sessionId, groupId }) {
       reports: reportResult.rows,
       alerts,
       groupId,
+      parallelSelectionsByEvent,
     }),
   );
   const reportScopes = [allScope, ...dayScopes];

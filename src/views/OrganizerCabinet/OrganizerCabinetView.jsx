@@ -798,6 +798,7 @@ function OrganizerCabinetView({
             setScheduleDraftEvent(null);
           }}
           onCreateProgram={handleCreateProgram}
+          llmSettings={safeWorkspace.llmSettings}
         />
       ) : null}
 

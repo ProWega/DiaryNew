@@ -5,12 +5,14 @@ const {
   getParticipantDiary,
   updateParticipantEntry,
   updateParticipantReflection,
+  updateParticipantParallelSelection,
 } = require("../db/repositories/diaryStore.cjs");
 const { validateBody } = require("../validation/middleware.cjs");
 const {
   updateDiaryEntrySchema,
   updateReflectionSchema,
   updateJourneyStageSchema,
+  updateParallelSelectionSchema,
   submitReturnEntrySchema,
 } = require("../validation/schemas.cjs");
 const { asyncHandler, getViewerId } = require("../lib/routeHelpers.cjs");
@@ -64,6 +66,25 @@ router.patch(
         sessionId: req.params.sessionId,
         dayId: req.params.dayId,
         patch: req.body || {},
+      }),
+    );
+  }),
+);
+
+// POST /api/participant/sessions/:sessionId/parallel-selection
+// body: { dayId, slotKey, eventId } — выбор параллельного блока.
+router.post(
+  "/sessions/:sessionId/parallel-selection",
+  validateBody(updateParallelSelectionSchema),
+  asyncHandler(async (req, res) => {
+    const { dayId, slotKey, eventId } = req.body || {};
+    res.json(
+      await updateParticipantParallelSelection({
+        viewerId: getViewerId(req),
+        sessionId: req.params.sessionId,
+        dayId,
+        slotKey,
+        eventId,
       }),
     );
   }),

@@ -4,6 +4,7 @@ import MetricBadge from "../components/MetricBadge";
 import StateScalePicker from "../components/participant/StateScalePicker";
 import ReflectionEditor from "../components/methodology/ReflectionEditor";
 import { getStateInfo, getStateLevel } from "../lib/metrics";
+import ParallelSlotPicker, { ParallelSlotSwitcher } from "./Participant/ParallelSlotPicker";
 
 const reflectionFields = ["q1", "q2"];
 const METHODOLOGY_AXES = ["mind", "heart", "will"];
@@ -16,6 +17,53 @@ function hasMethodologyAxisContent(reflection) {
   return METHODOLOGY_AXES.some((axis) => String(reflection?.[axis] || "").trim());
 }
 const EVENT_SCROLL_MARGIN = 16;
+
+/**
+ * Группирует события в слоты. Параллельный слот — несколько событий с одинаковым
+ * slotKey и общим признаком isParallelOption=true. Возвращает массив элементов:
+ *   { kind: 'event', event, slot } — обычная карточка события;
+ *   { kind: 'picker', slot } — карточка-picker для параллельного слота без выбора.
+ *
+ * Сортировка слотов: бэкенд уже отдаёт events в правильном порядке (по
+ * start_time + sort_order), поэтому здесь сохраняем первое появление слота.
+ */
+function buildParticipantSlots(events) {
+  const slotMap = new Map();
+  for (const evt of events) {
+    const slotId = evt.isParallelOption ? `parallel-${evt.slotKey}` : `single-${evt.id}`;
+    if (!slotMap.has(slotId)) {
+      slotMap.set(slotId, {
+        key: evt.slotKey || "",
+        startTime: evt.slotKey || null,
+        endTime: null,
+        events: [],
+        isParallel: Boolean(evt.isParallelOption),
+      });
+    }
+    const slot = slotMap.get(slotId);
+    slot.events.push(evt);
+    // endTime — максимальный end_time среди событий слота (для отображения).
+    const [, evtEnd] = String(evt.time || "").split(" - ");
+    if (evtEnd && (!slot.endTime || evtEnd > slot.endTime)) {
+      slot.endTime = evtEnd;
+    }
+  }
+
+  const items = [];
+  for (const slot of slotMap.values()) {
+    if (slot.isParallel) {
+      const selectedEvent = slot.events.find((e) => e.isSelected);
+      if (selectedEvent) {
+        items.push({ kind: "event", event: selectedEvent, slot });
+      } else {
+        items.push({ kind: "picker", slot });
+      }
+    } else {
+      items.push({ kind: "event", event: slot.events[0], slot });
+    }
+  }
+  return items;
+}
 
 function getFirstPendingEventId(events) {
   const availableEvents = events.filter((event) => !isEventLocked(event));
@@ -37,9 +85,12 @@ function getNextAvailableEvent(events, index, direction) {
     nextIndex >= 0 && nextIndex < events.length;
     nextIndex += direction
   ) {
-    if (!isEventLocked(events[nextIndex])) {
-      return events[nextIndex];
-    }
+    const candidate = events[nextIndex];
+    if (isEventLocked(candidate)) continue;
+    // Skip parallel options that the participant didn't choose — они
+    // не отображаются в ленте.
+    if (candidate.isParallelOption && !candidate.isSelected) continue;
+    return candidate;
   }
 
   return null;
@@ -207,6 +258,7 @@ function ParticipantRoutedView({
   journeyStage = null,
   isCarefulMode = false,
   userId = "",
+  setParallelSelection = async () => null,
 }) {
   const [openEventId, setOpenEventId] = useState("");
   const [isReflectionStarted, setIsReflectionStarted] = useState(false);
@@ -244,6 +296,15 @@ function ParticipantRoutedView({
     (event) => event.answered !== false && event.stateId,
   );
   const defaultOpenEventId = useMemo(() => getFirstPendingEventId(todayEvents), [todayEvents]);
+  // Группировка событий дня в слоты (с учётом параллельных опций). Используется
+  // и в нижнем рендер-цикле (карточки / picker), и в подсчёте «N из M событий»
+  // — параллельный слот считается за одну позицию.
+  const slotItems = useMemo(() => buildParticipantSlots(todayEvents), [todayEvents]);
+  const visibleEvents = useMemo(
+    () => slotItems.filter((item) => item.kind === "event").map((item) => item.event),
+    [slotItems],
+  );
+  const totalSlots = slotItems.length;
   const visibleReflectionPrompts = useMemo(
     () =>
       (reflectionPrompts || [])
@@ -257,18 +318,20 @@ function ParticipantRoutedView({
   );
   const openEvent = todayEvents.find((event) => event.id === openEventId) || null;
   const openEventIndex = todayEvents.findIndex((event) => event.id === openEvent?.id);
-  const answeredEventCount = todayEvents.filter((event) => Boolean(event.stateId)).length;
+  // Считаем по видимым «слотам»: параллельный слот без выбора считается как
+  // ОДНА позиция, но не «отвечена» (т.к. ни одно событие в нём не активно).
+  const answeredEventCount = visibleEvents.filter((event) => Boolean(event.stateId)).length;
   const reflectionAnswered =
     isReflectionAnswered(reflection) &&
     !hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
-  const allEventsAnswered = todayEvents.length > 0 && answeredEventCount === todayEvents.length;
+  const allEventsAnswered = totalSlots > 0 && answeredEventCount === totalSlots;
   const showReflectionForm = reflectionAnswered || (allEventsAnswered && isReflectionStarted);
   const hasDayRequiredReflectionGap =
     showReflectionForm &&
     hasMissingRequiredAnswers(dayReflectionQuestions, safeReflectionAnswers(reflection.answers));
   const showArchivedReflection =
     hasLegacyReflectionContent(reflection) && !hasMethodologyAxisContent(reflection);
-  const checklistTotal = todayEvents.length + 1;
+  const checklistTotal = totalSlots + 1;
   const checklistAnswered = answeredEventCount + (reflectionAnswered ? 1 : 0);
   const completionValue = Math.max(0, Math.min(todayMetrics.completion || 0, 100));
   const openEventPosition = openEventIndex >= 0 ? openEventIndex + 1 : 0;
@@ -584,6 +647,23 @@ function ParticipantRoutedView({
     }
   }
 
+  const [parallelSaving, setParallelSaving] = useState(false);
+  async function handleParallelSelect(slot, chosenEvent) {
+    if (!activeDayId || !slot?.key || !chosenEvent?.id) return;
+    setParallelSaving(true);
+    try {
+      await setParallelSelection({
+        dayId: activeDayId,
+        slotKey: slot.key,
+        eventId: chosenEvent.id,
+      });
+      // После сохранения — открываем выбранную карточку.
+      setOpenEventId(chosenEvent.id);
+    } finally {
+      setParallelSaving(false);
+    }
+  }
+
   function moveOpenEvent(dayId, event, index, direction) {
     const nextEvent = getNextAvailableEvent(todayEvents, index, direction);
 
@@ -659,9 +739,7 @@ function ParticipantRoutedView({
                   {selectedDay?.dateLabel ? ` · ${selectedDay.dateLabel}` : ""}
                 </h3>
                 <p className="participant-flow-copy">
-                  {openEventPosition
-                    ? `Событие ${openEventPosition} из ${todayEvents.length}. `
-                    : ""}
+                  {openEventPosition ? `Событие ${openEventPosition} из ${totalSlots}. ` : ""}
                   Откройте карточку и выберите точку на шкале.
                 </p>
               </div>
@@ -693,7 +771,7 @@ function ParticipantRoutedView({
               </div>
               <div className="participant-progress-meta">
                 <span>
-                  {answeredEventCount} из {todayEvents.length} событий
+                  {answeredEventCount} из {totalSlots} событий
                 </span>
                 <span>
                   {checklistAnswered} из {checklistTotal} пунктов дня
@@ -702,7 +780,22 @@ function ParticipantRoutedView({
             </div>
 
             <div className="participant-event-list">
-              {todayEvents.map((event, index) => {
+              {slotItems.map((slotItem, slotIndex) => {
+                if (slotItem.kind === "picker") {
+                  return (
+                    <ParallelSlotPicker
+                      key={`picker-${slotItem.slot.key}`}
+                      slot={slotItem.slot}
+                      position={slotIndex + 1}
+                      saving={parallelSaving}
+                      onSelect={(chosen) => handleParallelSelect(slotItem.slot, chosen)}
+                    />
+                  );
+                }
+                const event = slotItem.event;
+                const slot = slotItem.slot;
+                const index = todayEvents.indexOf(event);
+                const displayPosition = slotIndex + 1;
                 const draft = getEventDraft(event);
                 const effectiveStateId = draft.stateId || event.stateId || "";
                 const effectiveState = effectiveStateId ? getStateInfo(effectiveStateId) : null;
@@ -752,7 +845,7 @@ function ParticipantRoutedView({
                       aria-disabled={isLocked}
                       onClick={() => toggleEvent(event.id)}
                     >
-                      <span className="participant-event-index">{index + 1}</span>
+                      <span className="participant-event-index">{displayPosition}</span>
                       <span className="participant-event-row-main">
                         <strong>{event.title}</strong>
                         <small>{event.type}</small>
@@ -963,6 +1056,14 @@ function ParticipantRoutedView({
                                 </div>
                               </>
                             ) : null}
+                            {slot.isParallel ? (
+                              <ParallelSlotSwitcher
+                                slot={slot}
+                                currentEventId={event.id}
+                                saving={parallelSaving}
+                                onSelect={(chosen) => handleParallelSelect(slot, chosen)}
+                              />
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -994,7 +1095,7 @@ function ParticipantRoutedView({
               </div>
               <div className="participant-progress-meta">
                 <span>
-                  {answeredEventCount} из {todayEvents.length} событий
+                  {answeredEventCount} из {totalSlots} событий
                 </span>
                 <span>Рефлексия: {reflectionAnswered ? "учтена" : "не заполнена"}</span>
               </div>
@@ -1013,7 +1114,7 @@ function ParticipantRoutedView({
                     <p>Сначала завершите события, потом спокойно подведите итог.</p>
                   </div>
                   <span className="confidence-tag">
-                    {answeredEventCount} из {todayEvents.length}
+                    {answeredEventCount} из {totalSlots}
                   </span>
                 </div>
               ) : null}

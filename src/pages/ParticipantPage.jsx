@@ -47,7 +47,7 @@ function getNextEventUnlockDelay(history) {
 function ParticipantPage({ mode }) {
   const { sessionId } = useParams();
   const { bootstrap, currentUser } = useAuth();
-  const { data, loading, error, refresh, updateEntry, updateReflection } =
+  const { data, loading, error, refresh, updateEntry, updateReflection, setParallelSelection } =
     useParticipantDiary(sessionId);
   const [selectedHistoryDay, setSelectedHistoryDay] = useState(() =>
     readStoredSelectedDay(sessionId),
@@ -241,6 +241,7 @@ function ParticipantPage({ mode }) {
       journeyStage={bootstrap.journeyStage ?? null}
       isCarefulMode={Boolean(bootstrap.isCarefulMode)}
       userId={currentUser?.id || ""}
+      setParallelSelection={setParallelSelection}
     />
   );
 }

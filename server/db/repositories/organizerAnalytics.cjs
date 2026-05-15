@@ -1,8 +1,9 @@
 const { query } = require("../postgres.cjs");
+const { calculateProgress, getPublishedParticipationData } = require("./programProgress.cjs");
 const {
-  calculateProgress,
-  getPublishedParticipationData,
-} = require("./programProgress.cjs");
+  groupEventsBySlot,
+  countSelectionsByEvent,
+} = require("../../services/parallelSlotsService.cjs");
 
 function average(values) {
   const finite = values.map(Number).filter(Number.isFinite);
@@ -74,8 +75,25 @@ function getDataState({ participation }) {
   return "ready";
 }
 
-function buildEventPulse({ events, participantCount, entriesByEvent }) {
+/**
+ * Версия для кабинета организатора. `participantCount` — общее число активных
+ * участников сессии. Для параллельных событий знаменатель меняется на
+ * `selectedCount` (см. analyticsStore.buildEventPulse для curator-side
+ * комментариев).
+ */
+function buildEventPulse({
+  events,
+  participantCount,
+  entriesByEvent,
+  parallelSelectionsByEvent = new Map(),
+}) {
   let previousAverage = null;
+  const isParallelById = new Map();
+  for (const slot of groupEventsBySlot(events)) {
+    if (slot.isParallel) {
+      for (const evt of slot.events) isParallelById.set(evt.id, true);
+    }
+  }
 
   return events.map((event, index) => {
     const entries = entriesByEvent.get(event.id) || [];
@@ -90,6 +108,13 @@ function buildEventPulse({ events, participantCount, entriesByEvent }) {
       previousAverage = averageStateLevel;
     }
 
+    const isParallel = Boolean(isParallelById.get(event.id));
+    const selectedCount = isParallel
+      ? parallelSelectionsByEvent.get(event.id) || 0
+      : participantCount;
+    const denominator = isParallel ? selectedCount : participantCount;
+    const completion = denominator ? Math.round((entries.length / denominator) * 100) : 0;
+
     return {
       id: event.id,
       dayId: event.day_id,
@@ -101,10 +126,14 @@ function buildEventPulse({ events, participantCount, entriesByEvent }) {
       timeLabel: formatTimeRange(event),
       location: event.location || "",
       track: event.track || "",
+      parallelGroup: event.parallel_group || "A",
       tags: event.tags || [],
       answersCount: entries.length,
-      participantsCount: participantCount,
-      completion: participantCount ? Math.round((entries.length / participantCount) * 100) : 0,
+      participantsCount: denominator,
+      groupTotal: participantCount,
+      selectedCount,
+      isParallel,
+      completion,
       averageStateLevel: roundMetric(averageStateLevel),
       minStateLevel: levels.length ? Math.min(...levels) : null,
       maxStateLevel: levels.length ? Math.max(...levels) : null,
@@ -180,7 +209,9 @@ async function getOrganizerAnalyticsSnapshot(sessionId) {
 
   const groupRows = groupsResult.rows;
   const participantCount = participation.participants.length;
-  const participantsById = new Map(participation.participants.map((participant) => [participant.id, participant]));
+  const participantsById = new Map(
+    participation.participants.map((participant) => [participant.id, participant]),
+  );
   const participantsByGroup = new Map();
   const entriesByEvent = new Map();
   const entriesByUser = new Map();
@@ -231,10 +262,15 @@ async function getOrganizerAnalyticsSnapshot(sessionId) {
     resolvedAt: alert.resolved_at || null,
   }));
   const openAlerts = alerts.filter((alert) => alert.status !== "resolved" && !alert.resolvedAt);
+  const parallelSelectionsByEvent = await countSelectionsByEvent({
+    sessionId,
+    eventIds: participation.events.map((event) => event.id),
+  });
   const eventPulse = buildEventPulse({
     events: participation.events,
     participantCount,
     entriesByEvent,
+    parallelSelectionsByEvent,
   });
 
   const groupPulse = groupRows.map((group, groupIndex) => {
@@ -253,7 +289,9 @@ async function getOrganizerAnalyticsSnapshot(sessionId) {
     const trajectory = participation.events.map((event) => {
       const eventEntries = entriesByGroupEvent.get(`${group.id}:${event.id}`) || [];
       return roundMetric(
-        averageOrNull(eventEntries.map((entry) => Number(entry.state_level)).filter(Number.isFinite)),
+        averageOrNull(
+          eventEntries.map((entry) => Number(entry.state_level)).filter(Number.isFinite),
+        ),
       );
     });
 
@@ -349,7 +387,9 @@ async function getOrganizerAnalyticsSnapshot(sessionId) {
     }
   }
 
-  for (const group of groupPulse.filter((item) => item.openRiskSignalsCount > 0 || item.completion < 60)) {
+  for (const group of groupPulse.filter(
+    (item) => item.openRiskSignalsCount > 0 || item.completion < 60,
+  )) {
     operationalBrief.push({
       id: `group-pressure-${group.id}`,
       type: "group_pressure",

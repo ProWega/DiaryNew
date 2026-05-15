@@ -5,7 +5,11 @@ WORKDIR /app
 
 # More aggressive network resilience — npm registry from some networks
 # (RU/corporate) needs longer timeouts and more retries.
-ENV NPM_CONFIG_FETCH_TIMEOUT=600000 \
+# NPM_REGISTRY (build-arg) — позволяет переопределить registry на зеркало:
+#   docker build --build-arg NPM_REGISTRY=https://registry.npmmirror.com ...
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    NPM_CONFIG_FETCH_TIMEOUT=600000 \
     NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
@@ -30,7 +34,9 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-ENV NODE_ENV=production \
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    NODE_ENV=production \
     APP_MODE=production \
     HOST=0.0.0.0 \
     PORT=4000 \

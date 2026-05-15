@@ -83,6 +83,7 @@
     "recharts": "^3.8.1",
     "socks-proxy-agent": "^10.0.0",
     "undici": "^8.2.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.2"
   },
   "devDependencies": {

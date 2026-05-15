@@ -62,6 +62,7 @@ const { listCuratorsForGroup } = require("../services/groupCuratorsService.cjs")
 const chatPresetsStore = require("../db/repositories/curatorChatPresetsStore.cjs");
 const { previewChatContext } = require("../services/curatorChatService.cjs");
 const chatContext = require("../services/curatorChatContext.cjs");
+const programExcelImporter = require("../services/programExcelImporter.cjs");
 
 const router = Router();
 
@@ -1152,6 +1153,207 @@ router.get(
         groupId: req.params.groupId,
       }),
     );
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Импорт программы из Excel
+// ---------------------------------------------------------------------------
+
+/**
+ * Парсит `value` как JSON. Возвращает null если не строка / невалидный JSON.
+ */
+function safeParseJson(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * multer 2.x декодирует `file.originalname` из latin1, поэтому русские имена
+ * файлов (вроде «№1. Драфт_Наследники Победы.xlsx») приходят как мусор.
+ * Принудительно декодируем через UTF-8.
+ */
+function decodeOriginalName(name) {
+  if (!name) return name;
+  try {
+    return Buffer.from(name, "latin1").toString("utf8");
+  } catch {
+    return name;
+  }
+}
+
+// POST /api/organizer/sessions/:sessionId/programs/import-preview
+// multipart: file (.xlsx) + form fields: mode, model?, stopWords? (JSON array)
+// Возвращает DraftProgram (НЕ пишет в БД).
+router.post(
+  "/sessions/:sessionId/programs/import-preview",
+  requireOrganizer,
+  documentUploader,
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw createHttpError(400, "Файл не получен");
+    }
+    const mode = req.body?.mode === "llm" ? "llm" : "heuristic";
+    const stopWords = safeParseJson(req.body?.stopWords);
+    const sheetName = req.body?.sheetName ? String(req.body.sheetName) : null;
+    const llmConfig =
+      mode === "llm"
+        ? {
+            model: String(req.body?.model || "").trim(),
+            sessionId: req.params.sessionId,
+            maxTokens: undefined,
+          }
+        : null;
+
+    const draft = await programExcelImporter.parseProgram({
+      buffer: req.file.buffer,
+      mode,
+      stopWords: Array.isArray(stopWords) ? stopWords : undefined,
+      llmConfig,
+      sheetName,
+    });
+
+    // Audit только для платного LLM-режима, чтобы не засорять log на
+    // каждый просмотр.
+    if (mode === "llm" && draft.usage) {
+      logAuditEvent({
+        actorId: req.viewer.id,
+        sessionId: req.params.sessionId,
+        action: "organizer.program.imported.preview.llm",
+        entityType: "session",
+        entityId: req.params.sessionId,
+        payload: {
+          fileName: decodeOriginalName(req.file.originalname) || null,
+          sizeBytes: req.file.size,
+          model: llmConfig.model,
+          usage: draft.usage,
+        },
+      });
+    }
+
+    res.json({ draft, fileName: decodeOriginalName(req.file.originalname) || null });
+  }),
+);
+
+// POST /api/organizer/sessions/:sessionId/programs/import-commit
+// body: { draft: DraftProgram, fileName?, mode?, model?, conflictResolution }
+// Сохраняет draft как программу в workspace (status='draft').
+router.post(
+  "/sessions/:sessionId/programs/import-commit",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const draft = req.body?.draft;
+    if (!draft || !Array.isArray(draft.days)) {
+      throw createHttpError(400, "В payload отсутствует draft.days[]");
+    }
+    const conflictResolution =
+      req.body?.conflictResolution === "create_new" ? "create_new" : "replace_draft";
+
+    const result = await updateWorkspace(req.params.sessionId, (workspaceDraft) => {
+      workspace.syncWorkspace(workspaceDraft);
+      const existingProgram = workspaceDraft.programWorkspace.programs[0] || null;
+      if (
+        existingProgram &&
+        existingProgram.status === "published" &&
+        conflictResolution === "replace_draft"
+      ) {
+        const err = new Error(
+          "Текущая программа опубликована — нельзя автоматически заменить. Сначала переведите её в draft.",
+        );
+        err.status = 409;
+        throw err;
+      }
+
+      const programId = `program-${randomUUID().slice(0, 8)}`;
+      const days = (draft.days || []).map((day, dayIndex) => {
+        const dayId = `day-${randomUUID().slice(0, 8)}`;
+        // Только не отфильтрованные события идут в БД.
+        const events = (day.events || [])
+          .filter((evt) => !evt.droppedByStopWord)
+          .map((evt) => ({
+            id: `event-${randomUUID().slice(0, 8)}`,
+            title: String(evt.title || "").trim() || "Событие без названия",
+            start: String(evt.start || ""),
+            end: String(evt.end || ""),
+            type: String(evt.type || "Лекция"),
+            speakerId: "",
+            speakerName: String(evt.speakerName || ""),
+            location: String(evt.location || ""),
+            track: String(evt.track || ""),
+            parallelGroup: String(evt.parallelGroup || "A"),
+            status: "planned",
+            tags: Array.isArray(evt.tags) ? evt.tags : [],
+            description: String(evt.description || ""),
+            reflectionQuestions: [],
+          }));
+        return {
+          id: dayId,
+          label: String(day.label || `День ${dayIndex + 1}`),
+          dateLabel: String(day.dateLabel || ""),
+          dateValue: String(day.dateValue || ""),
+          flowOrder: ["A"],
+          flowMeta: { A: { label: "A", track: "" } },
+          flows: [{ id: "A", label: "A", track: "" }],
+          events,
+        };
+      });
+
+      const newProgram = {
+        id: programId,
+        title: String(draft.title || "").trim() || "Программа (импорт из Excel)",
+        description: String(draft.description || ""),
+        status: "draft",
+        eventContext: {
+          id: `event-context-${randomUUID().slice(0, 8)}`,
+          title: draft.eventContext?.title || "",
+          eventType: draft.eventContext?.eventType || "Форумное событие",
+          venue: draft.eventContext?.venue || "",
+          startDate: draft.eventContext?.startDate || "",
+          endDate: draft.eventContext?.endDate || "",
+          participantCount: Number(draft.eventContext?.participantCount || 0),
+          description: draft.eventContext?.description || "",
+        },
+        days,
+      };
+
+      workspaceDraft.programWorkspace.programs = [newProgram];
+      workspaceDraft.programWorkspace.currentProgramId = programId;
+      workspaceDraft.programWorkspace.activeEventId = null;
+      return workspace.syncWorkspace(workspaceDraft);
+    });
+
+    const eventsCount = (draft.days || []).reduce(
+      (sum, day) => sum + (day.events || []).filter((evt) => !evt.droppedByStopWord).length,
+      0,
+    );
+    const filteredCount = (draft.days || []).reduce(
+      (sum, day) => sum + (day.events || []).filter((evt) => evt.droppedByStopWord).length,
+      0,
+    );
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.program.imported.commit",
+      entityType: "program",
+      entityId: result.programWorkspace?.currentProgramId || null,
+      payload: {
+        fileName: req.body?.fileName || null,
+        mode: req.body?.mode || null,
+        model: req.body?.model || null,
+        daysCount: draft.days.length,
+        eventsCount,
+        filteredCount,
+        conflictResolution,
+      },
+    });
+
+    res.status(201).json(result);
   }),
 );
 

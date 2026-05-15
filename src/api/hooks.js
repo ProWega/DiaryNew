@@ -205,10 +205,31 @@ export function useParticipantDiary(sessionId) {
     [userId, sessionId, queryClient, addToast],
   );
 
+  const setParallelSelection = useCallback(
+    async ({ dayId, slotKey, eventId }) => {
+      if (!userId) return null;
+      const key = qk.participantDiary(userId, sessionId);
+      try {
+        const nextData = await jsonApi.setParallelSelection(userId, sessionId, {
+          dayId,
+          slotKey,
+          eventId,
+        });
+        queryClient.setQueryData(key, nextData);
+        return nextData;
+      } catch (error) {
+        addToast("Не удалось сохранить выбор блока", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, queryClient, addToast],
+  );
+
   return {
     ...queryShape(query, qk.participantDiary(userId, sessionId), queryClient),
     updateEntry,
     updateReflection,
+    setParallelSelection,
   };
 }
 
@@ -941,4 +962,59 @@ export function useOrganizerChatContextPreview(sessionId, groupId, curatorId) {
     [userId, sessionId, groupId, curatorId, mutateAsync],
   );
   return { preview: data ?? null, loading: isPending, error, fetchPreview, reset };
+}
+
+/**
+ * Импорт программы из Excel: preview (без записи) и commit (запись в workspace).
+ * После commit инвалидируем organizer-workspace.
+ */
+export function useProgramImport(sessionId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+
+  const previewMutation = useMutation({
+    mutationFn: ({ file, options }) =>
+      jsonApi.importProgramPreview(userId, sessionId, file, options),
+  });
+  const commitMutation = useMutation({
+    mutationFn: (payload) => jsonApi.importProgramCommit(userId, sessionId, payload),
+  });
+
+  const previewImport = useCallback(
+    async ({ file, options }) => {
+      if (!userId || !sessionId) return null;
+      try {
+        return await previewMutation.mutateAsync({ file, options });
+      } catch (error) {
+        addToast(error?.message || "Не удалось разобрать файл", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, previewMutation, addToast],
+  );
+
+  const commitImport = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId) return null;
+      try {
+        const result = await commitMutation.mutateAsync(payload);
+        queryClient.invalidateQueries({ queryKey: qk.organizerWorkspace(userId, sessionId) });
+        addToast("Программа импортирована", "success");
+        return result;
+      } catch (error) {
+        addToast(error?.message || "Не удалось сохранить программу", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, commitMutation, queryClient, addToast],
+  );
+
+  return {
+    previewImport,
+    commitImport,
+    previewing: previewMutation.isPending,
+    committing: commitMutation.isPending,
+  };
 }

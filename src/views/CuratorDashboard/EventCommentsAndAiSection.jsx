@@ -129,7 +129,17 @@ export function EventCommentsAndAiSection({
                   <div className="curator-comment-event-head">
                     <div>
                       <span className="curator-comment-event-index">#{index + 1}</span>
-                      <h4>{event.title}</h4>
+                      <h4>
+                        {event.title}
+                        {pulse.isParallel ? (
+                          <span
+                            className="soft-pill is-parallel"
+                            title="Параллельный блок — заполненность считается от тех, кто выбрал этот блок"
+                          >
+                            ⚡ {pulse.parallelGroup || ""}
+                          </span>
+                        ) : null}
+                      </h4>
                       <p className="curator-comment-event-meta">
                         {[event.timeLabel, event.type].filter(Boolean).join(" · ") ||
                           "Время и тип не указаны"}
@@ -142,6 +152,18 @@ export function EventCommentsAndAiSection({
                       <strong>{formatPercent(pulse.completion)}</strong>
                       <span>заполненность</span>
                     </div>
+                    {pulse.isParallel ? (
+                      <div
+                        className="curator-comment-metric is-parallel-selection"
+                        title="Сколько участников выбрали именно этот параллельный блок из общего состава группы"
+                      >
+                        <strong>
+                          {getNumericMetric(pulse.selectedCount)}/
+                          {getNumericMetric(pulse.groupTotal)}
+                        </strong>
+                        <span>выбрали блок</span>
+                      </div>
+                    ) : null}
                     <div className="curator-comment-metric">
                       <strong>{answersCount}</strong>
                       <span>ответов</span>

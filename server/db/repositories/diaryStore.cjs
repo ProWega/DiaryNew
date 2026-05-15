@@ -7,6 +7,12 @@ const {
   getPublishedProgramContext,
 } = require("./programProgress.cjs");
 const { computeParticipantEventAccess } = require("./eventAccess.cjs");
+const {
+  groupEventsBySlot,
+  getSelectionsForUser,
+  setSelection,
+} = require("../../services/parallelSlotsService.cjs");
+const { logAuditEvent } = require("../../services/auditLog.cjs");
 
 function getStateIdByLevel(level) {
   switch (Number(level)) {
@@ -205,12 +211,30 @@ async function getParticipantDiary({ viewerId, sessionId }) {
 
   const eventIds = context.events.map((event) => event.id);
   const dayIds = context.days.map((day) => day.id);
-  const [entries, reflections] = await Promise.all([
+  const [entries, reflections, parallelSelectionsMap] = await Promise.all([
     getParticipantEntries(viewerId, sessionId, eventIds),
     getParticipantReflections(viewerId, sessionId, dayIds),
+    getSelectionsForUser({ userId: viewerId, sessionId }),
   ]);
   const entryByEvent = new Map(entries.map((entry) => [entry.event_id, entry]));
   const reflectionByDay = new Map(reflections.map((reflection) => [reflection.day_id, reflection]));
+
+  // Группируем события по слотам (внутри каждого дня), чтобы аннотировать
+  // каждое событие признаком параллельности и привязкой к слоту.
+  // Map<eventId, slot> для быстрого lookup при пробежке по context.events.
+  const eventsByDay = new Map();
+  for (const event of context.events) {
+    if (!eventsByDay.has(event.day_id)) eventsByDay.set(event.day_id, []);
+    eventsByDay.get(event.day_id).push(event);
+  }
+  const slotByEventId = new Map();
+  for (const [, dayEvents] of eventsByDay) {
+    for (const slot of groupEventsBySlot(dayEvents)) {
+      for (const evt of slot.events) {
+        slotByEventId.set(evt.id, slot);
+      }
+    }
+  }
   const days = new Map();
 
   for (const row of context.events) {
@@ -251,6 +275,11 @@ async function getParticipantDiary({ viewerId, sessionId }) {
       });
     }
 
+    const slot = slotByEventId.get(row.id);
+    const slotKey = slot?.key || "";
+    const selectionKey = `${row.day_id}|${slotKey}`;
+    const selectedEventIdInSlot = parallelSelectionsMap.get(selectionKey) || null;
+    const isParallelOption = Boolean(slot?.isParallel);
     days.get(row.day_id).events.push({
       id: row.id,
       time: [row.start_time, row.end_time].filter(Boolean).join(" - "),
@@ -265,6 +294,14 @@ async function getParticipantDiary({ viewerId, sessionId }) {
       confidence: entry?.confidence || "high",
       answered,
       respondedAt: entry?.responded_at || null,
+      parallelGroup: row.parallel_group || "A",
+      slotKey,
+      isParallelOption,
+      slotEventIds: isParallelOption ? slot.events.map((e) => e.id) : [row.id],
+      // isSelected:
+      //  - false для опции параллельного слота, на которую участник НЕ выбрал;
+      //  - true для опции, которую выбрал, ИЛИ для непараллельных событий (по умолчанию активны).
+      isSelected: isParallelOption ? selectedEventIdInSlot === row.id : true,
       _entry: entry,
     });
   }
@@ -295,6 +332,11 @@ async function getParticipantDiary({ viewerId, sessionId }) {
   });
   const currentDay = selectClosestProgramDay(history) || history[0];
 
+  const parallelSelections = Array.from(parallelSelectionsMap.entries()).map(([key, eventId]) => {
+    const [dayId, slotKey] = key.split("|");
+    return { dayId, slotKey, eventId };
+  });
+
   return {
     sessionId,
     programStatus: context.program?.status || "draft",
@@ -303,6 +345,7 @@ async function getParticipantDiary({ viewerId, sessionId }) {
     progress,
     currentDayId: currentDay?.id,
     history,
+    parallelSelections,
   };
 }
 
@@ -466,8 +509,46 @@ async function updateParticipantReflection({ viewerId, sessionId, dayId, patch }
   return getParticipantDiary({ viewerId, sessionId });
 }
 
+/**
+ * Участник выбирает один из параллельных блоков. Audit-event пишется только
+ * при ИЗМЕНЕНИИ (а не при первичном выборе) — иначе ledger быстро забьётся.
+ */
+async function updateParticipantParallelSelection({
+  viewerId,
+  sessionId,
+  dayId,
+  slotKey,
+  eventId,
+}) {
+  await ensureParticipantAccess(viewerId, sessionId);
+  const result = await setSelection({
+    userId: viewerId,
+    sessionId,
+    dayId,
+    slotKey,
+    eventId,
+  });
+  if (result.changed) {
+    logAuditEvent({
+      actorId: viewerId,
+      sessionId,
+      action: "participant.parallel_choice.changed",
+      entityType: "program_event",
+      entityId: eventId,
+      payload: {
+        dayId,
+        slotKey,
+        from: result.previousEventId,
+        to: result.eventId,
+      },
+    });
+  }
+  return getParticipantDiary({ viewerId, sessionId });
+}
+
 module.exports = {
   getParticipantDiary,
   updateParticipantEntry,
   updateParticipantReflection,
+  updateParticipantParallelSelection,
 };
