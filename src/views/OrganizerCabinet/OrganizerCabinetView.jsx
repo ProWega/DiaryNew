@@ -19,12 +19,14 @@ import ProgramTabPanel from "./ProgramTabPanel";
 import SessionsTabPanel from "./SessionsTabPanel";
 import ParticipantsTabPanel from "./ParticipantsTabPanel";
 import AiAssistantTabPanel from "./AiAssistantTabPanel";
+import InviteBulkPanel from "./InviteBulkPanel";
 
 const TAB_OPTIONS = [
   { id: "sessions", label: "Мои заезды" },
   { id: "program", label: "Программа" },
   { id: "groups", label: "Группы" },
   { id: "participants", label: "Участники" },
+  { id: "bulk-invites", label: "Пригласить участников" },
   { id: "ai-assistant", label: "ИИ-помощник" },
 ];
 
@@ -881,6 +883,17 @@ function OrganizerCabinetView({
           onQueryChange={setParticipantQuery}
           onSelectParticipant={setSelectedParticipantId}
           onAssignGroup={onAssignGroupParticipants}
+        />
+      ) : null}
+
+      {activeTab === "bulk-invites" ? (
+        <InviteBulkPanel
+          sessionId={safeWorkspace.sessionId}
+          sessionCatalog={safeWorkspace.sessionCatalog}
+          onSelectSession={(sessionId) => {
+            const selected = safeWorkspace.sessionCatalog?.find((s) => s.id === sessionId);
+            if (selected) onSessionCreated?.(selected);
+          }}
         />
       ) : null}
 

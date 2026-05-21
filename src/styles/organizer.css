@@ -1286,3 +1286,142 @@
   align-items: center;
   gap: 8px;
 }
+
+/* ===== Bulk invites (Пригласить участников) ===== */
+
+.invite-bulk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.invite-bulk-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.invite-bulk-step,
+.invite-bulk-preview {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--color-surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-bulk-step h3,
+.invite-bulk-preview h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.invite-bulk-template-link {
+  align-self: flex-start;
+}
+
+.invite-bulk-stats {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(199, 178, 115, 0.12);
+}
+
+.invite-bulk-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-bulk-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-bulk-groups details {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.invite-bulk-groups summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.92rem;
+}
+
+.invite-bulk-groups summary::-webkit-details-marker {
+  display: none;
+}
+
+.invite-bulk-participants {
+  margin: 8px 0 4px 0;
+  padding-left: 20px;
+  font-size: 0.86rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2px 12px;
+}
+
+.invite-bulk-participants li {
+  list-style: decimal;
+}
+
+.invite-bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.92rem;
+}
+
+.invite-bulk-field input[type="text"],
+.invite-bulk-field input[type="file"],
+.invite-bulk-field select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.16));
+  font: inherit;
+}
+
+.invite-bulk-layouts {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.invite-bulk-layouts legend {
+  padding: 0 6px;
+  font-weight: 500;
+}
+
+.invite-bulk-layout-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.invite-bulk-layout-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invite-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.invite-bulk-footnote {
+  font-size: 0.82rem;
+  margin: 0;
+}

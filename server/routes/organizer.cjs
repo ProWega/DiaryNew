@@ -54,7 +54,8 @@ const norm = require("../services/programNormalizers.cjs");
 const workspace = require("../services/programWorkspaceService.cjs");
 const audience = require("../services/surveyAudienceService.cjs");
 const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
-const { documentUploader, persistUpload } = require("../lib/uploads.cjs");
+const { documentUploader, inviteBulkUploader, persistUpload } = require("../lib/uploads.cjs");
+const inviteDocumentService = require("../services/inviteDocumentService.cjs");
 const { extractText } = require("../services/documentExtraction.cjs");
 const { logAuditEvent } = require("../services/auditLog.cjs");
 const { getSessionUsageReport } = require("../services/curatorLlmGuard.cjs");
@@ -1354,6 +1355,116 @@ router.post(
     });
 
     res.status(201).json(result);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Пакетные приглашения участников через xlsx → PDF с QR
+// ---------------------------------------------------------------------------
+
+// GET /api/organizer/sessions/:sessionId/invites/template.xlsx
+// Скачать пустой шаблон с 3 колонками (Группа / Куратор / Участник)
+router.get(
+  "/sessions/:sessionId/invites/template.xlsx",
+  requireOrganizer,
+  asyncHandler(async (_req, res) => {
+    const buffer = inviteDocumentService.buildTemplateXlsx();
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="invites-template.xlsx"');
+    res.send(buffer);
+  }),
+);
+
+// POST /api/organizer/sessions/:sessionId/invites/preview
+// multipart: file (xlsx) — НЕ создаёт magic-link, только парсит.
+router.post(
+  "/sessions/:sessionId/invites/preview",
+  requireOrganizer,
+  inviteBulkUploader,
+  asyncHandler(async (req, res) => {
+    const file = req.files?.file?.[0];
+    if (!file) throw createHttpError(400, "Не получен xlsx-шаблон");
+    const result = inviteDocumentService.parseTemplateXlsx(file.buffer);
+    res.json({
+      ...result,
+      fileName: decodeOriginalName(file.originalname) || null,
+    });
+  }),
+);
+
+// POST /api/organizer/sessions/:sessionId/invites/generate
+// multipart: file (xlsx) + letterhead (PDF/PNG/JPEG, опц.)
+// body fields: layout, title?, footer?, ttlMinutes?
+// Создаёт magic-link'и для всех + рендерит PDF.
+router.post(
+  "/sessions/:sessionId/invites/generate",
+  requireOrganizer,
+  inviteBulkUploader,
+  asyncHandler(async (req, res) => {
+    const xlsxFile = req.files?.file?.[0];
+    if (!xlsxFile) throw createHttpError(400, "Не получен xlsx-шаблон");
+    const letterhead = req.files?.letterhead?.[0] || null;
+
+    const layout = ["card", "table"].includes(req.body?.layout) ? req.body.layout : "card";
+    const title = String(req.body?.title || "").trim() || "Приглашения участников";
+    const footer = String(req.body?.footer || "").trim() || "";
+    const ttlMinutes = Math.max(
+      15,
+      Math.min(60 * 24 * 30, Number(req.body?.ttlMinutes) || 60 * 24),
+    );
+
+    const parsed = inviteDocumentService.parseTemplateXlsx(xlsxFile.buffer);
+
+    const invites = await inviteDocumentService.createBulkInvites({
+      sessionId: req.params.sessionId,
+      actorId: req.viewer.id,
+      groups: parsed.groups,
+      ttlMinutes,
+    });
+
+    let pdfBuffer;
+    try {
+      pdfBuffer = await inviteDocumentService.renderInvitesPdf({
+        invites,
+        layout,
+        letterhead,
+        title,
+        footer,
+      });
+    } catch (error) {
+      throw createHttpError(500, `Ошибка рендера PDF: ${error.message}`);
+    }
+
+    const curatorCount = invites.filter((i) => i.role === "curator").length;
+    const participantsCount = invites.filter((i) => i.role === "participant").length;
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.batch.generated",
+      entityType: "session",
+      entityId: req.params.sessionId,
+      payload: {
+        fileName: decodeOriginalName(xlsxFile.originalname) || null,
+        groupsCount: parsed.groups.length,
+        curatorCount,
+        participantsCount,
+        ttlMinutes,
+        layout,
+        hasLetterhead: Boolean(letterhead),
+        letterheadMime: letterhead?.mimetype || null,
+      },
+    });
+
+    const filename = `invites-${req.params.sessionId}-${Date.now()}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Invites-Created", String(invites.length));
+    res.setHeader("X-Invites-Groups", String(parsed.groups.length));
+    res.status(201).send(pdfBuffer);
   }),
 );
 

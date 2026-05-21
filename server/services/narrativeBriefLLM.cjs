@@ -23,15 +23,19 @@ const crypto = require("node:crypto");
 const briefCacheRepo = require("../db/repositories/narrativeBriefCache.cjs");
 const { callLlm } = require("./llmClient.cjs");
 const { buildProxyDispatcher: _sharedBuildProxyDispatcher } = require("../lib/proxyDispatcher.cjs");
+const agentPromptsService = require("./agentPromptsService.cjs");
 
 const DEFAULT_MODEL = "claude-haiku-4-5";
 const DEFAULT_MAX_TOKENS = 500;
 const REQUEST_TIMEOUT_MS = 12_000;
 const CACHE_TTL_MS = 5 * 60_000;
 
-// Версия системного промпта. Бамп при любой правке SYSTEM_PROMPT инвалидирует
-// весь DB-кеш одним релизом, т.к. участвует в fingerprint'е.
-const PROMPT_VERSION = "2026-05-12-v1";
+// LEGACY_PROMPT_VERSION: используется только если agent_prompts недоступна
+// и нет fingerprint'а из service. После Phase 3 живой fingerprint —
+// `agentPromptsService.getPromptFingerprint(resolvedPrompt)`, который
+// автоматически меняется при сохранении новой версии в admin-UI.
+const LEGACY_PROMPT_VERSION = "2026-05-12-v1";
+const PROMPT_VERSION = LEGACY_PROMPT_VERSION;
 
 // Re-export для обратной совместимости (старые тесты импортируют отсюда).
 // Реализация переехала в server/lib/proxyDispatcher.cjs.
@@ -116,7 +120,10 @@ const SYSTEM_PROMPT = `Ты пишешь «записку к вечерней р
 function fingerprint(signals) {
   const safe = signals || {};
   const compact = {
-    promptVersion: PROMPT_VERSION,
+    // Если в signals явно передан promptFingerprint (Phase 3+ — приходит из
+    // agentPromptsService), используем его. Иначе legacy-константа,
+    // обратносовместимая со старым unit-тестом без service'а.
+    promptVersion: safe.promptFingerprint || PROMPT_VERSION,
     sessionId: safe.sessionId || null,
     groupId: safe.groupId || null,
     dayId: safe.dayId || null,
@@ -230,15 +237,17 @@ function writeCache(key, text) {
   }
 }
 
-async function callLLM(brief, { model, maxTokens } = {}) {
+async function callLLM(brief, { model, maxTokens, systemText } = {}) {
   // Унифицированный путь: llmClient выбирает Anthropic/OpenAI по prefix модели.
-  // SYSTEM_PROMPT помечается cacheable — для Anthropic ставит cache_control:ephemeral,
-  // для OpenAI cache_control не нужен (prompt-cache автоматический от 1024+ токенов).
+  // systemText, если передан вызывающим (Phase 3+), приходит из
+  // agentPromptsService — это активный admin-настроенный промпт. Если не
+  // передан — используем LEGACY-константу SYSTEM_PROMPT (тесты, старые
+  // callers).
   try {
     const result = await callLlm({
       model: model || DEFAULT_MODEL,
       maxTokens: maxTokens || DEFAULT_MAX_TOKENS,
-      systemBlocks: [{ text: SYSTEM_PROMPT, cacheable: true }],
+      systemBlocks: [{ text: systemText || SYSTEM_PROMPT, cacheable: true }],
       messages: [{ role: "user", content: buildUserMessage(brief) }],
     });
     if (!result || !result.text) return null;
@@ -284,6 +293,13 @@ async function enrichWithNarrative(brief, ctx = {}) {
   const model = ctx.model || DEFAULT_MODEL;
   const maxTokens = ctx.maxTokens || DEFAULT_MAX_TOKENS;
 
+  // Phase 3: резолвим активный промпт (admin-настраиваемый) с in-memory кешем.
+  // promptFingerprint мутирует при `saveNewVersion`/`restoreVersion` — это
+  // автоматически инвалидирует L1+L2 кеши brief'а (они переподсчитают fingerprint).
+  const resolvedPrompt = await agentPromptsService.resolvePrompt("narrative_brief");
+  const promptFingerprint = agentPromptsService.getPromptFingerprint(resolvedPrompt);
+  const systemText = resolvedPrompt.systemText || SYSTEM_PROMPT;
+
   // Базовый signals: явно переданный набор имеет приоритет, иначе reconstruct
   // из самого brief (для backward-compat и unit-тестов без DB).
   const signals = ctx.signals || {
@@ -303,6 +319,9 @@ async function enrichWithNarrative(brief, ctx = {}) {
     events: (brief.events || []).map((e, idx) => ({ id: e.id, sortOrder: idx })),
     concepts: [],
   };
+  // Thread prompt fingerprint into signals so it participates in the cache hash —
+  // admin save / restore → new id → new fp → cache miss → regeneration.
+  signals.promptFingerprint = promptFingerprint;
   const fp = fingerprint(signals);
   const l1Key = `${groupId || "unknown"}:${dayId || "no-day"}:${model}:${fp}`;
 
@@ -310,7 +329,7 @@ async function enrichWithNarrative(brief, ctx = {}) {
   if (force) {
     return await runLlmAndPersist({
       brief,
-      ctx: { sessionId, groupId, dayId, viewerId, model, maxTokens },
+      ctx: { sessionId, groupId, dayId, viewerId, model, maxTokens, systemText },
       fp,
       l1Key,
       markStaleFirst: true,
@@ -355,7 +374,7 @@ async function enrichWithNarrative(brief, ctx = {}) {
 
   return await runLlmAndPersist({
     brief,
-    ctx: { sessionId, groupId, dayId, viewerId, model, maxTokens },
+    ctx: { sessionId, groupId, dayId, viewerId, model, maxTokens, systemText },
     fp,
     l1Key,
     markStaleFirst: false,
@@ -368,7 +387,11 @@ async function runLlmAndPersist({ brief, ctx, fp, l1Key, markStaleFirst }) {
   // для claude-* — ANTHROPIC_API_KEY. callLLM возвращает null при отсутствии
   // нужного ключа → попадаем в обычный fallback ниже.
   try {
-    const result = await callLLM(brief, { model: ctx.model, maxTokens: ctx.maxTokens });
+    const result = await callLLM(brief, {
+      model: ctx.model,
+      maxTokens: ctx.maxTokens,
+      systemText: ctx.systemText,
+    });
     if (!result || !result.text) {
       return { ...brief, narrative: { text: null, source: "fallback" } };
     }

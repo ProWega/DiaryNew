@@ -107,3 +107,54 @@
     overflow-x: visible;
   }
 }
+
+/* ── Agent Prompts panel (Phase 5: AI agent configurator) ──────────────── */
+.agent-prompts-panel .reorder-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-prompts-panel .reorder-list-item {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft, #e2e2e2);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.agent-prompts-panel .reorder-handle {
+  font-weight: 600;
+  color: var(--text-muted, #6a6a6a);
+}
+.agent-prompts-panel .reorder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.agent-prompts-panel .reorder-actions {
+  display: flex;
+  gap: 4px;
+}
+.agent-prompts-panel .reorder-actions button {
+  min-width: 32px;
+  padding: 4px 10px;
+}
+.agent-prompts-panel .data-table tr.is-current {
+  background: rgba(80, 140, 255, 0.06);
+}
+.agent-prompts-panel .diff-block {
+  background: var(--surface-muted, #f6f6f8);
+  padding: 12px;
+  border-radius: 8px;
+  font-family: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 480px;
+  overflow: auto;
+}

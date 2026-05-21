@@ -146,11 +146,50 @@ function persistUpload({ kind, file }) {
   };
 }
 
+// ── Bulk-invite uploader: xlsx (обязательно) + letterhead (опционально) ────
+const LETTERHEAD_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const LETTERHEAD_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+const inviteBulkUploader = multer({
+  storage: memoryStorage,
+  limits: { fileSize: DOCUMENT_MAX_BYTES, files: 2 },
+  fileFilter(_req, file, cb) {
+    if (file.fieldname === "file") {
+      // .xlsx
+      if (DOCUMENT_MIME.has(file.mimetype)) return cb(null, true);
+      return cb(
+        Object.assign(new Error(`Шаблон должен быть xlsx (получено: ${file.mimetype})`), {
+          status: 400,
+        }),
+      );
+    }
+    if (file.fieldname === "letterhead") {
+      if (file.size > LETTERHEAD_MAX_BYTES) {
+        return cb(
+          Object.assign(new Error("Фирменный бланк не должен быть больше 5 МБ"), { status: 400 }),
+        );
+      }
+      if (LETTERHEAD_MIME.has(file.mimetype)) return cb(null, true);
+      return cb(
+        Object.assign(
+          new Error(`Фирменный бланк: только PDF/PNG/JPEG. Получено: ${file.mimetype}`),
+          { status: 400 },
+        ),
+      );
+    }
+    cb(Object.assign(new Error(`Неизвестное поле upload'а: ${file.fieldname}`), { status: 400 }));
+  },
+}).fields([
+  { name: "file", maxCount: 1 },
+  { name: "letterhead", maxCount: 1 },
+]);
+
 module.exports = {
   ensureUploadDirs: ensureDirs,
   uploadsRoot: UPLOADS_ROOT,
   audioUploader: createUploader({ kind: "audio" }),
   photoUploader: createUploader({ kind: "photo" }),
   documentUploader: createUploader({ kind: "document" }),
+  inviteBulkUploader,
   persistUpload,
 };

@@ -1018,3 +1018,71 @@ export function useProgramImport(sessionId) {
     committing: commitMutation.isPending,
   };
 }
+
+/**
+ * Хук для пакетной выдачи приглашений: preview (парс xlsx-шаблона) + generate
+ * (создание magic-link'ов + PDF). Возвращает также templateUrl для прямого
+ * скачивания пустого шаблона через `<a href=...>`.
+ */
+export function useBulkInvites(sessionId) {
+  const { currentUser } = useAuth();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+
+  const previewMutation = useMutation({
+    mutationFn: (file) => jsonApi.previewBulkInvites(userId, sessionId, file),
+  });
+  const generateMutation = useMutation({
+    mutationFn: (payload) => jsonApi.generateBulkInvitesPdf(userId, sessionId, payload),
+  });
+  const templateMutation = useMutation({
+    mutationFn: () => jsonApi.downloadInvitesTemplate(userId, sessionId),
+  });
+
+  const previewInvites = useCallback(
+    async (file) => {
+      if (!userId || !sessionId) return null;
+      try {
+        return await previewMutation.mutateAsync(file);
+      } catch (error) {
+        addToast(error?.message || "Не удалось разобрать шаблон", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, previewMutation, addToast],
+  );
+
+  const generateInvites = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId) return null;
+      try {
+        const blob = await generateMutation.mutateAsync(payload);
+        addToast("PDF приглашений готов", "success");
+        return blob;
+      } catch (error) {
+        addToast(error?.message || "Не удалось сгенерировать PDF", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, generateMutation, addToast],
+  );
+
+  const downloadTemplate = useCallback(async () => {
+    if (!userId || !sessionId) return null;
+    try {
+      return await templateMutation.mutateAsync();
+    } catch (error) {
+      addToast(error?.message || "Не удалось скачать шаблон", "error");
+      throw error;
+    }
+  }, [userId, sessionId, templateMutation, addToast]);
+
+  return {
+    previewInvites,
+    generateInvites,
+    downloadTemplate,
+    previewing: previewMutation.isPending,
+    generating: generateMutation.isPending,
+    downloadingTemplate: templateMutation.isPending,
+  };
+}

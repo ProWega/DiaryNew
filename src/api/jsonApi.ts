@@ -555,6 +555,120 @@ export const jsonApi = {
     });
   },
 
+  async downloadInvitesTemplate(
+    viewerId: string | number,
+    sessionId: string | number,
+  ): Promise<Blob> {
+    // GET через fetch с x-viewer-id (просто <a href> не передаёт viewer-header
+    // → backend вернёт 401 HTML, файл будет битым).
+    const response = await fetch(`/api/organizer/sessions/${sessionId}/invites/template.xlsx`, {
+      method: "GET",
+      credentials: "include",
+      headers: viewerHeaders(viewerId),
+    });
+    if (!response.ok) {
+      let message = "Не удалось скачать шаблон";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
+  },
+
+  async previewBulkInvites(viewerId: string | number, sessionId: string | number, file: File) {
+    const path = `/api/organizer/sessions/${sessionId}/invites/preview`;
+    const send = () => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: fd,
+      });
+    };
+    let response = await send();
+    if (response.status === 403) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // ignore
+      }
+      response = await send();
+    }
+    if (!response.ok) {
+      let message = "Не удалось разобрать шаблон";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json();
+  },
+
+  async generateBulkInvitesPdf(
+    viewerId: string | number,
+    sessionId: string | number,
+    payload: {
+      file: File;
+      letterhead?: File | null;
+      layout: "card" | "table";
+      title?: string;
+      footer?: string;
+      ttlMinutes?: number;
+    },
+  ): Promise<Blob> {
+    const path = `/api/organizer/sessions/${sessionId}/invites/generate`;
+    const send = () => {
+      const fd = new FormData();
+      fd.append("file", payload.file);
+      if (payload.letterhead) fd.append("letterhead", payload.letterhead);
+      fd.append("layout", payload.layout);
+      if (payload.title) fd.append("title", payload.title);
+      if (payload.footer) fd.append("footer", payload.footer);
+      if (payload.ttlMinutes) fd.append("ttlMinutes", String(payload.ttlMinutes));
+      return fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: fd,
+      });
+    };
+    let response = await send();
+    if (response.status === 403) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // ignore
+      }
+      response = await send();
+    }
+    if (!response.ok) {
+      let message = "Не удалось сгенерировать PDF";
+      try {
+        const payloadJson = (await response.json()) as { message?: string };
+        message = payloadJson.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
+  },
+
   async uploadEventConcept(
     viewerId: string | number,
     sessionId: string | number,
@@ -1069,6 +1183,79 @@ export const jsonApi = {
       method: "PATCH",
       headers: viewerHeaders(viewerId),
       body: payload,
+    });
+  },
+
+  // ── Admin: AI agent prompts ──────────────────────────────────────────────
+
+  listAgentPrompts(viewerId: string | number) {
+    return requestJson("/api/admin/agent-prompts", {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  getAgentPromptHistory(viewerId: string | number, agentType: string) {
+    return requestJson(`/api/admin/agent-prompts/${agentType}/history`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  saveAgentPrompt(viewerId: string | number, agentType: string, payload: Record<string, unknown>) {
+    return requestJson(`/api/admin/agent-prompts/${agentType}`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  restoreAgentPrompt(viewerId: string | number, versionId: string) {
+    return requestJson(`/api/admin/agent-prompts/restore/${versionId}`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: {},
+    });
+  },
+
+  previewAgentPrompt(
+    viewerId: string | number,
+    agentType: string,
+    payload: Record<string, unknown>,
+  ) {
+    return requestJson(`/api/admin/agent-prompts/${agentType}/preview`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  // ── Admin: AI reports ────────────────────────────────────────────────────
+
+  generateProgramAnalyticsReport(viewerId: string | number, payload: Record<string, unknown>) {
+    return requestJson("/api/admin/ai-reports/program-analytics/generate", {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  listAiReports(
+    viewerId: string | number,
+    params: { sessionId?: string; scope?: string; groupId?: string; limit?: number } = {},
+  ) {
+    const search = new URLSearchParams();
+    if (params.sessionId) search.set("sessionId", params.sessionId);
+    if (params.scope) search.set("scope", params.scope);
+    if (params.groupId) search.set("groupId", params.groupId);
+    if (params.limit) search.set("limit", String(params.limit));
+    const qs = search.toString();
+    return requestJson(`/api/admin/ai-reports${qs ? `?${qs}` : ""}`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  getAiReport(viewerId: string | number, reportId: string) {
+    return requestJson(`/api/admin/ai-reports/${reportId}`, {
+      headers: viewerHeaders(viewerId),
     });
   },
 };

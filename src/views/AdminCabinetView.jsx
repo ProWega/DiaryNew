@@ -14,11 +14,13 @@ import {
 import { RegistrationAccessPanel } from "../components/access/AccessComponents";
 import { AlertCard, SoftPill } from "../components/ui/Pills";
 import { getDefaultRoute } from "../rbac/permissions";
+import AgentPromptsPanel from "./AdminCabinet/AgentPromptsPanel";
 
 const ADMIN_SECTIONS = [
   { id: "users", label: "Пользователи", description: "Профили, роли и статусы" },
   { id: "sessions", label: "Заезды", description: "Карточки и регистрация" },
   { id: "assignments", label: "Назначения", description: "Доступы по заездам" },
+  { id: "ai-agents", label: "ИИ-агенты", description: "Промпты и порядок сбора контекста" },
   { id: "audit", label: "Аудит", description: "Последние действия" },
 ];
 
@@ -134,7 +136,11 @@ function MagicLinkPanel({
       <div className="field-grid">
         <label className="field-block">
           <span>Тип ссылки</span>
-          <select value={mode} disabled={saving || submitting} onChange={(event) => setMode(event.target.value)}>
+          <select
+            value={mode}
+            disabled={saving || submitting}
+            onChange={(event) => setMode(event.target.value)}
+          >
             <option value="login">Вход пользователя</option>
             <option value="invite">Приглашение участника</option>
           </select>
@@ -143,7 +149,11 @@ function MagicLinkPanel({
         {mode === "login" ? (
           <label className="field-block">
             <span>Пользователь</span>
-            <select value={targetUserId} disabled={saving || submitting} onChange={(event) => setTargetUserId(event.target.value)}>
+            <select
+              value={targetUserId}
+              disabled={saving || submitting}
+              onChange={(event) => setTargetUserId(event.target.value)}
+            >
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.roleLabel}: {user.fullName}
@@ -155,7 +165,11 @@ function MagicLinkPanel({
           <>
             <label className="field-block">
               <span>Заезд</span>
-              <select value={sessionId} disabled={saving || submitting} onChange={(event) => setSessionId(event.target.value)}>
+              <select
+                value={sessionId}
+                disabled={saving || submitting}
+                onChange={(event) => setSessionId(event.target.value)}
+              >
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
@@ -165,7 +179,11 @@ function MagicLinkPanel({
             </label>
             <label className="field-block">
               <span>Роль</span>
-              <select value={role} disabled={saving || submitting} onChange={(event) => setRole(event.target.value)}>
+              <select
+                value={role}
+                disabled={saving || submitting}
+                onChange={(event) => setRole(event.target.value)}
+              >
                 <option value="participant">Участник</option>
                 <option value="curator">Куратор</option>
                 <option value="organizer">Организатор</option>
@@ -173,7 +191,11 @@ function MagicLinkPanel({
             </label>
             <label className="field-block">
               <span>Группа</span>
-              <select value={groupId} disabled={saving || submitting || role === "organizer"} onChange={(event) => setGroupId(event.target.value)}>
+              <select
+                value={groupId}
+                disabled={saving || submitting || role === "organizer"}
+                onChange={(event) => setGroupId(event.target.value)}
+              >
                 <option value="">Автоматически</option>
                 {sessionGroups.map((group) => (
                   <option key={group.id} value={group.id}>
@@ -184,7 +206,11 @@ function MagicLinkPanel({
             </label>
             <label className="field-block">
               <span>Имя для нового пользователя</span>
-              <input value={fullName} disabled={saving || submitting} onChange={(event) => setFullName(event.target.value)} />
+              <input
+                value={fullName}
+                disabled={saving || submitting}
+                onChange={(event) => setFullName(event.target.value)}
+              />
             </label>
           </>
         )}
@@ -204,7 +230,12 @@ function MagicLinkPanel({
         </label>
       ) : null}
 
-      <button type="button" className="ghost-button" disabled={saving || submitting} onClick={handleCreateLink}>
+      <button
+        type="button"
+        className="ghost-button"
+        disabled={saving || submitting}
+        onClick={handleCreateLink}
+      >
         {submitting ? "Создаём..." : "Создать magic link"}
       </button>
     </article>
@@ -238,11 +269,14 @@ function AdminCabinetView({
   const [sessionQuery, setSessionQuery] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState(workspace.sessions[0]?.id || null);
   const [sessionDraft, setSessionDraft] = useState(workspace.sessions[0] || EMPTY_SESSION);
-  const [registrationDraft, setRegistrationDraft] = useState(workspace.sessions[0] || EMPTY_SESSION);
+  const [registrationDraft, setRegistrationDraft] = useState(
+    workspace.sessions[0] || EMPTY_SESSION,
+  );
   const [isCreatingSession, setIsCreatingSession] = useState(!workspace.sessions.length);
 
   const [assignmentDraft, setAssignmentDraft] = useState({
-    userId: workspace.users.find((user) => user.role === "organizer")?.id || workspace.users[0]?.id || "",
+    userId:
+      workspace.users.find((user) => user.role === "organizer")?.id || workspace.users[0]?.id || "",
     sessionId: workspace.sessions[0]?.id || "",
     role: "organizer",
     groupId: "",
@@ -339,14 +373,19 @@ function AdminCabinetView({
           <p className="eyebrow">Системный администратор</p>
           <h2>Пользователи, организаторы, заезды и публичная регистрация</h2>
           <p className="subtle">
-            Администратор управляет всеми ролями и назначениями, а также может открыть или закрыть регистрацию на любой заезд.
+            Администратор управляет всеми ролями и назначениями, а также может открыть или закрыть
+            регистрацию на любой заезд.
           </p>
         </div>
         <AdminSummary summary={workspace.summary} />
       </div>
 
       {mutationError ? (
-        <AlertCard title="Не удалось сохранить изменения" detail={mutationError.message} tone="severity-high" />
+        <AlertCard
+          title="Не удалось сохранить изменения"
+          detail={mutationError.message}
+          tone="severity-high"
+        />
       ) : null}
 
       <div className="admin-shell">
@@ -360,7 +399,9 @@ function AdminCabinetView({
               <button
                 key={section.id}
                 type="button"
-                className={activeTab === section.id ? "admin-side-link is-active" : "admin-side-link"}
+                className={
+                  activeTab === section.id ? "admin-side-link is-active" : "admin-side-link"
+                }
                 onClick={() => setActiveTab(section.id)}
               >
                 <span>{section.label}</span>
@@ -378,7 +419,9 @@ function AdminCabinetView({
           ) : null}
           <div className="admin-sidebar-meta">
             <SoftPill>Storage: {workspace.meta?.storageMode || "postgres"}</SoftPill>
-            <SoftPill outline>Обновлено: {new Date(workspace.meta?.updatedAt || Date.now()).toLocaleString("ru-RU")}</SoftPill>
+            <SoftPill outline>
+              Обновлено: {new Date(workspace.meta?.updatedAt || Date.now()).toLocaleString("ru-RU")}
+            </SoftPill>
           </div>
         </aside>
 
@@ -419,7 +462,9 @@ function AdminCabinetView({
                   onChange={setUserDraft}
                   onSubmit={handleUserSubmit}
                   onCancel={() => setIsCreatingUser(false)}
-                  onStatusChange={(status) => userDraft.id && onUpdateUserStatus(userDraft.id, status)}
+                  onStatusChange={(status) =>
+                    userDraft.id && onUpdateUserStatus(userDraft.id, status)
+                  }
                 />
                 <MagicLinkPanel
                   users={workspace.users}
@@ -496,6 +541,13 @@ function AdminCabinetView({
               />
               <GroupAssignmentPanel groups={workspace.groups} />
             </div>
+          ) : null}
+
+          {activeTab === "ai-agents" ? (
+            <AgentPromptsPanel
+              sessions={workspace.sessions || []}
+              groups={workspace.groups || []}
+            />
           ) : null}
 
           {activeTab === "audit" ? <AuditTimeline items={workspace.auditLog} /> : null}

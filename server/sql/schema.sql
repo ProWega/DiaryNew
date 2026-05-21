@@ -576,3 +576,26 @@ create table if not exists return_entries (
 );
 
 create index if not exists return_entries_user_session_idx on return_entries (user_id, session_id);
+
+-- ── Admin-tunable AI agent prompts (migration 1756) ────────────────
+-- Centralises system_prompt + порядок сбора preamble-блоков для всех LLM-агентов.
+-- См. docs/architecture/backend-services.md, раздел «Настройка ИИ-агентов».
+create table if not exists agent_prompts (
+  id            text primary key,
+  agent_type    text not null,
+  name          text not null,
+  version       int  not null,
+  system_text   text not null,
+  blocks_config jsonb not null default '[]'::jsonb,
+  model         text,
+  max_tokens    int,
+  is_current    boolean not null default false,
+  notes         text,
+  created_by    text references users(id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+
+create unique index if not exists agent_prompts_current_uniq
+  on agent_prompts(agent_type) where is_current = true;
+create index if not exists agent_prompts_type_version
+  on agent_prompts(agent_type, version desc);

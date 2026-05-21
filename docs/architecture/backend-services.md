@@ -186,6 +186,66 @@ A: 11:30-13:30 | B: «Подготовка к закрытию» | E: «Маст
 - Не назначает `reflectionQuestions` импортированным событиям.
 - Не лимитирует токенный бюджет organizer'а — разовый импорт.
 
+## Пакетные приглашения (xlsx → PDF с QR)
+
+Организатор скачивает шаблон, заполняет по группам/кураторам/участникам и получает готовый PDF: каждое приглашение — имя + кликабельная ссылка на magic-link + QR-код. Magic-link'и создаются за один backend-вызов и привязаны к `sessionId + groupId + role + fullName`.
+
+### Pipeline
+
+```
+[GET template] → пустой xlsx (3 колонки)
+                         ↓
+[POST preview] → parseTemplateXlsx → {groups, warnings, stats}
+                         ↓
+[POST generate] → createBulkInvites (findOrCreateGroup + createMagicLink × N)
+               → renderInvitesPdf (pdfkit + qrcode, опц. pdf-lib overlay)
+               → application/pdf (Content-Disposition: attachment)
+```
+
+Сервис: [`server/services/inviteDocumentService.cjs`](../../server/services/inviteDocumentService.cjs). Чистые функции (`buildTemplateXlsx`, `parseTemplateXlsx`) покрыты unit-тестами; `createBulkInvites` тестируется через мок [`createMagicLink`](../../server/db/repositories/authStore.cjs); `renderInvitesPdf` smoke-тест на PDF-магию `%PDF-`.
+
+### Структура шаблона xlsx
+
+| Группа             | Куратор                    | Участник      |
+| ------------------ | -------------------------- | ------------- |
+| Группа Печоры      | Захарова Виктория Ясиновна | Богдан Ногин  |
+| Группа Печоры      | Захарова Виктория Ясиновна | Антон Панин   |
+| Группа Севастополь | Тозлевская Сюзанна         | Кира Суханова |
+
+Парсер группирует по колонке «Группа», берёт первый непустой «Куратор» в каждой группе, дедупит участников. Если группа не существует в сессии — создаётся автоматически с audit-event `organizer.invite.batch.group_autocreated`.
+
+### Лайауты PDF
+
+| Тип     | На страницу | Размер QR | Применение                                     |
+| ------- | ----------- | --------- | ---------------------------------------------- |
+| `card`  | 1           | 240×240pt | Имя + большой QR + URL, для печати как «бейдж» |
+| `table` | 12-15 строк | 44×44pt   | Компактный «справочник куратора»               |
+
+Шрифт кириллицы — `TT Norms Std Trial Condensed Regular.otf` из [`public/fonts/`](../../public/fonts/). При отсутствии — fallback на Helvetica (warning в лог).
+
+### Letterhead overlay
+
+Опциональный multipart-файл `letterhead`:
+
+- **PNG/JPEG** → рисуется как фон на каждой странице через pdfkit `image()` на событии `pageAdded`.
+- **PDF** → после генерации pdfkit'ом, overlay через `pdf-lib`: на каждую нашу страницу создаём новую с letterhead-подложкой под нашим контентом через `drawPage()`.
+
+Если PDF-overlay упал — отдаём PDF без подложки + warning. Magic-link'и в БД уже созданы.
+
+### Routes (`server/routes/organizer.cjs`)
+
+- `GET /api/organizer/sessions/:sid/invites/template.xlsx` — скачать пустой шаблон.
+- `POST /api/organizer/sessions/:sid/invites/preview` — multipart `file=xlsx`. Возвращает `{groups, warnings, stats, fileName}`. Не пишет в БД.
+- `POST /api/organizer/sessions/:sid/invites/generate` — multipart `file=xlsx` + optional `letterhead=pdf|png|jpeg` + form-fields `{layout, title?, footer?, ttlMinutes?}`. Создаёт magic-link'и в `auth_magic_links`, рендерит PDF, возвращает `application/pdf` (201). Audit: `organizer.invite.batch.generated`. Headers `X-Invites-Created` + `X-Invites-Groups`.
+
+### Что НЕ делает в v1
+
+- Не дедупит magic-link'и — каждый клик «Сгенерировать» выдаёт **новые** (старые валидны до истечения TTL).
+- Нет email-рассылки — только генерация PDF, организатор сам распространяет.
+- Нет per-row TTL — общий TTL на весь батч (24ч/48ч/7д/30д).
+- Нет CSV/Google Sheets источника, нет истории batch-инвайтов в UI.
+- Layout «QR-стикеры без текста» — в v2.
+
 ## Middleware-цепочка `/api`
 
 В `server/index.cjs`:
@@ -200,3 +260,63 @@ A: 11:30-13:30 | B: «Подготовка к закрытию» | E: «Маст
 8. routers
 9. SPA fallback (только GET)
 10. error handler
+
+## Настройка ИИ-агентов (admin agent prompts)
+
+Промпты и порядок сбора preamble-блоков для всех LLM-агентов системы вынесены из кода в таблицу `agent_prompts` и настраиваются админом через раздел «ИИ-агенты» в AdminCabinetView. Каждое сохранение = новая версия (автоинкремент `version` per `agent_type`), ровно одна `is_current = true` гарантируется UNIQUE PARTIAL индексом.
+
+### Поток
+
+```
+Admin UI (AgentPromptsPanel.jsx)
+  ↓ POST /api/admin/agent-prompts/:agentType
+agentPromptsStore.saveNewVersion(agentType, payload, actorId)
+  ↓ транзакция: demote previous current → INSERT new as current
+agentPromptsService.invalidateCache(agentType)
+  ↓ в этом же процессе
+Consumers (curatorChatContext, narrativeBriefLLM, programAnalyticsService)
+  ← resolvePrompt(agentType) → DB или HARDCODED_FALLBACK
+  + cache TTL 60 s (между процессами — холодный инвалидейт)
+```
+
+### Типы агентов v1
+
+| Тип                 | Где используется                                                                                        | Блоки контекста (`BLOCK_CATALOG`)                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `curator_chat`      | [`curatorChatContext.cjs`](../../server/services/curatorChatContext.cjs) — preamble чата куратора       | `members`, `feedback`, `concepts`                                                         |
+| `narrative_brief`   | [`narrativeBriefLLM.cjs`](../../server/services/narrativeBriefLLM.cjs) — записка дня                    | `picture`, `conversationPoints`, `eventList`, `programArc`, `allowedTerms`, `bannedTerms` |
+| `program_analytics` | [`programAnalyticsService.cjs`](../../server/services/programAnalyticsService.cjs) — отчёт по программе | `sessionMeta`, `programDays`, `aggregatedFeedback`, `eventConcepts`                       |
+| _custom_            | произвольный `agent_type` — UI не предоставляет каталог, но `blocksConfig` сохраняется как есть         | —                                                                                         |
+
+Кастомные типы создаются через API (не через UI) и полезны для standalone-агентов без preamble — только `systemText`.
+
+### Fallback
+
+Если миграция `1756_agent_prompts.js` не запущена или `agent_prompts` пуста — `agentPromptsService.resolvePrompt` возвращает зашитый в коде `HARDCODED_FALLBACK[agentType]` (зеркало seed'а из миграции). Это гарантирует, что система продолжает работать даже без БД-конфигурации. После первого `saveNewVersion` всё идёт из БД.
+
+### Инвалидация downstream-кешей
+
+Для narrative brief: `agentPromptsService.getPromptFingerprint(resolvedPrompt)` участвует в `fingerprint(signals)` — при сохранении новой версии все `narrative_brief_cache`-записи становятся stale при следующем запросе (новый fingerprint → cache miss → переподсчёт).
+
+Для curator chat: prompt-cache на стороне Anthropic SDK переподтверждается при изменении prefix'а — после первого ответа с новым промптом cache greedily перерасчёт ставится автоматически.
+
+### Безопасность
+
+- Все endpoints под `requireAdmin`. Preview доступен только админу.
+- `system_text` — лимит 20 000 символов.
+- `blocks_config` — валидируется по схеме (для известных `agent_type` — только ключи из `BLOCK_CATALOG`).
+- Сам `system_text` в audit-payload не пишется — он есть в `agent_prompts` истории. В audit идут только `{agentType, version, notes}`.
+
+### Endpoints
+
+| Метод | Путь                                               | Действие                                                                      |
+| ----- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| GET   | `/api/admin/agent-prompts`                         | Список current версий + `BLOCK_CATALOG`                                       |
+| GET   | `/api/admin/agent-prompts/:agentType`              | Current версия одного агента                                                  |
+| GET   | `/api/admin/agent-prompts/:agentType/history`      | Все версии (DESC, лимит 50 по умолчанию)                                      |
+| POST  | `/api/admin/agent-prompts/:agentType`              | Сохранить как новую версию                                                    |
+| POST  | `/api/admin/agent-prompts/restore/:versionId`      | Откат: создаёт новую версию на основе старой                                  |
+| POST  | `/api/admin/agent-prompts/:agentType/preview`      | Прогнать LLM с draft'ом, без сохранения. Аудит: `admin.agent_prompts.preview` |
+| POST  | `/api/admin/ai-reports/program-analytics/generate` | Сгенерировать отчёт по сессии, записать в `ai_reports`                        |
+| GET   | `/api/admin/ai-reports?sessionId=...&scope=...`    | Список отчётов                                                                |
+| GET   | `/api/admin/ai-reports/:reportId`                  | Просмотр отчёта                                                               |

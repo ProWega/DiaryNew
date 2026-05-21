@@ -23,11 +23,15 @@ const { query } = require("../db/postgres.cjs");
 const { applyToList } = require("../lib/privacy.cjs");
 const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
 const { normalizeFilter } = require("./chatContextFilter.cjs");
+const agentPromptsService = require("./agentPromptsService.cjs");
 
 const MAX_PREAMBLE_CHARS = 200_000; // ~50k токенов; защита от переполнения контекста
 const TOKEN_ESTIMATE_RATIO = 3.5; // средняя длина токена в char'ах (RU+EN)
 
-const SYSTEM_PROMPT = `Ты — методолог-наставник, помогаешь куратору группы на программе «Дневник пути».
+// Backup-fallback константа: используется только если agent_prompts таблица
+// недоступна и в service-fallback нет записи для "curator_chat".
+// Источник правды — agent_prompts через agentPromptsService.resolvePrompt.
+const LEGACY_FALLBACK_SYSTEM = `Ты — методолог-наставник, помогаешь куратору группы на программе «Дневник пути».
 
 Контекст: куратор работает с группой 6–10 человек на 5–7-дневной смене. У каждого участника свой «этап пути» (поиск / проверка / опора / передача / бережно), участники ежедневно отмечают своё состояние (тишина / настройка / лад / подъём / сбой) и оставляют комментарии о мероприятиях, а в конце дня — пишут рефлексию. Концепции мероприятий — задумки авторов программы; они объясняют, ЧТО событие должно вызвать у участников.
 
@@ -59,14 +63,31 @@ const SYSTEM_PROMPT = `Ты — методолог-наставник, помо�
  * Пустой filter / `{}` нормализуется к "всё включено" (ALL_INCLUDED) —
  * backward-compat с v2.0.
  */
-async function buildPreamble({ sessionId, groupId, filter } = {}) {
+async function buildPreamble({ sessionId, groupId, filter, blocksConfig: draftBlocks } = {}) {
   const f = normalizeFilter(filter);
+
+  // Разрешаем активный промпт из agent_prompts (с TTL-кешем на 60s). Источник
+  // правды для системного текста + порядка/выключения preamble-блоков.
+  // draftBlocks (опционально) приходит от admin-preview, чтобы можно было
+  // прогнать LLM с проектом конфигурации, не сохраняя её в БД.
+  const resolved = await agentPromptsService.resolvePrompt("curator_chat");
+  const systemText = resolved.systemText || LEGACY_FALLBACK_SYSTEM;
+  const activeBlocks = Array.isArray(draftBlocks) ? draftBlocks : resolved.blocksConfig;
+  const enabledKeys = new Set(
+    (activeBlocks || []).filter((b) => b.enabled !== false).map((b) => b.key),
+  );
+  // Если admin вообще не настроил блоки (пустой массив) — считаем «все включены»,
+  // чтобы не сломать legacy-вызовы.
+  const blocksUnconfigured = enabledKeys.size === 0;
+  const wantsMembers = f.includeMembers && (blocksUnconfigured || enabledKeys.has("members"));
+  const wantsFeedback = f.includeDays && (blocksUnconfigured || enabledKeys.has("feedback"));
+  const wantsConcepts = f.includeConcepts && (blocksUnconfigured || enabledKeys.has("concepts"));
 
   // Параллельно: участники, комментарии к мероприятиям, рефлексии, концепции.
   // Если секция отключена — соответствующий запрос не делаем, block = "".
   const [members, commentsRaw, reflectionsRaw, conceptsRaw, stateLevels] = await Promise.all([
-    f.includeMembers ? fetchMembers(sessionId, groupId, f.memberIds) : Promise.resolve([]),
-    f.includeDays
+    wantsMembers ? fetchMembers(sessionId, groupId, f.memberIds) : Promise.resolve([]),
+    wantsFeedback
       ? fetchEventComments({
           sessionId,
           groupId,
@@ -75,7 +96,7 @@ async function buildPreamble({ sessionId, groupId, filter } = {}) {
           memberIds: f.memberIds,
         })
       : Promise.resolve([]),
-    f.includeDays
+    wantsFeedback
       ? fetchDayReflections({
           sessionId,
           groupId,
@@ -83,13 +104,13 @@ async function buildPreamble({ sessionId, groupId, filter } = {}) {
           memberIds: f.memberIds,
         })
       : Promise.resolve([]),
-    f.includeConcepts ? eventConceptsStore.listBySession(sessionId) : Promise.resolve([]),
-    f.includeDays ? fetchStateLevels(sessionId) : Promise.resolve([]),
+    wantsConcepts ? eventConceptsStore.listBySession(sessionId) : Promise.resolve([]),
+    wantsFeedback ? fetchStateLevels(sessionId) : Promise.resolve([]),
   ]);
 
   // Фильтрация концепций по eventIds на JS-уровне (массив маленький).
   const concepts =
-    f.includeConcepts && f.eventIds.length
+    wantsConcepts && f.eventIds.length
       ? conceptsRaw.filter((c) => f.eventIds.includes(c.eventId))
       : conceptsRaw;
 
@@ -101,11 +122,11 @@ async function buildPreamble({ sessionId, groupId, filter } = {}) {
 
   const stateLabelById = new Map(stateLevels.map((s) => [s.id, s.label]));
 
-  const membersBlock = f.includeMembers ? formatMembers(members) : "";
-  const feedbackBlock = f.includeDays
+  const membersBlock = wantsMembers ? formatMembers(members) : "";
+  const feedbackBlock = wantsFeedback
     ? formatFeedback({ comments, reflections, stateLabelById })
     : "";
-  const conceptsBlock = f.includeConcepts ? formatConcepts(concepts) : "";
+  const conceptsBlock = wantsConcepts ? formatConcepts(concepts) : "";
 
   // Если совокупно вышли за лимит — обрезаем концепции (самое длинное).
   let estimated = membersBlock.length + feedbackBlock.length + conceptsBlock.length;
@@ -120,7 +141,7 @@ async function buildPreamble({ sessionId, groupId, filter } = {}) {
   }
 
   return {
-    systemText: SYSTEM_PROMPT,
+    systemText,
     membersBlock,
     feedbackBlock,
     conceptsBlock: trimmedConceptsBlock,
@@ -128,6 +149,8 @@ async function buildPreamble({ sessionId, groupId, filter } = {}) {
     estimatedTokens: Math.ceil(estimated / TOKEN_ESTIMATE_RATIO),
     contextTruncated: conceptsTruncated,
     filter: f,
+    promptVersion: resolved.version,
+    promptId: resolved.id,
   };
 }
 
@@ -578,5 +601,8 @@ async function listContextOptions({ sessionId, groupId }) {
 module.exports = {
   buildPreamble,
   listContextOptions,
-  SYSTEM_PROMPT,
+  // Exported for tests + legacy callers; the live prompt comes from
+  // agentPromptsService.resolvePrompt("curator_chat").
+  LEGACY_FALLBACK_SYSTEM,
+  SYSTEM_PROMPT: LEGACY_FALLBACK_SYSTEM,
 };

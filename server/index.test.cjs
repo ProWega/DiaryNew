@@ -265,6 +265,55 @@ describe("Phase 5.1: return points endpoints", () => {
   });
 });
 
+describe("Admin: agent prompts endpoints", () => {
+  const csrfHeaders = {
+    Cookie: "newdiary_csrf=t",
+    "X-CSRF-Token": "t",
+    "Content-Type": "application/json",
+  };
+
+  it("GET /api/admin/agent-prompts requires admin (401/403/500)", async () => {
+    const res = await request(app).get("/api/admin/agent-prompts");
+    expect([401, 403, 500]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  it("POST /api/admin/agent-prompts/curator_chat rejects without CSRF", async () => {
+    const res = await request(app)
+      .post("/api/admin/agent-prompts/curator_chat")
+      .set("Content-Type", "application/json")
+      .send({ systemText: "x" });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/CSRF/);
+  });
+
+  it("POST /api/admin/agent-prompts/:agentType validates payload before auth shape", async () => {
+    const res = await request(app)
+      .post("/api/admin/agent-prompts/curator_chat")
+      .set(csrfHeaders)
+      .send({ systemText: "" });
+    // CSRF passes (matching). Either auth (401/403) or validation (400). NOT 5xx.
+    expect(res.status).toBeLessThan(500);
+  });
+
+  it("POST /preview rejects when systemText missing", async () => {
+    const res = await request(app)
+      .post("/api/admin/agent-prompts/curator_chat/preview")
+      .set(csrfHeaders)
+      .send({});
+    expect([400, 401, 403]).toContain(res.status);
+  });
+
+  it("agentType must be safe identifier (a-z0-9_)", async () => {
+    const res = await request(app)
+      .post("/api/admin/agent-prompts/BAD-Type-with-dashes/preview")
+      .set(csrfHeaders)
+      .send({ systemText: "x" });
+    // Either 400 (validation) or auth gate fires first.
+    expect([400, 401, 403]).toContain(res.status);
+  });
+});
+
 describe("Phase 4.1: GET /api/curator/.../brief — narrative записка", () => {
   it("rejects unauthenticated read (401/403/500 — anything but a 200 response)", async () => {
     const res = await request(app).get("/api/curator/sessions/s1/groups/g1/brief");
