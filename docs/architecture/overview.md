@@ -6,7 +6,7 @@
 - [Frontend stack](./frontend-stack.md) — TypeScript, React Query, MSW, декомпозиция view;
 - [Миграции БД](./migrations.md) — workflow `node-pg-migrate`;
 - [Безопасность](./security.md) — helmet, CORS, rate-limit, zod-валидация, CSRF, audit log;
-- [Methodology mapping](./methodology-mapping.md) — связь между методологией и доменом (journey_stage, careful_mode, рефлексия, точки возврата);
+- [Methodology mapping](./methodology-mapping.md) — связь между методологией и доменом (7-балльная активационная шкала, journey_stage, рефлексия, точки возврата);
 - [Curator AI v2](./curator-ai.md) — narrative-brief, кеш, чат «Разговор с ИИ», концепции мероприятий, бюджет токенов, выбор Anthropic / OpenAI.
 
 ## Контуры приложения

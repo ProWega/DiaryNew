@@ -38,8 +38,7 @@ function ProgramScoreSection({ brief }) {
       {stages ? (
         <p className="curator-arc-resonance subtle">
           Сегодня в группе: Поиск — {stages.search ?? 0}, Проверка — {stages.verification ?? 0},
-          Опора — {stages.support ?? 0}, Передача — {stages.transmission ?? 0}, Бережно —{" "}
-          {stages.careful ?? 0}.
+          Опора — {stages.support ?? 0}, Передача — {stages.transmission ?? 0}.
         </p>
       ) : null}
     </article>

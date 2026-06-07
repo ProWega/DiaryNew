@@ -42,8 +42,8 @@ describe("curatorChatContext.buildPreamble — feedback block", () => {
     mockQueryQueue([
       // 1. members
       rows([
-        { id: "u-1", full_name: "Иван Петров", journey_stage: "поиск", is_careful_mode: false },
-        { id: "u-2", full_name: "Анна Кузнецова", journey_stage: "опора", is_careful_mode: true },
+        { id: "u-1", full_name: "Иван Петров", journey_stage: "поиск" },
+        { id: "u-2", full_name: "Анна Кузнецова", journey_stage: "опора" },
       ]),
       // 2. comments
       rows([
@@ -95,7 +95,7 @@ describe("curatorChatContext.buildPreamble — feedback block", () => {
     });
 
     expect(preamble.membersBlock).toContain("Иван Петров — этап: поиск");
-    expect(preamble.membersBlock).toContain("Анна Кузнецова — этап: опора; режим «бережно»");
+    expect(preamble.membersBlock).toContain("Анна Кузнецова — этап: опора");
     expect(preamble.feedbackBlock).toContain("## Обратная связь участников");
     expect(preamble.feedbackBlock).toContain("Мероприятие: «Утренний круг»");
     expect(preamble.feedbackBlock).toContain("Иван Петров · отметил «лад»");
@@ -194,7 +194,7 @@ describe("curatorChatContext.buildPreamble — feedback block", () => {
   it("memberIds filter does not drop anonymous comments by other users", async () => {
     mockQueryQueue([
       // members (passes through filter)
-      rows([{ id: "u-1", full_name: "Иван", journey_stage: "поиск", is_careful_mode: false }]),
+      rows([{ id: "u-1", full_name: "Иван", journey_stage: "поиск" }]),
       // comments
       rows([
         {

@@ -108,13 +108,11 @@ const updateReflectionSchema = z
   })
   .strict();
 
-// PATCH /api/participant/sessions/:sessionId/journey-stage — v4: sets etap puti
-// + careful mode at session_user level. Both fields optional individually so
-// participant can update one without resetting the other.
+// PATCH /api/participant/sessions/:sessionId/journey-stage — выбор этапа пути
+// на уровне session_user.
 const updateJourneyStageSchema = z
   .object({
     journeyStage: z.enum(JOURNEY_STAGE_VALUES).nullable().optional(),
-    isCarefulMode: z.boolean().optional(),
   })
   .strict();
 

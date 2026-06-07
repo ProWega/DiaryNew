@@ -169,7 +169,6 @@ function AppLayout() {
 
   const sessionId = bootstrap?.sessionInfo?.id ?? null;
   const journeyStage = bootstrap?.journeyStage ?? null;
-  const isCarefulMode = bootstrap?.isCarefulMode ?? false;
 
   // Lifted from the Gate so the topbar chip can also flip it back.
   const [journeyStageSkipped, setJourneyStageSkipped] = useState(() => {
@@ -207,7 +206,7 @@ function AppLayout() {
     setJourneyStageSkipped(false);
   }
 
-  const journeyStageNotChosen = journeyStage === null && !isCarefulMode;
+  const journeyStageNotChosen = journeyStage === null;
   const showJourneyStageGate = journeyStageNotChosen && !journeyStageSkipped;
   const showJourneyStageChip = journeyStageNotChosen && journeyStageSkipped;
 

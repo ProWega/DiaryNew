@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { STATE_LABEL_META } from "../../../data/methodology";
+import { STATE_SCALE_META } from "../../../data/stateScaleModel";
 import { useRegenerateCuratorBrief, useCuratorUsage } from "../../../api/hooks";
 import UsageBadge from "../../../components/curator/UsageBadge";
 
 const REASON_LABEL = {
-  careful_mode: "Бережно",
   shift_down: "Резкая смена",
-  silence_streak: "Тишина подряд",
+  low_activation_streak: "Низкая активация подряд",
+  high_activation: "Высокая активация",
 };
 
 function formatCachedAt(iso) {
@@ -48,7 +48,7 @@ function ReflectionNoteSection({ brief, sessionId, groupId }) {
 
   if (!brief) return null;
   const { picture, stageResonance, conversationPoints, events, dayLabel, narrative } = brief;
-  const dominant = picture?.dominantState ? STATE_LABEL_META[picture.dominantState] : null;
+  const dominant = picture?.dominantState ? STATE_SCALE_META[picture.dominantState] : null;
   const hasNarrativeText = Boolean(narrative?.text);
   const isFromCache = narrative?.source === "db-cache";
   const cachedAtLabel = isFromCache ? formatCachedAt(narrative?.cachedAt) : null;
@@ -107,19 +107,12 @@ function ReflectionNoteSection({ brief, sessionId, groupId }) {
       <div className="curator-brief-picture">
         {dominant ? (
           <p className="curator-brief-picture-line">
-            Сегодня в группе чаще всего слышался <strong>{dominant.ru}</strong>:{" "}
+            Сегодня в группе чаще всего отмечалось состояние <strong>{dominant.label}</strong>:{" "}
             <span className="subtle">{dominant.description}</span>
           </p>
         ) : (
           <p className="subtle">Сегодня записей пока мало — картина дня прояснится позже.</p>
         )}
-        {picture?.carefulCount ? (
-          <p className="curator-brief-picture-line is-careful">
-            {picture.carefulCount}{" "}
-            {picture.carefulCount === 1 ? "участник просит" : "участника(ов) просят"} бережно —
-            стоит подойти деликатно.
-          </p>
-        ) : null}
       </div>
 
       <section className="curator-brief-stages">
@@ -140,10 +133,6 @@ function ReflectionNoteSection({ brief, sessionId, groupId }) {
           <li>
             <span>Передача</span>
             <strong>{stageResonance?.transmission ?? 0}</strong>
-          </li>
-          <li className="is-careful">
-            <span>Бережно</span>
-            <strong>{stageResonance?.careful ?? 0}</strong>
           </li>
         </ul>
       </section>

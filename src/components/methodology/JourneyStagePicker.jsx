@@ -2,13 +2,12 @@ import clsx from "clsx";
 import { JOURNEY_STAGE, JOURNEY_STAGE_META } from "../../data/methodology";
 
 /**
- * Onboarding-screen для выбора этапа пути (4 варианта по методике v4).
+ * Onboarding-screen для выбора этапа пути (4 варианта).
  * Не настрой и не настроение — это «где я в течение жизни». Этапы циклически
  * переживаются заново; педагог в Передаче может на новой смене оказаться
  * в Поиске. Это не регресс, а живое движение пути.
  *
- * Бережность («сейчас бережно») — отдельный флаг, не часть этапов.
- * См. CarefulModeToggle.jsx и docs/architecture/methodology-mapping.md.
+ * См. docs/architecture/methodology-mapping.md.
  *
  * Props:
  *  - value: JourneyStage | null    — выбранный этап (или null)

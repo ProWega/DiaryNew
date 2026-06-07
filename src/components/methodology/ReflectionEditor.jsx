@@ -3,20 +3,16 @@ import {
   SUMMARY_AXES,
   SUMMARY_AXIS_META,
   REFLECTION_PROMPTS_BY_STAGE,
-  REFLECTION_PROMPTS_CAREFUL,
 } from "../../data/methodology";
 
 /**
- * Reflection editor — итог дня по методике v4.
- * Три оси: Ум / Сердце / Воля + свободная запись.
- * Тон вопросов меняется под этап пути; при is_careful_mode=true
- * применяются мягкие промпты поверх любого этапа.
+ * Reflection editor — итог дня. Три оси: Ум / Сердце / Воля + свободная запись.
+ * Тон вопросов меняется под этап пути (journeyStage).
  *
  * Props:
  *  - value: { mind?: string, heart?: string, will?: string, freeText?: string }
  *  - onChange: (next: typeof value) => void
  *  - journeyStage?: JourneyStage  — для подбора тона промптов (default — стандартные defaultPrompt)
- *  - isCarefulMode?: boolean      — если true, перебивает stage и применяет мягкие промпты
  *  - showFreeText?: boolean       — default true; свободная запись после трёх осей
  *  - compact?: boolean            — без описания и подсказок
  */
@@ -24,11 +20,10 @@ function ReflectionEditor({
   value = {},
   onChange,
   journeyStage = null,
-  isCarefulMode = false,
   showFreeText = true,
   compact = false,
 }) {
-  const prompts = resolvePrompts(journeyStage, isCarefulMode);
+  const prompts = resolvePrompts(journeyStage);
 
   function patch(field, nextValue) {
     onChange?.({ ...value, [field]: nextValue });
@@ -85,16 +80,10 @@ function ReflectionEditor({
   );
 }
 
-function resolvePrompts(journeyStage, isCarefulMode) {
-  if (isCarefulMode) {
-    return REFLECTION_PROMPTS_CAREFUL;
-  }
-
+function resolvePrompts(journeyStage) {
   if (journeyStage && REFLECTION_PROMPTS_BY_STAGE[journeyStage]) {
     return REFLECTION_PROMPTS_BY_STAGE[journeyStage];
   }
-
-  // Fallback: дефолтные промпты из SUMMARY_AXIS_META
   return SUMMARY_AXES.reduce((acc, axis) => {
     acc[axis] = SUMMARY_AXIS_META[axis].defaultPrompt;
     return acc;

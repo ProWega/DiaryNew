@@ -90,7 +90,7 @@ res.json(result);
 
 - `user.create`, `user.update`, `user.status_change`, `user.assignment`
 - `session.create`, `session.update`, `session.registration_update`
-- `methodology.journey_stage.update` — выбор этапа пути / careful_mode участником
+- `methodology.journey_stage.update` — выбор этапа пути участником
 - `program_event.concept.upload`, `program_event.concept.delete` — концепции мероприятий (Curator AI v2)
 
 Расширение — по мере появления новых compliance-требований.
@@ -293,6 +293,10 @@ Consumers (curatorChatContext, narrativeBriefLLM, programAnalyticsService)
 ### Fallback
 
 Если миграция `1756_agent_prompts.js` не запущена или `agent_prompts` пуста — `agentPromptsService.resolvePrompt` возвращает зашитый в коде `HARDCODED_FALLBACK[agentType]` (зеркало seed'а из миграции). Это гарантирует, что система продолжает работать даже без БД-конфигурации. После первого `saveNewVersion` всё идёт из БД.
+
+### Версии и upgrade-миграции
+
+Миграция `1756_agent_prompts.js` создаёт v1 с seed-текстами. Любая правка через admin-UI или upgrade-миграция (например, `1757_agent_prompts_v2_seven_point.js` — возврат на 7-балльную активационную шкалу) автоматически становится новой `is_current`-версией, прошлая уходит в историю с `is_current=false` и доступна к откату. История версий видна в админ-кабинете «ИИ-агенты» → «История».
 
 ### Инвалидация downstream-кешей
 

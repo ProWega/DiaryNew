@@ -92,54 +92,6 @@
   }
 }
 
-/* CarefulModeToggle — флаг «бережно» поверх любого этапа */
-
-.careful-toggle {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-1);
-  cursor: pointer;
-  background: var(--color-surface);
-  transition: border-color 0.15s ease;
-}
-
-.careful-toggle:hover {
-  border-color: var(--color-sky-border);
-}
-
-.careful-toggle.is-active {
-  border-color: var(--color-text-accent);
-  background: var(--color-accent-bg);
-}
-
-.careful-toggle input[type="checkbox"] {
-  margin-top: 3px;
-}
-
-.careful-toggle-body {
-  display: grid;
-  gap: 2px;
-}
-
-.careful-toggle-body strong {
-  font-size: var(--font-size-base);
-  font-weight: 500;
-}
-
-.careful-toggle-body em {
-  font-style: normal;
-  color: var(--color-text-soft);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-}
-
-.careful-toggle.is-compact {
-  padding: var(--space-2) var(--space-3);
-}
-
 /* PrivacyToggle — две независимые галки на запись */
 
 .privacy-toggle {

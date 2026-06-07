@@ -159,7 +159,7 @@ export const jsonApi = {
   updateJourneyStage(
     viewerId: string | number,
     sessionId: string | number,
-    patch: { journeyStage?: string | null; isCarefulMode?: boolean },
+    patch: { journeyStage?: string | null },
   ) {
     return requestJson(`/api/participant/sessions/${sessionId}/journey-stage`, {
       method: "PATCH",

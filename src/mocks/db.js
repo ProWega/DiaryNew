@@ -63,22 +63,24 @@ export function buildSeedDatabase() {
         picture: {
           totalParticipants: 12,
           respondedToday: 9,
-          dominantState: "harmony",
-          dominantStateLabel: "Лад",
-          carefulCount: 2,
+          dominantState: "balance",
+          dominantStateLabel: "Баланс",
+          lowActivationCount: 1,
+          workingActivationCount: 6,
+          highActivationCount: 2,
         },
         conversationPoints: [
           {
             participantId: "user-participant-2",
             displayName: "Анна К.",
-            reason: "careful_mode",
-            note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+            reason: "low_activation_streak",
+            note: "Второй день в низкой активации — стоит просто побыть рядом.",
           },
           {
             participantId: "user-participant-3",
             displayName: "Илья М.",
             reason: "shift_down",
-            note: "Вчера в Ладе, сегодня в Сбое.",
+            note: "Вчера в Балансе, сегодня в Перевозбуждённости.",
           },
         ],
         stageResonance: {
@@ -86,7 +88,6 @@ export function buildSeedDatabase() {
           verification: 3,
           support: 3,
           transmission: 2,
-          careful: 2,
         },
         events: [
           {
@@ -102,9 +103,8 @@ export function buildSeedDatabase() {
             displayName: "Иван П.",
             journeyStage: "support",
             journeyStageLabel: "Опора",
-            isCarefulMode: false,
-            today: { id: "harmony", ru: "Лад" },
-            yesterday: { id: "tuning", ru: "Настройка" },
+            today: { id: "balance", ru: "Баланс" },
+            yesterday: { id: "relaxed", ru: "Расслабленность" },
             conversationHint: null,
           },
           {
@@ -112,12 +112,11 @@ export function buildSeedDatabase() {
             displayName: "Анна К.",
             journeyStage: "verification",
             journeyStageLabel: "Проверка",
-            isCarefulMode: true,
-            today: { id: "tuning", ru: "Настройка" },
-            yesterday: { id: "harmony", ru: "Лад" },
+            today: { id: "passive", ru: "Пассивность" },
+            yesterday: { id: "apathy", ru: "Апатия" },
             conversationHint: {
-              reason: "careful_mode",
-              note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+              reason: "low_activation_streak",
+              note: "Второй день в низкой активации — стоит просто побыть рядом.",
             },
           },
           {
@@ -125,12 +124,11 @@ export function buildSeedDatabase() {
             displayName: "Илья М.",
             journeyStage: "search",
             journeyStageLabel: "Поиск",
-            isCarefulMode: false,
-            today: { id: "breakdown", ru: "Сбой" },
-            yesterday: { id: "harmony", ru: "Лад" },
+            today: { id: "overstimulated", ru: "Перевозбуждённость" },
+            yesterday: { id: "balance", ru: "Баланс" },
             conversationHint: {
               reason: "shift_down",
-              note: "Вчера в Ладе, сегодня в Сбое.",
+              note: "Вчера в Балансе, сегодня в Перевозбуждённости.",
             },
           },
           {
@@ -138,8 +136,7 @@ export function buildSeedDatabase() {
             displayName: "Мария В.",
             journeyStage: "transmission",
             journeyStageLabel: "Передача",
-            isCarefulMode: false,
-            today: { id: "lift", ru: "Подъём" },
+            today: { id: "engaged", ru: "Включённость" },
             yesterday: null,
             conversationHint: null,
           },
@@ -151,8 +148,8 @@ export function buildSeedDatabase() {
               dayLabel: "День 1",
               respondedCount: 9,
               totalEntries: 14,
-              dominantState: "harmony",
-              dominantStateLabel: "Лад",
+              dominantState: "balance",
+              dominantStateLabel: "Баланс",
             },
             {
               dayId: "day-2",
@@ -165,7 +162,7 @@ export function buildSeedDatabase() {
           ],
         },
         narrative: {
-          text: "День прошёл в Ладе — большинство в группе нашли свой ритм и держатся рядом. Двое в бережном — стоит подойти к ним мягко, без напоминаний и заданий. У одного резкое смещение в Сбой после ровного вчера: возможно, важно просто побыть рядом и не настаивать на разговоре, если он не готов. Утренний круг отозвался теплее всего — оттуда можно начать вечернюю встречу.",
+          text: "День прошёл в рабочей активации — большинство в группе нашли свой ритм и держатся рядом. Одна участница второй день в низкой активации — стоит просто побыть рядом без напоминаний. У другого резкая смена в высокую активацию после ровного вчера: возможно, важно не настаивать на разговоре сразу. Утренний круг отозвался теплее всего — оттуда можно начать вечернюю встречу.",
           source: "llm",
         },
       },
@@ -313,10 +310,9 @@ export function enrichBootstrap(db, viewer) {
     reflectionPrompts,
     navigation: getNavigationItems(viewer),
     scopeBadges: getScopeBadges(viewer),
-    // Methodology v4: journey stage + careful mode for current participant.
-    // Persisted on the user record via PATCH /api/participant/.../journey-stage.
+    // Этап пути участника. Persisted на user-record через
+    // PATCH /api/participant/.../journey-stage.
     journeyStage: viewer.journeyStage ?? null,
-    isCarefulMode: viewer.isCarefulMode ?? false,
   };
 }
 

@@ -1,23 +1,16 @@
 import { useState } from "react";
 import Modal from "../ui/Modal";
 import JourneyStagePicker from "./JourneyStagePicker";
-import CarefulModeToggle from "./CarefulModeToggle";
 
 /**
  * Onboarding-модал, показываемый при первом входе участника в диарий.
- * Содержит JourneyStagePicker (4 этапа) + CarefulModeToggle (бережно).
- *
- * Методически:
- * - выбор этапа можно пропустить («решу позже» — onSkip)
- * - оба поля независимы: можно выбрать этап без бережно или наоборот
- * - когда оба поля заполнены / только одно — onSubmit получает то что есть
+ * Содержит JourneyStagePicker (4 этапа).
  *
  * Props:
  *  - open: boolean
- *  - onSubmit: (patch: { journeyStage: JourneyStage|null, isCarefulMode: boolean }) => void
+ *  - onSubmit: (patch: { journeyStage: JourneyStage|null }) => void
  *  - onSkip: () => void  — закрыть без сохранения
  *  - initialStage?: JourneyStage | null
- *  - initialCarefulMode?: boolean
  *  - saving?: boolean — disable buttons while API call in flight
  */
 function JourneyStageOnboardingModal({
@@ -25,14 +18,12 @@ function JourneyStageOnboardingModal({
   onSubmit,
   onSkip,
   initialStage = null,
-  initialCarefulMode = false,
   saving = false,
 }) {
   const [stage, setStage] = useState(initialStage);
-  const [careful, setCareful] = useState(initialCarefulMode);
 
   function handleSave() {
-    onSubmit?.({ journeyStage: stage, isCarefulMode: careful });
+    onSubmit?.({ journeyStage: stage });
   }
 
   return (
@@ -51,10 +42,6 @@ function JourneyStageOnboardingModal({
           subtitle="Выбор не обязательный — можно пропустить и решить позже."
         />
 
-        <div className="stage-onboarding-careful">
-          <CarefulModeToggle value={careful} onChange={setCareful} />
-        </div>
-
         <div className="stage-onboarding-actions">
           <button type="button" className="ghost-button" onClick={onSkip} disabled={saving}>
             Решу позже
@@ -63,7 +50,7 @@ function JourneyStageOnboardingModal({
             type="button"
             className="primary-button"
             onClick={handleSave}
-            disabled={saving || (stage === null && !careful)}
+            disabled={saving || stage === null}
           >
             {saving ? "Сохраняем..." : "Сохранить"}
           </button>

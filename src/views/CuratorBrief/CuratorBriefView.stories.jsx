@@ -6,31 +6,33 @@ const sampleBrief = {
   picture: {
     totalParticipants: 12,
     respondedToday: 9,
-    dominantState: "harmony",
-    dominantStateLabel: "Лад",
-    carefulCount: 2,
+    dominantState: "balance",
+    dominantStateLabel: "Баланс",
+    lowActivationCount: 2,
+    workingActivationCount: 5,
+    highActivationCount: 2,
   },
   conversationPoints: [
     {
       participantId: "u-2",
       displayName: "Анна К.",
-      reason: "careful_mode",
-      note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+      reason: "low_activation_streak",
+      note: "Второй день в низкой активации — стоит просто побыть рядом.",
     },
     {
       participantId: "u-3",
       displayName: "Илья М.",
       reason: "shift_down",
-      note: "Вчера в Ладе, сегодня в Сбое.",
+      note: "Вчера в Балансе, сегодня в Перевозбуждённости.",
     },
     {
       participantId: "u-4",
       displayName: "Мария В.",
-      reason: "silence_streak",
-      note: "Второй день в Тишине — может быть, стоит просто побыть рядом.",
+      reason: "high_activation",
+      note: "Сегодня в Панике — стоит проверить, нужна ли пауза или разговор.",
     },
   ],
-  stageResonance: { search: 4, verification: 3, support: 3, transmission: 2, careful: 2 },
+  stageResonance: { search: 4, verification: 3, support: 3, transmission: 2 },
   events: [
     {
       id: "e-1",
@@ -46,9 +48,8 @@ const sampleBrief = {
       displayName: "Иван П.",
       journeyStage: "support",
       journeyStageLabel: "Опора",
-      isCarefulMode: false,
-      today: { id: "harmony", ru: "Лад" },
-      yesterday: { id: "tuning", ru: "Настройка" },
+      today: { id: "balance", ru: "Баланс" },
+      yesterday: { id: "relaxed", ru: "Расслабленность" },
       conversationHint: null,
     },
     {
@@ -56,12 +57,11 @@ const sampleBrief = {
       displayName: "Анна К.",
       journeyStage: "verification",
       journeyStageLabel: "Проверка",
-      isCarefulMode: true,
-      today: { id: "tuning", ru: "Настройка" },
-      yesterday: { id: "harmony", ru: "Лад" },
+      today: { id: "passive", ru: "Пассивность" },
+      yesterday: { id: "apathy", ru: "Апатия" },
       conversationHint: {
-        reason: "careful_mode",
-        note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+        reason: "low_activation_streak",
+        note: "Второй день в низкой активации — стоит просто побыть рядом.",
       },
     },
     {
@@ -69,12 +69,11 @@ const sampleBrief = {
       displayName: "Илья М.",
       journeyStage: "search",
       journeyStageLabel: "Поиск",
-      isCarefulMode: false,
-      today: { id: "breakdown", ru: "Сбой" },
-      yesterday: { id: "harmony", ru: "Лад" },
+      today: { id: "overstimulated", ru: "Перевозбуждённость" },
+      yesterday: { id: "balance", ru: "Баланс" },
       conversationHint: {
         reason: "shift_down",
-        note: "Вчера в Ладе, сегодня в Сбое.",
+        note: "Вчера в Балансе, сегодня в Перевозбуждённости.",
       },
     },
     {
@@ -82,8 +81,7 @@ const sampleBrief = {
       displayName: "Мария В.",
       journeyStage: "transmission",
       journeyStageLabel: "Передача",
-      isCarefulMode: false,
-      today: { id: "lift", ru: "Подъём" },
+      today: { id: "engaged", ru: "Включённость" },
       yesterday: null,
       conversationHint: null,
     },
@@ -95,8 +93,8 @@ const sampleBrief = {
         dayLabel: "День 1",
         respondedCount: 9,
         totalEntries: 14,
-        dominantState: "harmony",
-        dominantStateLabel: "Лад",
+        dominantState: "balance",
+        dominantStateLabel: "Баланс",
       },
       {
         dayId: "day-2",
@@ -117,7 +115,7 @@ const sampleBrief = {
     ],
   },
   narrative: {
-    text: "День прошёл в Ладе — большинство в группе нашли свой ритм и держатся рядом. Двое в бережном — стоит подойти к ним мягко, без напоминаний и заданий. У одного резкое смещение в Сбой после ровного вчера: возможно, важно просто побыть рядом и не настаивать на разговоре.",
+    text: "День прошёл в рабочей активации — большинство в группе нашли свой ритм и держатся рядом. Одна участница второй день в низкой активации — стоит просто побыть рядом без напоминаний. У другого резкая смена в высокую активацию после ровного вчера: возможно, важно не настаивать на разговоре сразу.",
     source: "llm",
   },
 };
@@ -125,9 +123,16 @@ const sampleBrief = {
 const emptyBrief = {
   dayId: "",
   dayLabel: "",
-  picture: { totalParticipants: 0, respondedToday: 0, dominantState: null, carefulCount: 0 },
+  picture: {
+    totalParticipants: 0,
+    respondedToday: 0,
+    dominantState: null,
+    lowActivationCount: 0,
+    workingActivationCount: 0,
+    highActivationCount: 0,
+  },
   conversationPoints: [],
-  stageResonance: { search: 0, verification: 0, support: 0, transmission: 0, careful: 0 },
+  stageResonance: { search: 0, verification: 0, support: 0, transmission: 0 },
   events: [],
   participantCards: [],
   programArc: { dayBreakdown: [] },
@@ -148,12 +153,13 @@ export const Empty = {
   args: { brief: emptyBrief },
 };
 
-export const NoCarefulNoEvents = {
+export const NoHotPointsNoEvents = {
   args: {
     brief: {
       ...sampleBrief,
-      picture: { ...sampleBrief.picture, carefulCount: 0 },
-      conversationPoints: sampleBrief.conversationPoints.filter((p) => p.reason !== "careful_mode"),
+      conversationPoints: sampleBrief.conversationPoints.filter(
+        (p) => p.reason !== "high_activation",
+      ),
       events: [],
     },
   },

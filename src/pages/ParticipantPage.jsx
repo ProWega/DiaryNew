@@ -239,7 +239,6 @@ function ParticipantPage({ mode }) {
       overallAverages={overallAverages}
       formatAverage={formatAverage}
       journeyStage={bootstrap.journeyStage ?? null}
-      isCarefulMode={Boolean(bootstrap.isCarefulMode)}
       userId={currentUser?.id || ""}
       setParallelSelection={setParallelSelection}
     />

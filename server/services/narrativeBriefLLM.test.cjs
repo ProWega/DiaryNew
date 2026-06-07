@@ -12,9 +12,16 @@ const {
 const sampleBrief = {
   dayId: "day-1",
   dayLabel: "День 1",
-  picture: { totalParticipants: 10, respondedToday: 8, dominantState: "harmony", carefulCount: 1 },
-  conversationPoints: [{ participantId: "u-1", reason: "careful_mode", note: "..." }],
-  stageResonance: { search: 3, verification: 2, support: 3, transmission: 2, careful: 1 },
+  picture: {
+    totalParticipants: 10,
+    respondedToday: 8,
+    dominantState: "balance",
+    lowActivationCount: 1,
+    workingActivationCount: 6,
+    highActivationCount: 1,
+  },
+  conversationPoints: [{ participantId: "u-1", reason: "high_activation", note: "..." }],
+  stageResonance: { search: 3, verification: 2, support: 3, transmission: 2 },
   events: [{ id: "e-1", title: "Утренний круг", responseCount: 8, quotes: [] }],
 };
 
@@ -59,8 +66,8 @@ describe("fingerprint", () => {
     groupId: "g-1",
     dayId: "day-1",
     members: [
-      { id: "u-1", journeyStage: "search", isCarefulMode: false },
-      { id: "u-2", journeyStage: "support", isCarefulMode: true },
+      { id: "u-1", journeyStage: "search" },
+      { id: "u-2", journeyStage: "support" },
     ],
     entries: [
       {
@@ -167,7 +174,7 @@ describe("SYSTEM_PROMPT — methodology contract", () => {
   });
 
   it("BANNED_TERMS includes the high-priority diagnostic words", () => {
-    for (const word of ["риск", "уровень", "статус", "диагноз", "прогресс", "метрика"]) {
+    for (const word of ["риск", "статус", "диагноз", "прогресс", "метрика"]) {
       expect(BANNED_TERMS).toContain(word);
     }
   });

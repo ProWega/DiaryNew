@@ -1,95 +1,20 @@
 /**
- * Methodology constants for «Дневник пути» (Истоки), version v4.
+ * Methodology constants for «Дневник пути» (Истоки).
  *
- * This file is the single source of truth for:
- *  - 5 methodology state labels (Тишина / Настройка / Лад / Подъём / Сбой)
- *  - mapping 7 current state ids → 5 methodology labels
+ * Состояние участника фиксируется по 7-балльной активационной шкале
+ * «от Апатии до Паники» — см. [src/data/stateScaleModel.js](./stateScaleModel.js)
+ * (STATE_SCALE_META). 5-уровневая методическая карта v4 (Тишина/Настройка/Лад/
+ * Подъём/Сбой) изъята; опциональные picker-варианты `arc-5/emoji-5/slider-5`
+ * получают своё описание из внутреннего overlay в stateScaleModel.js.
+ *
+ * Этот файл — single source of truth для:
  *  - 4 journey stages: Поиск / Проверка / Опора / Передача
- *  - careful mode flag («бережно» поверх любого этапа)
  *  - 3 group lad values (С группой / Рядом / В стороне)
  *  - 3 day-summary axes (Ум / Сердце / Воля)
- *  - prompts per axis × per journey stage + careful-mode prompts
+ *  - prompts per axis × per journey stage
  *
- * See docs/architecture/methodology-mapping.md for the rationale and the
- * "что нельзя нарушать" technical contract this file supports.
+ * См. docs/architecture/methodology-mapping.md для контракта.
  */
-
-// ── 5 methodology states ──────────────────────────────────────────────
-
-export const STATE_LABELS = ["silence", "tuning", "harmony", "lift", "breakdown"] as const;
-export type MethodologyState = (typeof STATE_LABELS)[number];
-
-interface StateLabelMeta {
-  ru: string;
-  description: string;
-  participantHint: string;
-}
-
-export const STATE_LABEL_META: Record<MethodologyState, StateLabelMeta> = {
-  silence: {
-    ru: "Тишина",
-    description: "Внутри тихо, наблюдаю, мало откликается.",
-    participantHint: "Это не провал — состояние накопления.",
-  },
-  tuning: {
-    ru: "Настройка",
-    description: "Прислушиваюсь, пристраиваюсь, ещё не вошёл, но уже здесь.",
-    participantHint: "Постепенно настраиваюсь.",
-  },
-  harmony: {
-    ru: "Лад",
-    description: "Со-настроен с собой, темой и людьми. Иду в ритме.",
-    participantHint: "В рабочем ритме.",
-  },
-  lift: {
-    ru: "Подъём",
-    description: "Много жара, ярко, хочется говорить и делать. Иногда через край.",
-    participantHint: "В подъёме.",
-  },
-  breakdown: {
-    ru: "Сбой",
-    description: "Слишком много или что-то не идёт. Нужна остановка или разговор.",
-    participantHint: "Стоит сделать паузу или поговорить.",
-  },
-};
-
-// ── Mapping: 7 current state ids → 5 methodology labels ──────────────
-
-/**
- * Maps existing `STATE_SCALE_ORDER` ids (7-level scale from stateScaleModel.js)
- * to the methodology's 5-level scale. The 7-level data stays in DB — UI
- * groups display through this mapping (variant B from the migration plan).
- */
-export const STATE_SCALE_TO_METHODOLOGY: Record<string, MethodologyState> = {
-  apathy: "silence",
-  passive: "silence",
-  relaxed: "tuning",
-  balance: "harmony",
-  engaged: "lift",
-  overstimulated: "breakdown",
-  panic: "breakdown",
-};
-
-/**
- * Reverse mapping: methodology label → canonical 7-level stateId picked when
- * the participant selects this label in a 5-level UI. Middle of each group so
- * новые записи не сваливаются в крайние `apathy`/`panic` (правило «Тишина не
- * дно» и симметричное «Сбой не край»).
- */
-export const STATE_METHODOLOGY_TO_DEFAULT_SCALE: Record<MethodologyState, string> = {
-  silence: "passive",
-  tuning: "relaxed",
-  harmony: "balance",
-  lift: "engaged",
-  breakdown: "overstimulated",
-};
-
-/**
- * Stable display order for the 5 methodology labels (silence → breakdown).
- * Re-exported alias of STATE_LABELS for callers that want the ordering intent
- * to be explicit.
- */
-export const STATE_METHODOLOGY_ORDER = STATE_LABELS;
 
 // ── Group lad (second dimension of state) ────────────────────────────
 
@@ -114,11 +39,9 @@ export const GROUP_LAD_META: Record<GroupLad, { ru: string; description: string 
 // ── Journey stage (этап пути) ────────────────────────────────────────
 
 /**
- * 4 этапа пути по методике v4. Этапы циклически переживаются заново —
- * педагог в Передаче может на новой смене оказаться в Поиске. Это не регресс,
- * а живое движение пути (раздел II.2 v4).
- *
- * NB: «Тишина» больше не этап — стала отдельным флагом `careful_mode` ниже.
+ * 4 этапа пути. Этапы циклически переживаются заново — педагог в Передаче
+ * может на новой смене оказаться в Поиске. Это не регресс, а живое движение
+ * пути.
  */
 export const JOURNEY_STAGE = ["search", "verification", "support", "transmission"] as const;
 export type JourneyStage = (typeof JOURNEY_STAGE)[number];
@@ -152,25 +75,6 @@ export const JOURNEY_STAGE_META: Record<
   },
 };
 
-// ── Careful mode («бережно») — флаг поверх любого этапа ─────────────
-
-/**
- * Опциональная пометка, которую участник ставит, когда сейчас сложно
- * и хочется деликатности — болезнь близкого, особый ребёнок, СВО, кризис.
- *
- * Принципиально, что это НЕ один из этапов — острая нагрузка почти всегда
- * сопрягается с другим этапом пути (мама особого ребёнка одновременно
- * в Передаче и в нагрузке). См. v4 раздел I.5.
- *
- * В БД хранится в `session_users.is_careful_mode boolean`.
- */
-export const CAREFUL_MODE_META = {
-  ru: "Бережно",
-  tagline: "Сейчас бережно",
-  description:
-    "Иногда сейчас сложно, и хочется, чтобы со мной было бережно. Можно поставить поверх любого этапа.",
-};
-
 // ── Summary axes (Ум / Сердце / Воля) ────────────────────────────────
 
 export const SUMMARY_AXES = ["mind", "heart", "will"] as const;
@@ -183,10 +87,8 @@ export const SUMMARY_AXIS_META: Record<SummaryAxis, { ru: string; defaultPrompt:
 };
 
 /**
- * Per-stage reflection prompts for each summary axis. Used by the reflection
- * editor to soften/adapt the question tone. The methodology requires the
- * prompts to shift under the chosen journey stage (v4 раздел III.3 table
- * «Тон вопросов»).
+ * Per-stage reflection prompts for each summary axis. Используется редактором
+ * рефлексии для адаптации тона вопросов под выбранный этап пути.
  */
 export const REFLECTION_PROMPTS_BY_STAGE: Record<JourneyStage, Record<SummaryAxis, string>> = {
   search: {
@@ -209,14 +111,4 @@ export const REFLECTION_PROMPTS_BY_STAGE: Record<JourneyStage, Record<SummaryAxi
     heart: "Что задело так, что хочу передать?",
     will: "Что решил привезти и сделать?",
   },
-};
-
-/**
- * Soft prompts применяются ПОВЕРХ любого этапа когда `is_careful_mode=true`.
- * Тон мягкий, не давит — методическое правило 6 (мягкие пороги для бережного).
- */
-export const REFLECTION_PROMPTS_CAREFUL: Record<SummaryAxis, string> = {
-  mind: "Что начало проясняться?",
-  heart: "Где было тепло?",
-  will: "К какому маленькому шагу подвинулся?",
 };

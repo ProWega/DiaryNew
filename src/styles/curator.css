@@ -1234,19 +1234,19 @@
   align-self: start;
 }
 
-.curator-brief-point-tag.is-careful_mode {
-  background: rgba(199, 178, 115, 0.22);
-  color: var(--istoki-gold-dark);
-}
-
 .curator-brief-point-tag.is-shift_down {
   background: rgba(168, 59, 42, 0.14);
   color: #5e1c12;
 }
 
-.curator-brief-point-tag.is-silence_streak {
+.curator-brief-point-tag.is-low_activation_streak {
   background: rgba(58, 74, 120, 0.14);
   color: #1f2a4a;
+}
+
+.curator-brief-point-tag.is-high_activation {
+  background: rgba(255, 122, 26, 0.18);
+  color: #5f2806;
 }
 
 .curator-brief-point strong {
@@ -1354,16 +1354,6 @@
 .curator-card-pill.is-active small {
   color: var(--color-bg);
   opacity: 0.85;
-}
-
-.curator-card-pill.is-careful::after {
-  content: "бережно";
-  font-size: 0.7rem;
-  color: var(--color-text-soft);
-}
-
-.curator-card-pill.is-active.is-careful::after {
-  color: var(--color-bg);
 }
 
 .curator-card-pill.has-hint:not(.is-active) {

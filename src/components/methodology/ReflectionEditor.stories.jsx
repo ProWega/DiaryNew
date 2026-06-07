@@ -10,13 +10,11 @@ export default {
       control: "radio",
       options: [null, "search", "verification", "support", "transmission"],
     },
-    isCarefulMode: { control: "boolean" },
     showFreeText: { control: "boolean" },
     compact: { control: "boolean" },
   },
   args: {
     journeyStage: null,
-    isCarefulMode: false,
     showFreeText: true,
     compact: false,
   },
@@ -69,12 +67,6 @@ export const StageSupport = {
 /** Передача — несущим ответственность (промпты про инструменты, что передать). */
 export const StageTransmission = {
   args: { journeyStage: "transmission" },
-  render: (args) => <Interactive {...args} />,
-};
-
-/** Careful mode — мягкие промпты поверх любого этапа. */
-export const CarefulMode = {
-  args: { journeyStage: "support", isCarefulMode: true },
   render: (args) => <Interactive {...args} />,
 };
 

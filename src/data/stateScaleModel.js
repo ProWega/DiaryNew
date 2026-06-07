@@ -1,32 +1,28 @@
-import {
-  STATE_LABELS,
-  STATE_LABEL_META,
-  STATE_SCALE_TO_METHODOLOGY,
-  STATE_METHODOLOGY_TO_DEFAULT_SCALE,
-} from "./methodology";
+// Канонической снова стала 7-балльная активационная шкала «от Апатии до Паники».
+// Methodology v4 (5 уровней: Тишина / Настройка / Лад / Подъём / Сбой) изъята —
+// варианты picker'а arc-5/emoji-5/slider-5 остаются опциональными и работают
+// через локальный METHODOLOGY_OVERLAY ниже (не через src/data/methodology.ts).
+// См. docs/architecture/methodology-mapping.md §2.1.
 
-// Группы 3 → методически: Тишина / Лад / Сбой (Настройка и Подъём
-// визуально живут внутри центральной группы как переходы).
-// IDs сохранены (burnout/integration/distress) для backward-compat
-// в StateScalePicker — переписать picker под 5-уровневую модель — отдельная задача.
+// 3 зоны активации — для аналитики и для группировки в zone-варианте picker'а.
 export const STATE_SCALE_ZONES = [
   {
-    id: "burnout",
-    label: "Тишина",
-    shortLabel: "Тишина",
-    rangeLabel: "Состояние накопления",
+    id: "low",
+    label: "Низкая активация",
+    shortLabel: "Низкая",
+    rangeLabel: "Сейчас тихо, наблюдаю",
   },
   {
-    id: "integration",
-    label: "Лад",
-    shortLabel: "Лад",
-    rangeLabel: "Рабочий диапазон",
+    id: "working",
+    label: "Рабочая активация",
+    shortLabel: "Рабочая",
+    rangeLabel: "В ритме, со-настройка",
   },
   {
-    id: "distress",
-    label: "Сбой",
-    shortLabel: "Сбой",
-    rangeLabel: "Нужна остановка или разговор",
+    id: "high",
+    label: "Высокая активация",
+    shortLabel: "Высокая",
+    rangeLabel: "Много, стоит замедлиться",
   },
 ];
 
@@ -44,122 +40,155 @@ export const STATE_SCALE_ORDER = [
 
 export const STATE_SCALE_NEUTRAL_PREVIEW = {
   title: "Найдите свою точку",
-  zoneLabel: "Шкала состояния",
-  description: "Тишина — Настройка — Лад — Подъём — Сбой. Каждое состояние равноправно.",
+  zoneLabel: "Шкала активации",
+  description: "Шкала активации: от Апатии до Паники. Каждое состояние равноправно.",
   participantHint: "Передвиньте бегунок. Ответ сохранится после отпускания.",
-  ariaValueText: "Предпросмотр: Лад, ответ ещё не сохранён",
+  ariaValueText: "Предпросмотр: Баланс, ответ ещё не сохранён",
   color: "#7a8088",
   surface: "#ededee",
   textColor: "#3a4046",
 };
 
-// Methodology «Дневник пути» v4: 5 уровней (Тишина / Настройка / Лад / Подъём / Сбой).
-// Внутри каждого методического уровня — 1 или 2 точки шкалы (для гранулярности
-// в arc-варианте). Текст единый на пару, цвет варьируется на тон.
-// См. docs/architecture/methodology-mapping.md §2.1 (вариант B).
+// Канонические лейблы 7-уровневой шкалы. Цвета и зоны выравнены с
+// server/db/repositories/stateScaleStore.cjs DEFAULT_STATES.
 export const STATE_SCALE_META = {
   apathy: {
-    label: "Тишина",
-    shortLabel: "Тишина",
+    label: "Апатия",
+    shortLabel: "Апатия",
     icon: "0",
     level: 0,
-    zone: "burnout",
-    zoneLabel: "Тишина (глубокая)",
+    zone: "low",
+    zoneLabel: "Низкая активация",
     description: "Внутри тихо, наблюдаю, мало откликается.",
     participantHint: "Это не провал — состояние накопления.",
-    // Глубокий синий — методика §III, правило 5: Тишина не должна читаться «плохой»
     color: "#3a4a78",
     surface: "#e1e6f0",
     textColor: "#1f2a4a",
     toneColor: "#3a4a78",
   },
   passive: {
-    label: "Тишина",
-    shortLabel: "Тишина",
+    label: "Пассивность",
+    shortLabel: "Пассивность",
     icon: "1",
     level: 1,
-    zone: "burnout",
-    zoneLabel: "Тишина",
-    description: "Внутри тихо, ещё не вошёл в общий ритм.",
-    participantHint: "Накапливаю, наблюдаю, пока не отзываюсь активно.",
+    zone: "low",
+    zoneLabel: "Низкая активация",
+    description: "Тихо, ещё не вошёл в общий ритм.",
+    participantHint: "Наблюдаю, пока не отзываюсь активно.",
     color: "#5b6dab",
     surface: "#e6ebf6",
     textColor: "#2a3866",
     toneColor: "#5b6dab",
   },
   relaxed: {
-    label: "Настройка",
-    shortLabel: "Настройка",
+    label: "Расслабленность",
+    shortLabel: "Расслаб.",
     icon: "2",
     level: 2,
-    zone: "integration",
-    zoneLabel: "Настройка",
+    zone: "working",
+    zoneLabel: "Рабочая активация",
     description: "Прислушиваюсь, пристраиваюсь, ещё не вошёл, но уже здесь.",
     participantHint: "Постепенно настраиваюсь.",
-    // Серебристо-серый
-    color: "#7a8088",
-    surface: "#ededee",
-    textColor: "#3a4046",
-    toneColor: "#7a8088",
+    color: "#4fc3b5",
+    surface: "#dbf2ee",
+    textColor: "#1d4f48",
+    toneColor: "#4fc3b5",
   },
   balance: {
-    label: "Лад",
-    shortLabel: "Лад",
+    label: "Баланс",
+    shortLabel: "Баланс",
     icon: "3",
     level: 3,
-    zone: "integration",
-    zoneLabel: "Лад",
+    zone: "working",
+    zoneLabel: "Рабочая активация",
     description: "Со-настроен с собой, темой и людьми. Иду в ритме.",
     participantHint: "В рабочем ритме.",
-    // Тёплый зелёный
-    color: "#5d7c3e",
-    surface: "#e7efd9",
-    textColor: "#2f4220",
-    toneColor: "#5d7c3e",
+    color: "#9bd40b",
+    surface: "#eff8d4",
+    textColor: "#3c5106",
+    toneColor: "#9bd40b",
   },
   engaged: {
-    label: "Подъём",
-    shortLabel: "Подъём",
+    label: "Включённость",
+    shortLabel: "Включ.",
     icon: "4",
     level: 4,
-    zone: "integration",
-    zoneLabel: "Подъём",
+    zone: "working",
+    zoneLabel: "Рабочая активация",
     description: "Много жара, ярко, хочется говорить и делать.",
     participantHint: "В подъёме.",
-    // Янтарный
-    color: "#d4a132",
-    surface: "#faedcb",
-    textColor: "#664a14",
-    toneColor: "#d4a132",
+    color: "#ffd23f",
+    surface: "#fff4c8",
+    textColor: "#665216",
+    toneColor: "#ffd23f",
   },
   overstimulated: {
-    label: "Сбой",
-    shortLabel: "Сбой",
+    label: "Перевозбуждённость",
+    shortLabel: "Перевозб.",
     icon: "5",
     level: 5,
-    zone: "distress",
-    zoneLabel: "Сбой",
+    zone: "high",
+    zoneLabel: "Высокая активация",
     description: "Много, тяжелее обычного. Стоит сделать паузу или поговорить.",
     participantHint: "Стоит сделать паузу или поговорить.",
-    // Алый
-    color: "#a83b2a",
-    surface: "#f6dad4",
-    textColor: "#5e1c12",
-    toneColor: "#a83b2a",
+    color: "#ff7a1a",
+    surface: "#fde0cb",
+    textColor: "#5f2806",
+    toneColor: "#ff7a1a",
   },
   panic: {
-    label: "Сбой",
-    shortLabel: "Сбой",
+    label: "Паника",
+    shortLabel: "Паника",
     icon: "6",
     level: 6,
-    zone: "distress",
-    zoneLabel: "Сбой (острый)",
+    zone: "high",
+    zoneLabel: "Высокая активация",
     description: "Слишком много или что-то не идёт. Нужна остановка.",
     participantHint: "Стоит сделать паузу или поговорить.",
-    color: "#7d2418",
-    surface: "#f0c8c0",
-    textColor: "#48140a",
-    toneColor: "#7d2418",
+    color: "#ff4a40",
+    surface: "#fcd0cc",
+    textColor: "#5e120e",
+    toneColor: "#ff4a40",
+  },
+};
+
+// ── Optional 5-level methodology overlay (изъятый этап v4) ──────────────────
+// Используется ТОЛЬКО для опциональных picker-вариантов arc-5 / emoji-5 /
+// slider-5 в StateScalePicker. Канонические лейблы/зоны выше — 7-уровневые.
+
+const METHODOLOGY_OVERLAY = [
+  { id: "silence", ru: "Тишина", sourceIds: ["apathy", "passive"], canonicalId: "passive" },
+  { id: "tuning", ru: "Настройка", sourceIds: ["relaxed"], canonicalId: "relaxed" },
+  { id: "harmony", ru: "Лад", sourceIds: ["balance"], canonicalId: "balance" },
+  { id: "lift", ru: "Подъём", sourceIds: ["engaged"], canonicalId: "engaged" },
+  {
+    id: "breakdown",
+    ru: "Сбой",
+    sourceIds: ["overstimulated", "panic"],
+    canonicalId: "overstimulated",
+  },
+];
+
+const METHODOLOGY_DESCRIPTIONS = {
+  silence: {
+    description: "Внутри тихо, наблюдаю, мало откликается.",
+    participantHint: "Это не провал — состояние накопления.",
+  },
+  tuning: {
+    description: "Прислушиваюсь, пристраиваюсь, ещё не вошёл, но уже здесь.",
+    participantHint: "Постепенно настраиваюсь.",
+  },
+  harmony: {
+    description: "Со-настроен с собой, темой и людьми. Иду в ритме.",
+    participantHint: "В рабочем ритме.",
+  },
+  lift: {
+    description: "Много жара, ярко, хочется говорить и делать. Иногда через край.",
+    participantHint: "В подъёме.",
+  },
+  breakdown: {
+    description: "Слишком много или что-то не идёт. Нужна остановка или разговор.",
+    participantHint: "Стоит сделать паузу или поговорить.",
   },
 };
 
@@ -180,44 +209,42 @@ function getLevel(state, fallbackIndex) {
 }
 
 /**
- * Build the 5-group view from a normalized 7-level state list. Each group keeps
- * `sourceIds` (1–2 items) so callers can highlight a group from a stored legacy
- * stateId, plus `canonicalId` to write back on selection.
+ * Optional 5-group view over the canonical 7-level state list. Each group keeps
+ * `sourceIds` so callers can highlight a group from a stored 7-level stateId,
+ * plus `canonicalId` to write back on selection. Used only by the optional
+ * picker variants arc-5 / emoji-5 / slider-5.
  */
 export function methodologyStateGroups(states) {
   const normalized = normalizeStateScale(states);
   const byId = new Map(normalized.map((state) => [state.id, state]));
 
-  return STATE_LABELS.map((id, level) => {
-    const canonicalId = STATE_METHODOLOGY_TO_DEFAULT_SCALE[id];
-    const sourceIds = Object.entries(STATE_SCALE_TO_METHODOLOGY)
-      .filter(([, label]) => label === id)
-      .map(([sourceId]) => sourceId);
+  return METHODOLOGY_OVERLAY.map((group, level) => {
     const canonicalState =
-      byId.get(canonicalId) || normalized.find((s) => sourceIds.includes(s.id));
-    const labelMeta = STATE_LABEL_META[id];
+      byId.get(group.canonicalId) || normalized.find((s) => group.sourceIds.includes(s.id));
+    const meta = METHODOLOGY_DESCRIPTIONS[group.id] || {};
 
     return {
-      id,
+      id: group.id,
       level,
-      label: labelMeta.ru,
-      shortLabel: labelMeta.ru,
-      description: labelMeta.description,
-      participantHint: labelMeta.participantHint,
+      label: group.ru,
+      shortLabel: group.ru,
+      description: meta.description || "",
+      participantHint: meta.participantHint || "",
       icon: canonicalState?.icon || "",
       color: canonicalState?.color || "#78733d",
       surface: canonicalState?.surface || "#f4efdb",
       textColor: canonicalState?.textColor || "#2a2522",
       toneColor: canonicalState?.toneColor || canonicalState?.color || "#78733d",
-      sourceIds,
-      canonicalId,
+      sourceIds: group.sourceIds,
+      canonicalId: group.canonicalId,
     };
   });
 }
 
 /**
- * Find the methodology group that owns a given legacy stateId. Used to light
- * up the right group when the stored value is `apathy` or `panic`.
+ * Find the methodology group that owns a given 7-level stateId. Used by the
+ * 5-level UI variants to light up the right group when the stored value is e.g.
+ * `apathy` or `panic`.
  */
 export function findMethodologyGroupForStateId(groups, stateId) {
   if (!stateId) return null;
@@ -243,7 +270,7 @@ export function normalizeStateScale(states = []) {
         icon: state.icon || meta.icon || "",
         level: getLevel(state, index),
         zone: zoneId,
-        zoneLabel: state.zoneLabel || meta.zoneLabel || zone?.label || "Шкала состояния",
+        zoneLabel: state.zoneLabel || meta.zoneLabel || zone?.label || "Шкала активации",
         description: state.description || meta.description || "",
         participantHint: state.participantHint || meta.participantHint || "",
         color,

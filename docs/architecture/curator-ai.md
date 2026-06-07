@@ -85,11 +85,11 @@ messages
 `signals` для fingerprint (sha256 от sorted JSON):
 
 - `{sessionId, groupId, dayId}`
-- members группы: `[{id, journeyStage, isCarefulMode}]`
+- members группы: `[{id, stage}]` (где `stage` = journey_stage)
 - entries сегодня+вчера: `[{id, userId, eventId, stateId, isAnonymous, isHiddenFromCurator, commentHash}]`
 - events дня: `[{id, sortOrder}]`
 - concepts: `[{eventId, storageFilename}]` (storage_filename = sha256 контента → замена файла = новый отпечаток)
-- `PROMPT_VERSION` (константа в коде, бамп = массовая инвалидация)
+- `promptFingerprint` — производная от `agent_prompts.is_current` строки (`agentPromptsService.getPromptFingerprint`); сохранение новой версии в админ-UI / накатывание upgrade-миграции = массовая инвалидация
 
 ### Chat
 
@@ -100,7 +100,7 @@ system block 1 (cacheable)
 
 system block 2 (cacheable)
   ↑ ## Состав группы (N участников)
-    - Иван Петров — этап: поиск; режим «бережно»
+    - Иван Петров — этап: поиск
     - Анна Кузнецова — этап: опора
     ...
   ↑ ## Обратная связь участников                — НОВОЕ (v2.2, март 2026)

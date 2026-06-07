@@ -6,7 +6,6 @@ const member = (overrides) => ({
   id: "u-1",
   fullName: "Иван И.",
   journeyStage: "support",
-  isCarefulMode: false,
   ...overrides,
 });
 
@@ -23,42 +22,47 @@ const entry = (overrides) => ({
 });
 
 describe("buildNarrativeBrief — picture", () => {
-  it("counts participants and dominant methodology label", () => {
+  it("counts participants and dominant state by 7-level label", () => {
     const result = buildNarrativeBrief({
       members: [member({ id: "u-1" }), member({ id: "u-2" }), member({ id: "u-3" })],
       todayEntries: [
-        entry({ userId: "u-1", stateId: "balance" }), // harmony
-        entry({ userId: "u-2", stateId: "engaged" }), // lift
-        entry({ userId: "u-3", stateId: "balance" }), // harmony
+        entry({ userId: "u-1", stateId: "balance" }),
+        entry({ userId: "u-2", stateId: "engaged" }),
+        entry({ userId: "u-3", stateId: "balance" }),
       ],
     });
 
     expect(result.picture.totalParticipants).toBe(3);
     expect(result.picture.respondedToday).toBe(3);
-    expect(result.picture.dominantState).toBe("harmony");
-    expect(result.picture.dominantStateLabel).toBe("Лад");
+    expect(result.picture.dominantState).toBe("balance");
+    expect(result.picture.dominantStateLabel).toBe("Баланс");
   });
 
-  it("counts careful_mode participants", () => {
+  it("aggregates entries into low / working / high activation zones", () => {
     const result = buildNarrativeBrief({
       members: [
-        member({ id: "u-1", isCarefulMode: true }),
-        member({ id: "u-2", isCarefulMode: false }),
-        member({ id: "u-3", isCarefulMode: true }),
+        member({ id: "u-1" }),
+        member({ id: "u-2" }),
+        member({ id: "u-3" }),
+        member({ id: "u-4" }),
+      ],
+      todayEntries: [
+        entry({ userId: "u-1", stateId: "apathy" }),
+        entry({ userId: "u-2", stateId: "balance" }),
+        entry({ userId: "u-3", stateId: "engaged" }),
+        entry({ userId: "u-4", stateId: "panic" }),
       ],
     });
 
-    expect(result.picture.carefulCount).toBe(2);
+    expect(result.picture.lowActivationCount).toBe(1);
+    expect(result.picture.workingActivationCount).toBe(2);
+    expect(result.picture.highActivationCount).toBe(1);
   });
 
   it("respondedToday counts unique users with privacy-filtered entries", () => {
     const result = buildNarrativeBrief({
       members: [member({ id: "u-1" }), member({ id: "u-2" })],
-      todayEntries: [
-        entry({ userId: "u-1" }),
-        entry({ userId: "u-1" }), // duplicate, same user → counted once
-        entry({ userId: null }), // anonymous, not counted
-      ],
+      todayEntries: [entry({ userId: "u-1" }), entry({ userId: "u-1" }), entry({ userId: null })],
     });
 
     expect(result.picture.respondedToday).toBe(1);
@@ -66,14 +70,14 @@ describe("buildNarrativeBrief — picture", () => {
 });
 
 describe("buildNarrativeBrief — stageResonance", () => {
-  it("counts members across 4 journey stages plus careful overlay", () => {
+  it("counts members across 4 journey stages", () => {
     const result = buildNarrativeBrief({
       members: [
         member({ id: "u-1", journeyStage: "search" }),
-        member({ id: "u-2", journeyStage: "search", isCarefulMode: true }),
+        member({ id: "u-2", journeyStage: "search" }),
         member({ id: "u-3", journeyStage: "verification" }),
         member({ id: "u-4", journeyStage: "support" }),
-        member({ id: "u-5", journeyStage: "transmission", isCarefulMode: true }),
+        member({ id: "u-5", journeyStage: "transmission" }),
       ],
     });
 
@@ -82,7 +86,6 @@ describe("buildNarrativeBrief — stageResonance", () => {
       verification: 1,
       support: 1,
       transmission: 1,
-      careful: 2,
     });
   });
 
@@ -98,60 +101,47 @@ describe("buildNarrativeBrief — stageResonance", () => {
 });
 
 describe("buildNarrativeBrief — conversationPoints", () => {
-  it("flags careful_mode participants as the highest priority", () => {
+  it("flags high_activation when today's state is overstimulated/panic", () => {
     const result = buildNarrativeBrief({
-      members: [member({ id: "u-1", isCarefulMode: true })],
+      members: [member({ id: "u-1" })],
+      todayEntries: [entry({ userId: "u-1", stateId: "panic" })],
     });
 
     expect(result.conversationPoints).toHaveLength(1);
     expect(result.conversationPoints[0]).toMatchObject({
       participantId: "u-1",
-      reason: "careful_mode",
+      reason: "high_activation",
     });
+    expect(result.conversationPoints[0].note).toContain("Паника");
   });
 
-  it("flags shift_down (harmony/tuning/lift → breakdown)", () => {
+  it("flags shift_down (working activation → high)", () => {
     const result = buildNarrativeBrief({
       members: [member({ id: "u-1" })],
-      todayEntries: [entry({ userId: "u-1", stateId: "panic" })], // breakdown
-      yesterdayEntries: [entry({ userId: "u-1", stateId: "balance" })], // harmony
-    });
-
-    expect(result.conversationPoints).toHaveLength(1);
-    expect(result.conversationPoints[0].reason).toBe("shift_down");
-    expect(result.conversationPoints[0].note).toContain("Лад");
-    expect(result.conversationPoints[0].note).toContain("Сбой");
-  });
-
-  it("flags silence_streak (silence both today and yesterday)", () => {
-    const result = buildNarrativeBrief({
-      members: [member({ id: "u-1" })],
-      todayEntries: [entry({ userId: "u-1", stateId: "passive" })], // silence
-      yesterdayEntries: [entry({ userId: "u-1", stateId: "apathy" })], // silence
-    });
-
-    expect(result.conversationPoints).toHaveLength(1);
-    expect(result.conversationPoints[0].reason).toBe("silence_streak");
-  });
-
-  it("does not double-count the same user (careful beats shift_down)", () => {
-    const result = buildNarrativeBrief({
-      members: [member({ id: "u-1", isCarefulMode: true })],
       todayEntries: [entry({ userId: "u-1", stateId: "panic" })],
       yesterdayEntries: [entry({ userId: "u-1", stateId: "balance" })],
     });
 
+    // high_activation wins for the same user (rule 1 fires before rule 2), so
+    // only one point is produced overall, not two.
     expect(result.conversationPoints).toHaveLength(1);
-    expect(result.conversationPoints[0].reason).toBe("careful_mode");
+    expect(result.conversationPoints[0].reason).toBe("high_activation");
+  });
+
+  it("flags low_activation_streak (apathy/passive both today and yesterday)", () => {
+    const result = buildNarrativeBrief({
+      members: [member({ id: "u-1" })],
+      todayEntries: [entry({ userId: "u-1", stateId: "passive" })],
+      yesterdayEntries: [entry({ userId: "u-1", stateId: "apathy" })],
+    });
+
+    expect(result.conversationPoints).toHaveLength(1);
+    expect(result.conversationPoints[0].reason).toBe("low_activation_streak");
   });
 
   it("never produces banned diagnostic words", () => {
     const result = buildNarrativeBrief({
-      members: [
-        member({ id: "u-1", isCarefulMode: true }),
-        member({ id: "u-2" }),
-        member({ id: "u-3" }),
-      ],
+      members: [member({ id: "u-1" }), member({ id: "u-2" }), member({ id: "u-3" })],
       todayEntries: [
         entry({ userId: "u-2", stateId: "panic" }),
         entry({ userId: "u-3", stateId: "passive" }),
@@ -163,26 +153,26 @@ describe("buildNarrativeBrief — conversationPoints", () => {
     });
 
     const allText = JSON.stringify(result.conversationPoints).toLowerCase();
-    for (const banned of ["риск", "уровень", "стадия", "диагноз", "метрика", "статус", "оценк"]) {
+    for (const banned of ["риск", "диагноз", "метрика", "статус", "оценк", "прогресс"]) {
       expect(allText).not.toContain(banned);
     }
   });
 
-  it("caps the conversation points to 5 (priority ordering preserved)", () => {
-    const members = Array.from({ length: 10 }, (_, i) =>
-      member({ id: `u-${i + 1}`, isCarefulMode: true }),
-    );
+  it("caps the conversation points to 5", () => {
+    const members = Array.from({ length: 10 }, (_, i) => member({ id: `u-${i + 1}` }));
+    const todayEntries = members.map((m) => entry({ userId: m.id, stateId: "panic" }));
 
-    const result = buildNarrativeBrief({ members });
+    const result = buildNarrativeBrief({ members, todayEntries });
     expect(result.conversationPoints).toHaveLength(5);
     for (const point of result.conversationPoints) {
-      expect(point.reason).toBe("careful_mode");
+      expect(point.reason).toBe("high_activation");
     }
   });
 
-  it("uses fallback display name when fullName is null (anonymous member case)", () => {
+  it("uses fallback display name when fullName is null", () => {
     const result = buildNarrativeBrief({
-      members: [member({ id: "u-1", fullName: null, isCarefulMode: true })],
+      members: [member({ id: "u-1", fullName: null })],
+      todayEntries: [entry({ userId: "u-1", stateId: "panic" })],
     });
     expect(result.conversationPoints[0].displayName).toBe("Участник без имени");
   });
@@ -249,10 +239,10 @@ describe("buildNarrativeBrief — full shape", () => {
 });
 
 describe("buildNarrativeBrief — participantCards", () => {
-  it("returns one card per member with journey stage label and careful flag", () => {
+  it("returns one card per member with journey stage label", () => {
     const result = buildNarrativeBrief({
       members: [
-        member({ id: "u-1", journeyStage: "verification", isCarefulMode: true }),
+        member({ id: "u-1", journeyStage: "verification" }),
         member({ id: "u-2", journeyStage: "transmission" }),
       ],
     });
@@ -263,21 +253,19 @@ describe("buildNarrativeBrief — participantCards", () => {
       displayName: "Иван И.",
       journeyStage: "verification",
       journeyStageLabel: "Проверка",
-      isCarefulMode: true,
     });
     expect(result.participantCards[1].journeyStageLabel).toBe("Передача");
-    expect(result.participantCards[1].isCarefulMode).toBe(false);
   });
 
-  it("includes today/yesterday methodology labels when entries exist", () => {
+  it("includes today/yesterday 7-level labels when entries exist", () => {
     const result = buildNarrativeBrief({
       members: [member({ id: "u-1" })],
-      todayEntries: [entry({ userId: "u-1", stateId: "engaged" })], // lift
-      yesterdayEntries: [entry({ userId: "u-1", stateId: "balance" })], // harmony
+      todayEntries: [entry({ userId: "u-1", stateId: "engaged" })],
+      yesterdayEntries: [entry({ userId: "u-1", stateId: "balance" })],
     });
 
-    expect(result.participantCards[0].today).toEqual({ id: "lift", ru: "Подъём" });
-    expect(result.participantCards[0].yesterday).toEqual({ id: "harmony", ru: "Лад" });
+    expect(result.participantCards[0].today).toEqual({ id: "engaged", ru: "Включённость" });
+    expect(result.participantCards[0].yesterday).toEqual({ id: "balance", ru: "Баланс" });
   });
 
   it("today/yesterday are null when no entry for that user", () => {
@@ -291,11 +279,12 @@ describe("buildNarrativeBrief — participantCards", () => {
 
   it("attaches conversationHint when participant is in conversationPoints", () => {
     const result = buildNarrativeBrief({
-      members: [member({ id: "u-1", isCarefulMode: true })],
+      members: [member({ id: "u-1" })],
+      todayEntries: [entry({ userId: "u-1", stateId: "panic" })],
     });
 
     expect(result.participantCards[0].conversationHint).toMatchObject({
-      reason: "careful_mode",
+      reason: "high_activation",
     });
   });
 
@@ -324,12 +313,10 @@ describe("buildNarrativeBrief — programArc", () => {
       ],
       entriesByDay: {
         "day-1": [
-          entry({ userId: "u-1", stateId: "balance" }), // harmony
-          entry({ userId: "u-2", stateId: "balance" }), // harmony
+          entry({ userId: "u-1", stateId: "balance" }),
+          entry({ userId: "u-2", stateId: "balance" }),
         ],
-        "day-2": [
-          entry({ userId: "u-1", stateId: "engaged" }), // lift
-        ],
+        "day-2": [entry({ userId: "u-1", stateId: "engaged" })],
       },
     });
 
@@ -339,10 +326,10 @@ describe("buildNarrativeBrief — programArc", () => {
       dayLabel: "День 1",
       respondedCount: 2,
       totalEntries: 2,
-      dominantState: "harmony",
-      dominantStateLabel: "Лад",
+      dominantState: "balance",
+      dominantStateLabel: "Баланс",
     });
-    expect(result.programArc.dayBreakdown[1].dominantState).toBe("lift");
+    expect(result.programArc.dayBreakdown[1].dominantState).toBe("engaged");
   });
 
   it("dominant is null when day has no entries", () => {
@@ -381,7 +368,7 @@ describe("buildNarrativeBrief — programArc", () => {
       entriesByDay: { d: [entry({ userId: "u-1", stateId: "panic" })] },
     });
     const text = JSON.stringify(result.programArc).toLowerCase();
-    for (const banned of ["риск", "уровень", "стадия", "диагноз", "метрика", "статус", "оценк"]) {
+    for (const banned of ["риск", "диагноз", "метрика", "статус", "оценк", "прогресс"]) {
       expect(text).not.toContain(banned);
     }
   });

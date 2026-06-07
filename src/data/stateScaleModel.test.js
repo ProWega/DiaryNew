@@ -6,15 +6,35 @@ import {
   methodologyStateGroups,
   normalizeStateScale,
 } from "./stateScaleModel";
-import { STATE_LABELS, STATE_METHODOLOGY_TO_DEFAULT_SCALE } from "./methodology";
 
 const seed = STATE_SCALE_ORDER.map((id) => ({ id }));
 
-describe("methodologyStateGroups", () => {
+describe("STATE_SCALE_META (canonical 7-level scale labels)", () => {
+  it("covers all 7 state ids", () => {
+    for (const id of STATE_SCALE_ORDER) {
+      expect(STATE_SCALE_META[id]).toBeTruthy();
+      expect(STATE_SCALE_META[id].label).toBeTruthy();
+    }
+  });
+
+  it("labels are активационные: Апатия → Паника", () => {
+    expect(STATE_SCALE_META.apathy.label).toBe("Апатия");
+    expect(STATE_SCALE_META.panic.label).toBe("Паника");
+    expect(STATE_SCALE_META.balance.label).toBe("Баланс");
+  });
+});
+
+describe("methodologyStateGroups (опциональный 5-уровневый overlay)", () => {
   const groups = methodologyStateGroups(seed);
 
-  it("returns exactly 5 groups in canonical order", () => {
-    expect(groups.map((group) => group.id)).toEqual([...STATE_LABELS]);
+  it("returns exactly 5 groups in canonical methodology order", () => {
+    expect(groups.map((group) => group.id)).toEqual([
+      "silence",
+      "tuning",
+      "harmony",
+      "lift",
+      "breakdown",
+    ]);
   });
 
   it("each group has level 0..4 ascending", () => {
@@ -33,12 +53,6 @@ describe("methodologyStateGroups", () => {
     expect(new Set(flat)).toEqual(new Set(STATE_SCALE_ORDER));
   });
 
-  it("canonicalId for each group is the configured reverse-mapping target", () => {
-    for (const group of groups) {
-      expect(group.canonicalId).toBe(STATE_METHODOLOGY_TO_DEFAULT_SCALE[group.id]);
-    }
-  });
-
   it("works with the default seed when called with empty array", () => {
     const fallback = methodologyStateGroups([]);
     expect(fallback).toHaveLength(5);
@@ -49,11 +63,11 @@ describe("methodologyStateGroups", () => {
 describe("findMethodologyGroupForStateId", () => {
   const groups = methodologyStateGroups(seed);
 
-  it("matches canonical id directly", () => {
+  it("matches canonical 7-level id (balance → harmony group)", () => {
     expect(findMethodologyGroupForStateId(groups, "balance")?.id).toBe("harmony");
   });
 
-  it("matches edge legacy ids — panic → breakdown, apathy → silence", () => {
+  it("matches edge ids — panic → breakdown, apathy → silence", () => {
     expect(findMethodologyGroupForStateId(groups, "panic")?.id).toBe("breakdown");
     expect(findMethodologyGroupForStateId(groups, "apathy")?.id).toBe("silence");
   });
@@ -64,7 +78,7 @@ describe("findMethodologyGroupForStateId", () => {
   });
 });
 
-describe("normalizeStateScale (regression — must still work after helper additions)", () => {
+describe("normalizeStateScale (regression)", () => {
   it("preserves length and order", () => {
     const result = normalizeStateScale(seed);
     expect(result).toHaveLength(STATE_SCALE_ORDER.length);

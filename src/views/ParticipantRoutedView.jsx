@@ -215,12 +215,15 @@ function getSaveErrorMessage(error) {
   return error?.message || "Не удалось сохранить отметку. Попробуйте выбрать состояние ещё раз.";
 }
 
+// 7-балльная активационная шкала «от Апатии до Паники» (default).
+// 5-уровневые варианты (arc-5 / emoji-5 / slider-5) сохранены в picker'е как
+// опциональные, но из основного UI убраны — см. methodology-mapping.md §2.1.
 const STATE_SCALE_VARIANT_OPTIONS = [
-  { id: "arc-5", label: "Дуга" },
-  { id: "emoji-5", label: "Эмодзи" },
-  { id: "slider-5", label: "Слайдер" },
+  { id: "arc", label: "Дуга" },
+  { id: "zones", label: "Зоны" },
+  { id: "compact", label: "Компактно" },
 ];
-const STATE_SCALE_VARIANT_DEFAULT = "arc-5";
+const STATE_SCALE_VARIANT_DEFAULT = "arc";
 const STATE_SCALE_VARIANT_IDS = STATE_SCALE_VARIANT_OPTIONS.map((opt) => opt.id);
 
 function getStateScaleVariantStorageKey(userId) {
@@ -256,7 +259,6 @@ function ParticipantRoutedView({
   overallAverages,
   formatAverage,
   journeyStage = null,
-  isCarefulMode = false,
   userId = "",
   setParallelSelection = async () => null,
 }) {
@@ -1181,7 +1183,6 @@ function ParticipantRoutedView({
                             freeText: reflection.freeText || "",
                           }}
                           journeyStage={journeyStage}
-                          isCarefulMode={isCarefulMode}
                           onChange={(next) =>
                             setReflection(activeDayId, (previous) => ({
                               ...previous,

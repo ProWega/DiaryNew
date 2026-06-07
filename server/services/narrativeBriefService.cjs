@@ -21,24 +21,31 @@ const { enrichWithNarrative } = require("./narrativeBriefLLM.cjs");
 const guard = require("./curatorLlmGuard.cjs");
 const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
 
-// 7-id stateId → 5 methodology labels (mirrors src/data/methodology.ts).
-const STATE_TO_METHODOLOGY = Object.freeze({
-  apathy: "silence",
-  passive: "silence",
-  relaxed: "tuning",
-  balance: "harmony",
-  engaged: "lift",
-  overstimulated: "breakdown",
-  panic: "breakdown",
+// 7-балльная активационная шкала «от Апатии до Паники». Лейблы синхронизированы
+// с src/data/stateScaleModel.js STATE_SCALE_META и server/db/repositories/
+// stateScaleStore.cjs DEFAULT_STATES.
+const STATE_LABEL_RU = Object.freeze({
+  apathy: "Апатия",
+  passive: "Пассивность",
+  relaxed: "Расслабленность",
+  balance: "Баланс",
+  engaged: "Включённость",
+  overstimulated: "Перевозбуждённость",
+  panic: "Паника",
 });
 
-const METHODOLOGY_LABEL_RU = Object.freeze({
-  silence: "Тишина",
-  tuning: "Настройка",
-  harmony: "Лад",
-  lift: "Подъём",
-  breakdown: "Сбой",
-});
+// Группировка по зонам активации — используется для аналитики и для правил
+// «нужен ли разговор». Соответствует STATE_SCALE_ZONES в stateScaleModel.js.
+const LOW_ACTIVATION = new Set(["apathy", "passive"]);
+const WORKING_ACTIVATION = new Set(["relaxed", "balance", "engaged"]);
+const HIGH_ACTIVATION = new Set(["overstimulated", "panic"]);
+
+function zoneOf(stateId) {
+  if (LOW_ACTIVATION.has(stateId)) return "low";
+  if (WORKING_ACTIVATION.has(stateId)) return "working";
+  if (HIGH_ACTIVATION.has(stateId)) return "high";
+  return null;
+}
 
 const JOURNEY_STAGES = Object.freeze(["search", "verification", "support", "transmission"]);
 const JOURNEY_STAGE_RU = Object.freeze({
@@ -50,12 +57,6 @@ const JOURNEY_STAGE_RU = Object.freeze({
 
 const CONVERSATION_POINT_LIMIT = 5;
 const EVENT_QUOTE_LIMIT = 3;
-const SHIFT_DOWN_FROM = new Set(["tuning", "harmony", "lift"]);
-const SHIFT_DOWN_TO = new Set(["breakdown"]);
-
-function methodologyOf(stateId) {
-  return STATE_TO_METHODOLOGY[stateId] || null;
-}
 
 function pickDominant(counts) {
   let topKey = null;
@@ -74,31 +75,45 @@ function buildPicture({ members, todayEntries }) {
   const userIdsToday = new Set(
     todayEntries.map((entry) => entry.userId).filter((id) => id != null),
   );
-  const counts = { silence: 0, tuning: 0, harmony: 0, lift: 0, breakdown: 0 };
+  // Count по 7-балльной шкале + сводка по зонам активации.
+  const stateCounts = {
+    apathy: 0,
+    passive: 0,
+    relaxed: 0,
+    balance: 0,
+    engaged: 0,
+    overstimulated: 0,
+    panic: 0,
+  };
+  let lowActivationCount = 0;
+  let workingActivationCount = 0;
+  let highActivationCount = 0;
   for (const entry of todayEntries) {
-    const label = methodologyOf(entry.stateId);
-    if (label) counts[label] += 1;
+    if (!entry.stateId || !(entry.stateId in stateCounts)) continue;
+    stateCounts[entry.stateId] += 1;
+    const zone = zoneOf(entry.stateId);
+    if (zone === "low") lowActivationCount += 1;
+    else if (zone === "working") workingActivationCount += 1;
+    else if (zone === "high") highActivationCount += 1;
   }
-  const dominantState = pickDominant(counts);
-  const carefulCount = members.filter((member) => member.isCarefulMode).length;
+  const dominantState = pickDominant(stateCounts);
 
   return {
     totalParticipants,
     respondedToday: userIdsToday.size,
     dominantState,
-    dominantStateLabel: dominantState ? METHODOLOGY_LABEL_RU[dominantState] : null,
-    carefulCount,
+    dominantStateLabel: dominantState ? STATE_LABEL_RU[dominantState] : null,
+    lowActivationCount,
+    workingActivationCount,
+    highActivationCount,
   };
 }
 
 function buildStageResonance({ members }) {
-  const counts = { search: 0, verification: 0, support: 0, transmission: 0, careful: 0 };
+  const counts = { search: 0, verification: 0, support: 0, transmission: 0 };
   for (const member of members) {
     if (JOURNEY_STAGES.includes(member.journeyStage)) {
       counts[member.journeyStage] += 1;
-    }
-    if (member.isCarefulMode) {
-      counts.careful += 1;
     }
   }
   return counts;
@@ -119,52 +134,48 @@ function buildConversationPoints({ members, todayEntries, yesterdayEntries }) {
     points.push(point);
   }
 
-  // Rule 1 (highest priority): участник сам обозначил, что сейчас хочется
-  // бережности — стоит подойти деликатно.
+  // Rule 1: высокая активация — Перевозбуждённость или Паника сегодня. Стоит
+  // мягко проверить состояние; формулировки без диагностики.
   for (const member of members) {
-    if (member.isCarefulMode) {
+    const todayEntry = findFirstEntryByUser(todayEntries, member.id);
+    if (!todayEntry) continue;
+    if (HIGH_ACTIVATION.has(todayEntry.stateId)) {
       add({
         participantId: member.id,
         displayName: member.fullName || "Участник без имени",
-        reason: "careful_mode",
-        note: "Сейчас «бережно» — стоит подойти деликатно, без давления.",
+        reason: "high_activation",
+        note: `Сегодня в ${STATE_LABEL_RU[todayEntry.stateId]} — стоит проверить, нужна ли пауза или разговор.`,
       });
     }
   }
 
-  // Rule 2: резкая динамика — вчера был в одной из «средних» групп (Настройка/Лад/
-  // Подъём) и сегодня в Сбое. Без слов «риск» / «срыв».
+  // Rule 2: резкая смена — вчера была рабочая активация, сегодня высокая.
   for (const member of members) {
     const todayEntry = findFirstEntryByUser(todayEntries, member.id);
     const yesterdayEntry = findFirstEntryByUser(yesterdayEntries, member.id);
     if (!todayEntry || !yesterdayEntry) continue;
-    const todayLabel = methodologyOf(todayEntry.stateId);
-    const yesterdayLabel = methodologyOf(yesterdayEntry.stateId);
-    if (SHIFT_DOWN_FROM.has(yesterdayLabel) && SHIFT_DOWN_TO.has(todayLabel)) {
+    if (WORKING_ACTIVATION.has(yesterdayEntry.stateId) && HIGH_ACTIVATION.has(todayEntry.stateId)) {
       add({
         participantId: member.id,
         displayName: member.fullName || "Участник без имени",
         reason: "shift_down",
-        note: `Вчера в ${METHODOLOGY_LABEL_RU[yesterdayLabel]}, сегодня в ${METHODOLOGY_LABEL_RU[todayLabel]}.`,
+        note: `Вчера в ${STATE_LABEL_RU[yesterdayEntry.stateId]}, сегодня в ${STATE_LABEL_RU[todayEntry.stateId]}.`,
       });
     }
   }
 
-  // Rule 3: затяжная Тишина — два дня подряд в группе silence. Подойти можно
-  // мягко, без давления.
+  // Rule 3: затяжная низкая активация — два дня подряд Апатия или Пассивность.
+  // Подойти можно мягко, без давления.
   for (const member of members) {
     const todayEntry = findFirstEntryByUser(todayEntries, member.id);
     const yesterdayEntry = findFirstEntryByUser(yesterdayEntries, member.id);
     if (!todayEntry || !yesterdayEntry) continue;
-    if (
-      methodologyOf(todayEntry.stateId) === "silence" &&
-      methodologyOf(yesterdayEntry.stateId) === "silence"
-    ) {
+    if (LOW_ACTIVATION.has(todayEntry.stateId) && LOW_ACTIVATION.has(yesterdayEntry.stateId)) {
       add({
         participantId: member.id,
         displayName: member.fullName || "Участник без имени",
-        reason: "silence_streak",
-        note: "Второй день в Тишине — может быть, стоит просто побыть рядом.",
+        reason: "low_activation_streak",
+        note: "Второй день в низкой активации — стоит просто побыть рядом.",
       });
     }
   }
@@ -172,10 +183,9 @@ function buildConversationPoints({ members, todayEntries, yesterdayEntries }) {
   return points.slice(0, CONVERSATION_POINT_LIMIT);
 }
 
-function methodologyLabelForState(stateId) {
-  const id = methodologyOf(stateId);
-  if (!id) return null;
-  return { id, ru: METHODOLOGY_LABEL_RU[id] };
+function stateLabelForId(stateId) {
+  if (!stateId || !(stateId in STATE_LABEL_RU)) return null;
+  return { id: stateId, ru: STATE_LABEL_RU[stateId] };
 }
 
 function buildParticipantCards({ members, todayEntries, yesterdayEntries, conversationPoints }) {
@@ -196,9 +206,8 @@ function buildParticipantCards({ members, todayEntries, yesterdayEntries, conver
       displayName: member.fullName || "Участник без имени",
       journeyStage: member.journeyStage || null,
       journeyStageLabel: member.journeyStage ? JOURNEY_STAGE_RU[member.journeyStage] || null : null,
-      isCarefulMode: Boolean(member.isCarefulMode),
-      today: methodologyLabelForState(todayEntry?.stateId),
-      yesterday: methodologyLabelForState(yesterdayEntry?.stateId),
+      today: stateLabelForId(todayEntry?.stateId),
+      yesterday: stateLabelForId(yesterdayEntry?.stateId),
       conversationHint: hint,
     };
   });
@@ -209,11 +218,18 @@ function buildProgramArc({ programDays, entriesByDay }) {
 
   const dayBreakdown = programDays.map((day) => {
     const dayEntries = entriesByDay[day.id] || [];
-    const counts = { silence: 0, tuning: 0, harmony: 0, lift: 0, breakdown: 0 };
+    const counts = {
+      apathy: 0,
+      passive: 0,
+      relaxed: 0,
+      balance: 0,
+      engaged: 0,
+      overstimulated: 0,
+      panic: 0,
+    };
     const respondedUserIds = new Set();
     for (const entry of dayEntries) {
-      const label = methodologyOf(entry.stateId);
-      if (label) counts[label] += 1;
+      if (entry.stateId && entry.stateId in counts) counts[entry.stateId] += 1;
       if (entry.userId != null) respondedUserIds.add(entry.userId);
     }
     const dominantState = pickDominant(counts);
@@ -224,7 +240,7 @@ function buildProgramArc({ programDays, entriesByDay }) {
       respondedCount: respondedUserIds.size,
       totalEntries: dayEntries.length,
       dominantState,
-      dominantStateLabel: dominantState ? METHODOLOGY_LABEL_RU[dominantState] : null,
+      dominantStateLabel: dominantState ? STATE_LABEL_RU[dominantState] : null,
     };
   });
 
@@ -301,7 +317,7 @@ async function fetchTargetDay(sessionId, dayId) {
 
 async function fetchMembersForGroup(sessionId, groupId) {
   const result = await query(
-    `select u.id, u.full_name, su.journey_stage, su.is_careful_mode
+    `select u.id, u.full_name, su.journey_stage
      from session_users su
      join users u on u.id = su.user_id
      where su.session_id = $1 and su.group_id = $2
@@ -312,7 +328,6 @@ async function fetchMembersForGroup(sessionId, groupId) {
     id: row.id,
     fullName: row.full_name,
     journeyStage: row.journey_stage || null,
-    isCarefulMode: Boolean(row.is_careful_mode),
   }));
 }
 
@@ -578,6 +593,8 @@ module.exports = {
   getCuratorNarrativeBrief,
   listSessionDaysForCurator,
   // Exposed for tests:
-  STATE_TO_METHODOLOGY,
-  METHODOLOGY_LABEL_RU,
+  STATE_LABEL_RU,
+  LOW_ACTIVATION,
+  WORKING_ACTIVATION,
+  HIGH_ACTIVATION,
 };

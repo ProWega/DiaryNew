@@ -7,7 +7,7 @@ export default {
   parameters: { layout: "fullscreen" },
 };
 
-function Demo({ initialStage = null, initialCarefulMode = false, saving = false }) {
+function Demo({ initialStage = null, saving = false }) {
   const [open, setOpen] = useState(true);
   const [submitted, setSubmitted] = useState(null);
   const [skipped, setSkipped] = useState(false);
@@ -59,14 +59,13 @@ function Demo({ initialStage = null, initialCarefulMode = false, saving = false 
         onSubmit={handleSubmit}
         onSkip={handleSkip}
         initialStage={initialStage}
-        initialCarefulMode={initialCarefulMode}
         saving={saving}
       />
     </div>
   );
 }
 
-/** Default — пустой выбор. Кнопка «Сохранить» disabled пока ничего не выбрано. */
+/** Default — пустой выбор. Кнопка «Сохранить» disabled пока не выбран этап. */
 export const Default = {
   render: () => <Demo />,
 };
@@ -74,11 +73,6 @@ export const Default = {
 /** Preselected — модал открыт со выбранным этапом (например, после возврата). */
 export const PreselectedSearch = {
   render: () => <Demo initialStage="search" />,
-};
-
-/** WithCareful — кнопка активна благодаря careful, даже если этап не выбран. */
-export const WithCareful = {
-  render: () => <Demo initialCarefulMode={true} />,
 };
 
 /** Saving — состояние «в процессе сохранения», кнопки disabled. */

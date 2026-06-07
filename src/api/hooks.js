@@ -688,9 +688,9 @@ export function useAdminWorkspace() {
   };
 }
 
-// Methodology v4: журнализация выбора этапа пути + careful_mode участником.
-// На успех инвалидирует bootstrap-кеш (там лежит journeyStage / isCarefulMode),
-// чтобы AppLayout и onboarding modal сразу увидели актуальное значение.
+// Сохранение выбора этапа пути участником.
+// На успех инвалидирует bootstrap-кеш (там лежит journeyStage), чтобы
+// AppLayout и onboarding modal сразу увидели актуальное значение.
 export function useJourneyStageMutation() {
   const { currentUser, refreshBootstrap } = useAuth();
   const userId = currentUser?.id;

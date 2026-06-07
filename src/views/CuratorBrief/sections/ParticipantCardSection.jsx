@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 
 const REASON_LABEL = {
-  careful_mode: "Бережно",
   shift_down: "Резкая смена",
-  silence_streak: "Тишина подряд",
+  low_activation_streak: "Низкая активация подряд",
+  high_activation: "Высокая активация",
 };
 
 function ParticipantSummary({ card }) {
   if (!card) return null;
-  const stageBits = [card.journeyStageLabel, card.isCarefulMode ? "бережно" : null].filter(Boolean);
+  const stageBits = [card.journeyStageLabel].filter(Boolean);
 
   return (
     <div className="curator-card-summary">
@@ -82,8 +82,8 @@ function ParticipantCardSection({ brief }) {
                   role="tab"
                   aria-selected={isActive}
                   className={`curator-card-pill ${isActive ? "is-active" : ""} ${
-                    card.isCarefulMode ? "is-careful" : ""
-                  } ${card.conversationHint ? "has-hint" : ""}`}
+                    card.conversationHint ? "has-hint" : ""
+                  }`}
                   onClick={() => setSelectedUserId(card.userId)}
                 >
                   <strong>{card.displayName}</strong>

@@ -4,19 +4,18 @@ const { query } = require("../db/postgres.cjs");
 const { logAuditEvent } = require("./auditLog.cjs");
 
 /**
- * Methodology v4: запись участника об этапе пути и/или флаге careful_mode.
- * Хранится в `session_users.journey_stage` и `session_users.is_careful_mode`
- * (см. миграцию 1751000000000_journey_stage_and_careful_mode).
+ * Запись участника об этапе пути. Хранится в `session_users.journey_stage`.
  *
  * Семантика patch:
- *  - { journeyStage: "search" }                       — только этап
- *  - { isCarefulMode: true }                          — только бережно
- *  - { journeyStage: null }                           — сброс этапа
- *  - { journeyStage: "support", isCarefulMode: true } — оба сразу
- *  - {} (пустой patch)                                — no-op
+ *  - { journeyStage: "search" }  — установить этап
+ *  - { journeyStage: null }      — сбросить этап
+ *  - {} (пустой patch)           — no-op
  *
  * Audit: каждый успешный апдейт пишет событие 'methodology.journey_stage.update'
- * с полным before/after diff в payload (без блокировки, через logAuditEvent).
+ * с before/after в payload (через logAuditEvent, без блокировки).
+ *
+ * Колонка `session_users.is_careful_mode` оставлена в схеме для backward-compat,
+ * но приложение её больше не читает и не пишет.
  */
 async function updateParticipantJourneyStage({ viewerId, sessionId, patch }) {
   if (!viewerId || !sessionId) {
@@ -32,17 +31,11 @@ async function updateParticipantJourneyStage({ viewerId, sessionId, patch }) {
     fields.push(`journey_stage = $${paramIndex++}`);
     values.push(safePatch.journeyStage ?? null);
   }
-  if (Object.prototype.hasOwnProperty.call(safePatch, "isCarefulMode")) {
-    fields.push(`is_careful_mode = $${paramIndex++}`);
-    values.push(Boolean(safePatch.isCarefulMode));
-  }
 
   if (!fields.length) {
-    // No-op patch — return current state without writing.
     return readJourneyStage(viewerId, sessionId);
   }
 
-  // Read current state for audit before/after.
   const before = await readJourneyStage(viewerId, sessionId);
 
   values.push(sessionId, viewerId);
@@ -53,7 +46,7 @@ async function updateParticipantJourneyStage({ viewerId, sessionId, patch }) {
     `UPDATE session_users
        SET ${fields.join(", ")}, updated_at = now()
        WHERE session_id = ${sessionParam} AND user_id = ${userParam}
-       RETURNING journey_stage, is_careful_mode`,
+       RETURNING journey_stage`,
     values,
   );
 
@@ -61,13 +54,10 @@ async function updateParticipantJourneyStage({ viewerId, sessionId, patch }) {
     throw createError(404, "Участник не найден в этом заезде");
   }
 
-  const row = result.rows[0];
   const after = {
-    journeyStage: row.journey_stage,
-    isCarefulMode: row.is_careful_mode,
+    journeyStage: result.rows[0].journey_stage,
   };
 
-  // Non-blocking audit write.
   logAuditEvent({
     actorId: viewerId,
     sessionId,
@@ -82,7 +72,7 @@ async function updateParticipantJourneyStage({ viewerId, sessionId, patch }) {
 
 async function readJourneyStage(viewerId, sessionId) {
   const result = await query(
-    `SELECT journey_stage, is_careful_mode
+    `SELECT journey_stage
        FROM session_users
        WHERE session_id = $1 AND user_id = $2
        LIMIT 1`,
@@ -90,12 +80,11 @@ async function readJourneyStage(viewerId, sessionId) {
   );
 
   if (!result.rows.length) {
-    return { journeyStage: null, isCarefulMode: false };
+    return { journeyStage: null };
   }
 
   return {
     journeyStage: result.rows[0].journey_stage,
-    isCarefulMode: result.rows[0].is_careful_mode,
   };
 }
 
