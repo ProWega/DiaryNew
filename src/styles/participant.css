@@ -1668,6 +1668,13 @@
 }
 
 @media (max-width: 860px) {
+  /* Main 2-column diary layout (events | summary) collapses to a single
+     column on tablets / mobile — иначе правая колонка с минимумом 380px
+     душит левую и обе налезают друг на друга. */
+  .participant-layout {
+    grid-template-columns: 1fr;
+  }
+
   .hero-card,
   .panel-card,
   .event-card,
