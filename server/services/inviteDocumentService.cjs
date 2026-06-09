@@ -40,6 +40,10 @@ const TEMPLATE_EXAMPLE_ROWS = [
 const SUPPORTED_LAYOUTS = new Set(["card", "table"]);
 const DEFAULT_TTL_MINUTES = 24 * 60;
 
+// Шаблон xlsx для куратора (1 колонка) — отличается от организаторского.
+const CURATOR_TEMPLATE_HEADER = "ФИО";
+const CURATOR_TEMPLATE_EXAMPLES = [["Иванов Иван Иванович"], ["Петрова Анна"], ["Сидоров Пётр"]];
+
 // -------- Шаблон xlsx --------
 
 /**
@@ -273,6 +277,7 @@ async function createBulkInvites({ sessionId, actorId, groups, ttlMinutes }) {
         fullName: group.curator,
         url: link.url,
         expiresAt: link.expiresAt,
+        magicLinkId: link.id,
       });
     }
 
@@ -303,6 +308,7 @@ async function createBulkInvites({ sessionId, actorId, groups, ttlMinutes }) {
         fullName: participant,
         url: link.url,
         expiresAt: link.expiresAt,
+        magicLinkId: link.id,
       });
     }
   }
@@ -370,6 +376,92 @@ async function renderQr(url, size) {
     margin: 1,
     errorCorrectionLevel: "M",
   });
+}
+
+/**
+ * QR как data-URL (data:image/png;base64,...) — для inline-отображения
+ * в браузере через <img src=...>. Используется curator-эндпоинтом
+ * списка приглашений.
+ */
+async function renderQrDataUrl(url, size = 220) {
+  return QRCode.toDataURL(url, {
+    width: size,
+    margin: 1,
+    errorCorrectionLevel: "M",
+  });
+}
+
+// -------- XLSX для куратора (1 колонка «ФИО») --------
+
+/**
+ * Пустой шаблон с одной колонкой «ФИО» + 3 примера.
+ */
+function buildCuratorNamesTemplateXlsx() {
+  const wb = xlsx.utils.book_new();
+  const aoa = [[CURATOR_TEMPLATE_HEADER], ...CURATOR_TEMPLATE_EXAMPLES];
+  const sheet = xlsx.utils.aoa_to_sheet(aoa);
+  sheet["!cols"] = [{ wch: 32 }];
+  xlsx.utils.book_append_sheet(wb, sheet, "Участники");
+  return xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+/**
+ * Парсит xlsx с одним столбцом ФИО. Возвращает:
+ *   { names: [string], warnings: [{kind, message}], stats: {totalRows, namesCount} }
+ *
+ * Поиск колонки: ищем «фио» в заголовке первой строки. Если не найдено —
+ * берём первую колонку и пишем warning. Дедуп — case-insensitive по trim'у.
+ */
+function parseCuratorNamesXlsx(buffer) {
+  const wb = xlsx.read(buffer, { type: "buffer" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw createImportError(400, "В файле нет ни одного листа");
+  const rows = xlsx.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+    blankrows: false,
+    raw: false,
+  });
+  if (!rows.length) throw createImportError(400, "Файл пустой");
+
+  const warnings = [];
+  const header = (rows[0] || []).map((c) =>
+    String(c || "")
+      .trim()
+      .toLowerCase(),
+  );
+  let nameCol = header.findIndex((c) => c.includes("фио") || c.includes("имя"));
+  let dataStart = 1;
+  if (nameCol < 0) {
+    nameCol = 0;
+    dataStart = 0; // нет заголовка — данные с первой строки
+    warnings.push({
+      kind: "missing_header",
+      message: "Заголовок «ФИО» не найден, считываем первую колонку как есть.",
+    });
+  }
+
+  const seen = new Set();
+  const names = [];
+  let totalRows = 0;
+  for (let i = dataStart; i < rows.length; i += 1) {
+    const raw = rows[i]?.[nameCol];
+    const name = String(raw || "").trim();
+    if (!name) continue;
+    totalRows += 1;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  if (!names.length) {
+    throw createImportError(400, "В файле нет ни одного имени");
+  }
+  return {
+    names,
+    warnings,
+    stats: { totalRows, namesCount: names.length },
+  };
 }
 
 /**
@@ -613,102 +705,29 @@ function createImportError(status, message) {
   return error;
 }
 
-// -------- Invite batches: история выпусков для re-render PDF --------
-
-/**
- * Сохраняет один пакет приглашений в `invite_batches`. Возвращает id батча.
- * Invites сохраняются целиком (включая URL magic-link'ов) — иначе перевыпустить
- * PDF невозможно, т.к. в `auth_magic_links` от токена остаётся только хеш.
- */
-async function persistInviteBatch({
-  sessionId,
-  actorId,
-  invites,
-  layout,
-  title,
-  footer,
-  ttlMinutes,
-}) {
-  if (!sessionId) throw createImportError(400, "sessionId обязателен");
-  if (!Array.isArray(invites)) throw createImportError(400, "invites должен быть массивом");
-
-  const id = createId("invite-batch");
-  const uniqueGroups = new Set(invites.map((i) => i.groupId || i.groupName).filter(Boolean));
-  const result = await query(
-    `insert into invite_batches
-       (id, session_id, created_by, layout, title, footer, ttl_minutes,
-        invites, groups_count, invites_count)
-     values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
-     returning id, created_at`,
-    [
-      id,
-      sessionId,
-      actorId || null,
-      layout || "card",
-      title || null,
-      footer || null,
-      ttlMinutes != null ? Number(ttlMinutes) : null,
-      JSON.stringify(invites),
-      uniqueGroups.size,
-      invites.length,
-    ],
-  );
-  return { id: result.rows[0].id, createdAt: result.rows[0].created_at };
-}
-
-function mapBatchRow(row, { includeInvites = false } = {}) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    sessionId: row.session_id,
-    createdBy: row.created_by || null,
-    layout: row.layout || "card",
-    title: row.title || null,
-    footer: row.footer || null,
-    ttlMinutes: row.ttl_minutes || null,
-    groupsCount: row.groups_count || 0,
-    invitesCount: row.invites_count || 0,
-    createdAt: row.created_at,
-    ...(includeInvites ? { invites: row.invites || [] } : {}),
-  };
-}
-
-async function listInviteBatches({ sessionId, limit = 50 }) {
-  const result = await query(
-    `select id, session_id, created_by, layout, title, footer, ttl_minutes,
-            groups_count, invites_count, created_at
-       from invite_batches
-       where session_id = $1
-       order by created_at desc
-       limit $2`,
-    [sessionId, Math.min(200, Math.max(1, limit))],
-  );
-  return result.rows.map((row) => mapBatchRow(row));
-}
-
-async function getInviteBatch(batchId) {
-  if (!batchId) return null;
-  const result = await query(
-    `select id, session_id, created_by, layout, title, footer, ttl_minutes,
-            invites, groups_count, invites_count, created_at
-       from invite_batches
-       where id = $1
-       limit 1`,
-    [batchId],
-  );
-  return mapBatchRow(result.rows[0], { includeInvites: true });
-}
+// -------- Invite batches: реэкспорт из репозитория для backward-compat --------
+// Реальная логика теперь в server/db/repositories/inviteBatchesStore.cjs —
+// её используют curator-роуты и admin single-link. Здесь оставляем тонкие
+// обёртки, чтобы существующие тесты и organizer-роуты продолжали работать.
+const inviteBatchesStore = require("../db/repositories/inviteBatchesStore.cjs");
+const persistInviteBatch = inviteBatchesStore.persistInviteBatch;
+const listInviteBatches = inviteBatchesStore.listInviteBatches;
+const getInviteBatch = inviteBatchesStore.getInviteBatch;
 
 module.exports = {
   TEMPLATE_HEADERS,
+  CURATOR_TEMPLATE_HEADER,
   DEFAULT_TTL_MINUTES,
   SUPPORTED_LAYOUTS,
   buildTemplateXlsx,
   parseTemplateXlsx,
+  buildCuratorNamesTemplateXlsx,
+  parseCuratorNamesXlsx,
   findExistingSessionUserId,
   findOrCreateGroup,
   createBulkInvites,
   renderInvitesPdf,
+  renderQrDataUrl,
   persistInviteBatch,
   listInviteBatches,
   getInviteBatch,

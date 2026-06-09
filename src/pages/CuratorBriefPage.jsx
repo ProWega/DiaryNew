@@ -6,11 +6,13 @@ import FeedbackState from "../components/FeedbackState";
 import CuratorBriefView from "../views/CuratorBrief/CuratorBriefView";
 import CuratorDashboardView from "../views/CuratorDashboardView";
 import ChatPanel from "../views/CuratorBrief/ChatPanel";
+import CuratorGroupView from "../views/CuratorGroup/CuratorGroupView";
 
 const VIEW_BRIEF = "brief";
 const VIEW_CHAT = "chat";
+const VIEW_GROUP = "group";
 const VIEW_LEGACY = "dashboard";
-const VIEW_OPTIONS = [VIEW_BRIEF, VIEW_CHAT, VIEW_LEGACY];
+const VIEW_OPTIONS = [VIEW_BRIEF, VIEW_CHAT, VIEW_GROUP, VIEW_LEGACY];
 const DEFAULT_VIEW = VIEW_BRIEF;
 
 function getViewStorageKey(userId) {
@@ -65,6 +67,15 @@ function CuratorViewToggle({ view, onChange }) {
         onClick={() => onChange(VIEW_CHAT)}
       >
         Разговор с ИИ
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === VIEW_GROUP}
+        className={view === VIEW_GROUP ? "mini-tab is-active" : "mini-tab"}
+        onClick={() => onChange(VIEW_GROUP)}
+      >
+        Состав группы
       </button>
       <button
         type="button"
@@ -200,6 +211,8 @@ function CuratorBriefPage() {
         <LegacyContent sessionId={sessionId} groupId={groupId} />
       ) : view === VIEW_CHAT ? (
         <ChatPanel sessionId={sessionId} groupId={groupId} />
+      ) : view === VIEW_GROUP ? (
+        <CuratorGroupView sessionId={sessionId} groupId={groupId} />
       ) : (
         <BriefContent sessionId={sessionId} groupId={groupId} />
       )}

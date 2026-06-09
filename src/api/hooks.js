@@ -263,6 +263,149 @@ export function useCuratorBrief(sessionId, groupId, dayId = null) {
   return queryShape(query, queryKey, queryClient);
 }
 
+export function useCuratorGroupOverview(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "group-overview", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorGroupOverview(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+export function useCuratorGroupInvitations(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = currentUser?.id;
+  const queryKey = ["curator", "group-invitations", userId, sessionId, groupId];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getCuratorGroupInvitations(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  return queryShape(query, queryKey, queryClient);
+}
+
+/**
+ * Мутации для «Состав группы»:
+ *   createSingle({fullName, ttlMinutes?})
+ *   createBulkNames({names: string[], ttlMinutes?})
+ *   createBulkXlsx({file, ttlMinutes?})
+ *   downloadTemplate() → Blob
+ * После успешного создания инвалидирует related queries в react-query.
+ */
+export function useCuratorInvitationMutations(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+
+  function invalidate() {
+    queryClient.invalidateQueries({
+      queryKey: ["curator", "group-overview", userId, sessionId, groupId],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["curator", "group-invitations", userId, sessionId, groupId],
+    });
+  }
+
+  const singleMutation = useMutation({
+    mutationFn: ({ fullName, ttlMinutes }) =>
+      jsonApi.createCuratorInvitation(userId, sessionId, groupId, { fullName, ttlMinutes }),
+  });
+  const bulkNamesMutation = useMutation({
+    mutationFn: ({ names, ttlMinutes }) =>
+      jsonApi.createCuratorInvitationsBulkNames(userId, sessionId, groupId, names, ttlMinutes),
+  });
+  const bulkXlsxMutation = useMutation({
+    mutationFn: ({ file, ttlMinutes }) =>
+      jsonApi.createCuratorInvitationsBulkXlsx(userId, sessionId, groupId, file, ttlMinutes),
+  });
+  const templateMutation = useMutation({
+    mutationFn: () => jsonApi.downloadCuratorInvitesTemplate(userId, sessionId, groupId),
+  });
+
+  const createSingle = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId || !groupId) return null;
+      try {
+        const result = await singleMutation.mutateAsync(payload);
+        addToast(`Приглашение для «${payload.fullName}» создано`, "success");
+        invalidate();
+        return result?.invite || null;
+      } catch (error) {
+        addToast(error?.message || "Не удалось создать приглашение", "error");
+        throw error;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, singleMutation, addToast],
+  );
+
+  const createBulkNames = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId || !groupId) return null;
+      try {
+        const result = await bulkNamesMutation.mutateAsync(payload);
+        const count = result?.invitations?.length || 0;
+        addToast(`Создано ${count} приглашений`, "success");
+        invalidate();
+        return result;
+      } catch (error) {
+        addToast(error?.message || "Не удалось создать приглашения", "error");
+        throw error;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, bulkNamesMutation, addToast],
+  );
+
+  const createBulkXlsx = useCallback(
+    async (payload) => {
+      if (!userId || !sessionId || !groupId) return null;
+      try {
+        const result = await bulkXlsxMutation.mutateAsync(payload);
+        const count = result?.invitations?.length || 0;
+        addToast(`Создано ${count} приглашений`, "success");
+        invalidate();
+        return result;
+      } catch (error) {
+        addToast(error?.message || "Не удалось импортировать xlsx", "error");
+        throw error;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, sessionId, groupId, bulkXlsxMutation, addToast],
+  );
+
+  const downloadTemplate = useCallback(async () => {
+    if (!userId || !sessionId || !groupId) return null;
+    try {
+      return await templateMutation.mutateAsync();
+    } catch (error) {
+      addToast(error?.message || "Не удалось скачать шаблон", "error");
+      throw error;
+    }
+  }, [userId, sessionId, groupId, templateMutation, addToast]);
+
+  return {
+    createSingle,
+    createBulkNames,
+    createBulkXlsx,
+    downloadTemplate,
+    creatingSingle: singleMutation.isPending,
+    creatingBulk: bulkNamesMutation.isPending || bulkXlsxMutation.isPending,
+    downloadingTemplate: templateMutation.isPending,
+  };
+}
+
 export function useCuratorSessionDays(sessionId, groupId) {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();

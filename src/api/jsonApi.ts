@@ -715,6 +715,118 @@ export const jsonApi = {
     return response.blob();
   },
 
+  // ── Curator: group overview + invitations ───────────────────────────────
+
+  getCuratorGroupOverview(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/overview`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  getCuratorGroupInvitations(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/invitations`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  createCuratorInvitation(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { fullName: string; ttlMinutes?: number },
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/invitations`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
+  createCuratorInvitationsBulkNames(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    names: string[],
+    ttlMinutes?: number,
+  ) {
+    return requestJson(`/api/curator/sessions/${sessionId}/groups/${groupId}/invitations/bulk`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: { names, ttlMinutes },
+    });
+  },
+
+  async createCuratorInvitationsBulkXlsx(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    file: File,
+    ttlMinutes?: number,
+  ) {
+    const path = `/api/curator/sessions/${sessionId}/groups/${groupId}/invitations/bulk`;
+    const send = () => {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (ttlMinutes) fd.append("ttlMinutes", String(ttlMinutes));
+      return fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: fd,
+      });
+    };
+    let response = await send();
+    if (response.status === 403) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // ignore
+      }
+      response = await send();
+    }
+    if (!response.ok) {
+      let message = "Не удалось выпустить приглашения";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.json();
+  },
+
+  async downloadCuratorInvitesTemplate(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ): Promise<Blob> {
+    const response = await fetch(
+      `/api/curator/sessions/${sessionId}/groups/${groupId}/invitations/template.xlsx`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: viewerHeaders(viewerId),
+      },
+    );
+    if (!response.ok) {
+      throw new ApiError("Не удалось скачать шаблон", response.status);
+    }
+    return response.blob();
+  },
+
   async uploadEventConcept(
     viewerId: string | number,
     sessionId: string | number,

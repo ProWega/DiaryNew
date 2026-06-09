@@ -62,6 +62,16 @@ Participant diary payload включает опубликованные дни �
 
 Контекст ответа собирается в [server/services/curatorChatContext.cjs](https://github.com) → preamble: methodology system prompt + члены группы + brief всех дней (из `narrative_brief_cache.is_current`) + extracted_text всех концепций мероприятий сессии. Прогоняется через `applyToList(...,"curator")` для фильтрации анонимных / hidden-from-curator. Превышение бюджета → 402 `budget_exceeded`.
 
+### Состав группы (вкладка «Состав группы»)
+
+- `GET /api/curator/sessions/:sessionId/groups/:groupId/overview` — метрики группы (active today, reflections done, pending invites, avg activation) + ростер участников (имя, journey_stage, состояние сегодня/вчера, рефлексия done, последний комментарий).
+- `GET /api/curator/sessions/:sessionId/groups/:groupId/invitations` — список magic-link'ов для группы из `invite_batches` (admin/organizer/curator) с inline QR `data:image/png;base64,...` и статусом `pending|consumed|expired`.
+- `GET /api/curator/sessions/:sessionId/groups/:groupId/invitations/template.xlsx` — пустой шаблон с одной колонкой «ФИО».
+- `POST /api/curator/sessions/:sessionId/groups/:groupId/invitations` — body `{ fullName, ttlMinutes? }`. Дедуп по `findExistingSessionUserId`, `createMagicLink` с `role='participant', groupId, sessionId`, запись в `invite_batches` (1-row batch). При consume `upsertUserAssignment` автоматически добавляет участника в группу куратора. Audit: `curator.invite.single`.
+- `POST /api/curator/sessions/:sessionId/groups/:groupId/invitations/bulk` — multipart `file=xlsx` (1 столбец ФИО) или body `{ names: string[], ttlMinutes? }`. Дедуп по ФИО, цикл `createMagicLink`, один батч. Audit: `curator.invite.bulk` (с `count`, `dedupCount`).
+
+Все эндпоинты требуют `ensureCuratorAccess(viewerId, sessionId, groupId)` — куратор группы A не видит данные группы B.
+
 ## API: admin
 
 - `GET /api/admin/dashboard`
