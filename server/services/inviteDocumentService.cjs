@@ -316,10 +316,21 @@ const FONT_BASE_PATH = path.join(__dirname, "..", "..", "public", "fonts", "TT N
 const FONT_REGULAR = "TT Norms Std Trial Condensed Regular.otf";
 const FONT_BOLD = "TT Norms Std Trial Condensed Bold.otf";
 
+let warnedAboutMissingFont = false;
+
 function loadFontBuffer(filename) {
   try {
     return fs.readFileSync(path.join(FONT_BASE_PATH, filename));
-  } catch {
+  } catch (error) {
+    if (!warnedAboutMissingFont) {
+      warnedAboutMissingFont = true;
+      // Один раз на процесс. Если упадём в этот fallback в проде — PDF будет
+      // в дефолтном Helvetica и потеряет кириллицу. Чаще всего причина —
+      // в Dockerfile не скопирован public/fonts/ в runtime-стейдж.
+      console.warn(
+        `[inviteDocumentService] font missing at ${path.join(FONT_BASE_PATH, filename)} — PDF will use Helvetica (no Cyrillic glyphs). Reason: ${error?.message || error}`,
+      );
+    }
     return null;
   }
 }
@@ -332,11 +343,24 @@ function createDoc({ title }) {
   });
   const regular = loadFontBuffer(FONT_REGULAR);
   const bold = loadFontBuffer(FONT_BOLD);
-  if (regular) doc.registerFont("Main", regular);
-  if (bold) doc.registerFont("Main-Bold", bold);
-  // Если шрифт не загрузился — будет встроенный Helvetica (нет кириллицы),
-  // но это деградация, не падение.
-  doc.font(regular ? "Main" : "Helvetica");
+  if (!regular) {
+    // В тестах разрешаем fallback (там путь к шрифтам не настроен), в
+    // production fail-fast — лучше показать ошибку организатору, чем
+    // выдать PDF с битой кириллицей.
+    if (process.env.NODE_ENV === "production") {
+      const err = new Error(
+        "PDF font (TT Norms Std Trial Condensed Regular.otf) не найден на диске. " +
+          "В runtime-образе должен быть public/fonts/TT Norms/ — без него кириллица в PDF битая.",
+      );
+      err.status = 500;
+      throw err;
+    }
+    doc.font("Helvetica");
+  } else {
+    doc.registerFont("Main", regular);
+    if (bold) doc.registerFont("Main-Bold", bold);
+    doc.font("Main");
+  }
   return doc;
 }
 
@@ -360,7 +384,7 @@ function groupByGroupName(invites) {
   return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
 }
 
-function drawPageHeader(doc, { title, groupName, curator, isFirstPage }) {
+function drawPageHeader(doc, { title, groupName, curator, isFirstPage: _isFirstPage }) {
   const top = doc.page.margins.top;
   doc.fontSize(18).text(title || "Приглашения участников", doc.page.margins.left, top);
   doc.moveDown(0.3);
@@ -589,6 +613,92 @@ function createImportError(status, message) {
   return error;
 }
 
+// -------- Invite batches: история выпусков для re-render PDF --------
+
+/**
+ * Сохраняет один пакет приглашений в `invite_batches`. Возвращает id батча.
+ * Invites сохраняются целиком (включая URL magic-link'ов) — иначе перевыпустить
+ * PDF невозможно, т.к. в `auth_magic_links` от токена остаётся только хеш.
+ */
+async function persistInviteBatch({
+  sessionId,
+  actorId,
+  invites,
+  layout,
+  title,
+  footer,
+  ttlMinutes,
+}) {
+  if (!sessionId) throw createImportError(400, "sessionId обязателен");
+  if (!Array.isArray(invites)) throw createImportError(400, "invites должен быть массивом");
+
+  const id = createId("invite-batch");
+  const uniqueGroups = new Set(invites.map((i) => i.groupId || i.groupName).filter(Boolean));
+  const result = await query(
+    `insert into invite_batches
+       (id, session_id, created_by, layout, title, footer, ttl_minutes,
+        invites, groups_count, invites_count)
+     values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+     returning id, created_at`,
+    [
+      id,
+      sessionId,
+      actorId || null,
+      layout || "card",
+      title || null,
+      footer || null,
+      ttlMinutes != null ? Number(ttlMinutes) : null,
+      JSON.stringify(invites),
+      uniqueGroups.size,
+      invites.length,
+    ],
+  );
+  return { id: result.rows[0].id, createdAt: result.rows[0].created_at };
+}
+
+function mapBatchRow(row, { includeInvites = false } = {}) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    createdBy: row.created_by || null,
+    layout: row.layout || "card",
+    title: row.title || null,
+    footer: row.footer || null,
+    ttlMinutes: row.ttl_minutes || null,
+    groupsCount: row.groups_count || 0,
+    invitesCount: row.invites_count || 0,
+    createdAt: row.created_at,
+    ...(includeInvites ? { invites: row.invites || [] } : {}),
+  };
+}
+
+async function listInviteBatches({ sessionId, limit = 50 }) {
+  const result = await query(
+    `select id, session_id, created_by, layout, title, footer, ttl_minutes,
+            groups_count, invites_count, created_at
+       from invite_batches
+       where session_id = $1
+       order by created_at desc
+       limit $2`,
+    [sessionId, Math.min(200, Math.max(1, limit))],
+  );
+  return result.rows.map((row) => mapBatchRow(row));
+}
+
+async function getInviteBatch(batchId) {
+  if (!batchId) return null;
+  const result = await query(
+    `select id, session_id, created_by, layout, title, footer, ttl_minutes,
+            invites, groups_count, invites_count, created_at
+       from invite_batches
+       where id = $1
+       limit 1`,
+    [batchId],
+  );
+  return mapBatchRow(result.rows[0], { includeInvites: true });
+}
+
 module.exports = {
   TEMPLATE_HEADERS,
   DEFAULT_TTL_MINUTES,
@@ -599,4 +709,7 @@ module.exports = {
   findOrCreateGroup,
   createBulkInvites,
   renderInvitesPdf,
+  persistInviteBatch,
+  listInviteBatches,
+  getInviteBatch,
 };

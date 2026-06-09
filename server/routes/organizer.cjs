@@ -1438,6 +1438,25 @@ router.post(
       throw createHttpError(500, `Ошибка рендера PDF: ${error.message}`);
     }
 
+    // Сохраняем пакет в invite_batches для последующего re-render PDF
+    // (без выпуска новых magic-link'ов). Если запись не удалась — PDF всё
+    // равно отдаём; история — приятный бонус, не блокер.
+    let batchId = null;
+    try {
+      const persisted = await inviteDocumentService.persistInviteBatch({
+        sessionId: req.params.sessionId,
+        actorId: req.viewer.id,
+        invites,
+        layout,
+        title,
+        footer,
+        ttlMinutes,
+      });
+      batchId = persisted.id;
+    } catch (error) {
+      console.warn("[organizer] invite batch persist failed:", error?.message || error);
+    }
+
     const curatorCount = invites.filter((i) => i.role === "curator").length;
     const participantsCount = invites.filter((i) => i.role === "participant").length;
 
@@ -1448,6 +1467,7 @@ router.post(
       entityType: "session",
       entityId: req.params.sessionId,
       payload: {
+        batchId,
         fileName: decodeOriginalName(xlsxFile.originalname) || null,
         groupsCount: parsed.groups.length,
         curatorCount,
@@ -1464,7 +1484,78 @@ router.post(
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("X-Invites-Created", String(invites.length));
     res.setHeader("X-Invites-Groups", String(parsed.groups.length));
+    if (batchId) res.setHeader("X-Invite-Batch-Id", batchId);
     res.status(201).send(pdfBuffer);
+  }),
+);
+
+// GET /api/organizer/sessions/:sessionId/invite-batches
+// История выпущенных пакетов приглашений для сессии. Без поля `invites` —
+// только метаданные для списка в UI.
+router.get(
+  "/sessions/:sessionId/invite-batches",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const batches = await inviteDocumentService.listInviteBatches({
+      sessionId: req.params.sessionId,
+      limit,
+    });
+    res.json({ batches });
+  }),
+);
+
+// POST /api/organizer/sessions/:sessionId/invite-batches/:batchId/render
+// Перевыпускает PDF из сохранённого пакета. body: { layout?, title?, footer? }
+// — если указаны, переопределяют сохранённые. Не создаёт новые magic-link'и.
+router.post(
+  "/sessions/:sessionId/invite-batches/:batchId/render",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const batch = await inviteDocumentService.getInviteBatch(req.params.batchId);
+    if (!batch || batch.sessionId !== req.params.sessionId) {
+      throw createHttpError(404, "Пакет не найден");
+    }
+    const invites = Array.isArray(batch.invites) ? batch.invites : [];
+    if (!invites.length) {
+      throw createHttpError(400, "Пакет пуст — нечего рендерить");
+    }
+
+    const overrideLayout = req.body?.layout;
+    const layout = ["card", "table"].includes(overrideLayout) ? overrideLayout : batch.layout;
+    const title = req.body?.title !== undefined ? String(req.body.title) : batch.title;
+    const footer = req.body?.footer !== undefined ? String(req.body.footer) : batch.footer;
+
+    let pdfBuffer;
+    try {
+      pdfBuffer = await inviteDocumentService.renderInvitesPdf({
+        invites,
+        layout,
+        title: title || "Приглашения участников",
+        footer: footer || "",
+      });
+    } catch (error) {
+      throw createHttpError(500, `Ошибка рендера PDF: ${error.message}`);
+    }
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.batch.rerendered",
+      entityType: "invite_batch",
+      entityId: batch.id,
+      payload: {
+        invitesCount: invites.length,
+        groupsCount: batch.groupsCount,
+        layout,
+      },
+    });
+
+    const filename = `invites-batch-${batch.id}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Invites-Created", String(invites.length));
+    res.status(200).send(pdfBuffer);
   }),
 );
 

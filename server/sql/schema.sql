@@ -599,3 +599,23 @@ create unique index if not exists agent_prompts_current_uniq
   on agent_prompts(agent_type) where is_current = true;
 create index if not exists agent_prompts_type_version
   on agent_prompts(agent_type, version desc);
+
+-- ── Invite batches (migration 1758) ────────────────────────────────
+-- История пакетов приглашений (organizer bulk-invites) для re-render PDF
+-- без выпуска новых magic-link'ов.
+create table if not exists invite_batches (
+  id              text primary key,
+  session_id      text not null references sessions(id) on delete cascade,
+  created_by      text references users(id) on delete set null,
+  layout          text not null default 'card',
+  title           text,
+  footer          text,
+  ttl_minutes     integer,
+  invites         jsonb not null default '[]'::jsonb,
+  groups_count    integer not null default 0,
+  invites_count   integer not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists invite_batches_session_created_idx
+  on invite_batches(session_id, created_at desc);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBulkInvites } from "../../api/hooks";
 
 const TEMPLATE_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -51,10 +51,36 @@ function InviteBulkPanel({ sessionId, sessionCatalog = [], onSelectSession }) {
     previewInvites,
     generateInvites,
     downloadTemplate,
+    listBatches,
+    rerenderBatch,
     previewing,
     generating,
     downloadingTemplate,
+    rerenderingBatch,
   } = useBulkInvites(sessionId);
+
+  const [batches, setBatches] = useState([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+
+  const reloadBatches = useCallback(async () => {
+    if (!sessionId) {
+      setBatches([]);
+      return;
+    }
+    setBatchesLoading(true);
+    try {
+      const result = await listBatches();
+      setBatches(Array.isArray(result?.batches) ? result.batches : []);
+    } catch {
+      // toast уже показан внутри хука
+    } finally {
+      setBatchesLoading(false);
+    }
+  }, [sessionId, listBatches]);
+
+  useEffect(() => {
+    reloadBatches();
+  }, [reloadBatches]);
 
   const sessions = Array.isArray(sessionCatalog) ? sessionCatalog : [];
   const currentSession = sessions.find((s) => s.id === sessionId) || null;
@@ -144,9 +170,39 @@ function InviteBulkPanel({ sessionId, sessionCatalog = [], onSelectSession }) {
       if (blob) {
         const filename = `invites-${sessionId}-${new Date().toISOString().slice(0, 10)}.pdf`;
         downloadBlob(blob, filename);
+        // подтягиваем свежий пакет в историю
+        reloadBatches();
       }
     } catch (error) {
       setErrorMessage(error?.message || "Не удалось сгенерировать PDF");
+    }
+  }
+
+  async function handleRerender(batch) {
+    setErrorMessage(null);
+    try {
+      const blob = await rerenderBatch(batch.id, {});
+      if (blob) {
+        const stamp = new Date(batch.createdAt || Date.now()).toISOString().slice(0, 10);
+        downloadBlob(blob, `invites-${batch.id}-${stamp}.pdf`);
+      }
+    } catch (error) {
+      setErrorMessage(error?.message || "Не удалось перевыпустить PDF");
+    }
+  }
+
+  function formatBatchDate(value) {
+    if (!value) return "—";
+    try {
+      return new Date(value).toLocaleString("ru-RU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return String(value);
     }
   }
 
@@ -343,6 +399,72 @@ function InviteBulkPanel({ sessionId, sessionCatalog = [], onSelectSession }) {
         {errorMessage && !preview ? (
           <p className="alert-card severity-high">{errorMessage}</p>
         ) : null}
+
+        <section className="invite-bulk-batches">
+          <header className="panel-head">
+            <div>
+              <p className="eyebrow">История пакетов</p>
+              <h3>Перевыпустить ранее созданный PDF</h3>
+              <p className="subtle">
+                Каждый клик «Сгенерировать PDF» сохраняется сюда. Кнопка «Перевыпустить PDF»
+                рендерит документ заново из тех же magic-link&apos;ов (без выпуска новых) —
+                например, если предыдущий PDF получился с битым форматированием.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={reloadBatches}
+              disabled={batchesLoading}
+            >
+              {batchesLoading ? "Обновляем…" : "Обновить"}
+            </button>
+          </header>
+
+          {batches.length === 0 ? (
+            <p className="subtle">
+              {batchesLoading
+                ? "Загружаем историю…"
+                : "Пока ни одного пакета. Сгенерируйте первый — он появится здесь."}
+            </p>
+          ) : (
+            <div className="table-card">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Лейаут</th>
+                    <th>Групп</th>
+                    <th>Приглашений</th>
+                    <th>Заголовок</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {batches.map((batch) => (
+                    <tr key={batch.id}>
+                      <td>{formatBatchDate(batch.createdAt)}</td>
+                      <td>{batch.layout || "card"}</td>
+                      <td>{batch.groupsCount}</td>
+                      <td>{batch.invitesCount}</td>
+                      <td className="cell-wrap">{batch.title || "—"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={rerenderingBatch}
+                          onClick={() => handleRerender(batch)}
+                        >
+                          {rerenderingBatch ? "…" : "Перевыпустить PDF"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </article>
   );

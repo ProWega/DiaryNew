@@ -49,6 +49,10 @@ COPY package*.json ./
 RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts && npm cache clean --force
 
 COPY server ./server
+# Шрифты с кириллицей нужны pdfkit'у в runtime — без них приглашения и любой
+# серверный PDF рендерятся дефолтным Helvetica, у которого нет кириллицы,
+# и весь текст превращается в мусор (см. inviteDocumentService.cjs:createDoc).
+COPY public/fonts ./public/fonts
 COPY --from=build /app/dist ./dist
 
 EXPOSE 4000

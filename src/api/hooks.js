@@ -1038,6 +1038,10 @@ export function useBulkInvites(sessionId) {
   const templateMutation = useMutation({
     mutationFn: () => jsonApi.downloadInvitesTemplate(userId, sessionId),
   });
+  const rerenderMutation = useMutation({
+    mutationFn: ({ batchId, overrides }) =>
+      jsonApi.rerenderInviteBatchPdf(userId, sessionId, batchId, overrides),
+  });
 
   const previewInvites = useCallback(
     async (file) => {
@@ -1077,12 +1081,40 @@ export function useBulkInvites(sessionId) {
     }
   }, [userId, sessionId, templateMutation, addToast]);
 
+  const listBatches = useCallback(async () => {
+    if (!userId || !sessionId) return { batches: [] };
+    try {
+      return await jsonApi.listInviteBatches(userId, sessionId);
+    } catch (error) {
+      addToast(error?.message || "Не удалось загрузить историю пакетов", "error");
+      throw error;
+    }
+  }, [userId, sessionId, addToast]);
+
+  const rerenderBatch = useCallback(
+    async (batchId, overrides) => {
+      if (!userId || !sessionId || !batchId) return null;
+      try {
+        const blob = await rerenderMutation.mutateAsync({ batchId, overrides });
+        addToast("PDF пакета перевыпущен", "success");
+        return blob;
+      } catch (error) {
+        addToast(error?.message || "Не удалось перевыпустить PDF", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, rerenderMutation, addToast],
+  );
+
   return {
     previewInvites,
     generateInvites,
     downloadTemplate,
+    listBatches,
+    rerenderBatch,
     previewing: previewMutation.isPending,
     generating: generateMutation.isPending,
     downloadingTemplate: templateMutation.isPending,
+    rerenderingBatch: rerenderMutation.isPending,
   };
 }

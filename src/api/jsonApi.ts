@@ -669,6 +669,52 @@ export const jsonApi = {
     return response.blob();
   },
 
+  listInviteBatches(viewerId: string | number, sessionId: string | number) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/invite-batches`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  async rerenderInviteBatchPdf(
+    viewerId: string | number,
+    sessionId: string | number,
+    batchId: string,
+    overrides: { layout?: "card" | "table"; title?: string; footer?: string } = {},
+  ): Promise<Blob> {
+    const path = `/api/organizer/sessions/${sessionId}/invite-batches/${batchId}/render`;
+    const send = () =>
+      fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: JSON.stringify(overrides),
+      });
+    let response = await send();
+    if (response.status === 403) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // ignore
+      }
+      response = await send();
+    }
+    if (!response.ok) {
+      let message = "Не удалось перевыпустить PDF";
+      try {
+        const payloadJson = (await response.json()) as { message?: string };
+        message = payloadJson.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
+  },
+
   async uploadEventConcept(
     viewerId: string | number,
     sessionId: string | number,
