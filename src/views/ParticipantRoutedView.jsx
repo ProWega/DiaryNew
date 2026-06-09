@@ -1253,6 +1253,7 @@ function ParticipantRoutedView({
                     title="Карта эмоций дня"
                     values={todayChartEvents.map((event) => getStateLevel(event.stateId))}
                     labels={todayChartEvents.map((event) => event.title)}
+                    labelsMode="on-click"
                   />
                 </div>
 

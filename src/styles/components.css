@@ -750,6 +750,44 @@
   overflow-wrap: anywhere;
 }
 
+/* labelsMode="on-click": одна строка-подсказка с названием активной точки.
+   Заменяет .chart-labels-row, когда у графика много точек и их названия
+   не помещаются под осью X (мобильный портрет). */
+.chart-active-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(244, 239, 219, 0.45);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.32;
+  overflow-wrap: anywhere;
+}
+
+.chart-active-label strong {
+  font-weight: 800;
+}
+
+.chart-active-label-hint {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-active-label-empty {
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.chart-click-target {
+  cursor: pointer;
+}
+
 .chart-frame {
   color: var(--text-main);
 }

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { stateScale } from "../data/mockData";
 
 const DEFAULT_PALETTE = [
@@ -43,7 +43,10 @@ function getAutoDomain(values, fallback = DEFAULT_DOMAIN, includeZero = false) {
   const min = Math.min(...finiteValues, includeZero ? 0 : Infinity);
   const max = Math.max(...finiteValues, includeZero ? 0 : -Infinity);
   const padding = Math.max((max - min) * 0.12, 0.4);
-  return normalizeDomain([Math.floor((min - padding) * 10) / 10, Math.ceil((max + padding) * 10) / 10]);
+  return normalizeDomain([
+    Math.floor((min - padding) * 10) / 10,
+    Math.ceil((max + padding) * 10) / 10,
+  ]);
 }
 
 function getState(value) {
@@ -182,7 +185,7 @@ function ChartShell({
 }) {
   return (
     <div className={`chart-shell chart-frame ${compact ? "is-compact" : ""} ${className}`.trim()}>
-      {(title || description || legend?.length) ? (
+      {title || description || legend?.length ? (
         <div className="chart-toolbar">
           <div className="chart-header">
             {title ? <h3>{title}</h3> : null}
@@ -261,7 +264,14 @@ function renderAnnotations({ annotations = [], domain, width, height, margin, xC
       const y = getY(annotation.value, domain, height, margin);
       return (
         <g key={annotation.id ?? `annotation-y-${index}`}>
-          <line x1={margin.left} x2={width - margin.right} y1={y} y2={y} stroke={color} strokeDasharray="3 6" />
+          <line
+            x1={margin.left}
+            x2={width - margin.right}
+            y1={y}
+            y2={y}
+            stroke={color}
+            strokeDasharray="3 6"
+          />
           <text x={margin.left + 8} y={y - 6} fontSize="11" fill={color}>
             {annotation.label}
           </text>
@@ -273,7 +283,14 @@ function renderAnnotations({ annotations = [], domain, width, height, margin, xC
       const x = getX(annotation.index, xCount, width, margin);
       return (
         <g key={annotation.id ?? `annotation-x-${index}`}>
-          <line x1={x} x2={x} y1={margin.top} y2={height - margin.bottom} stroke={color} strokeDasharray="3 6" />
+          <line
+            x1={x}
+            x2={x}
+            y1={margin.top}
+            y2={height - margin.bottom}
+            stroke={color}
+            strokeDasharray="3 6"
+          />
           <text x={x + 6} y={margin.top + 12} fontSize="11" fill={color}>
             {annotation.label}
           </text>
@@ -307,15 +324,24 @@ export function EmotionLineChart({
   height,
   curve = "smooth",
   onPointClick,
+  // "static" — все названия точек видны под графиком (как раньше).
+  // "on-click" — лейблы под графиком скрыты; тап по точке показывает
+  // название этой точки в одной строке-подписи под графиком.
+  // Используется на портрете мобильного, где 5+ названий не помещаются.
+  labelsMode = "static",
 }) {
   const gradientId = useId();
+  const [activeIndex, setActiveIndex] = useState(null);
+  const isClickMode = labelsMode === "on-click";
   const width = 760;
   const chartHeight = height ?? (compact ? 150 : 260);
   const margin = compact ? { top: 18, right: 18, bottom: 20, left: 18 } : DEFAULT_MARGIN;
   const normalizedSeries = normalizeSeries({ series, data, values, labels, palette });
   const nonEmptySeries = normalizedSeries.filter((item) => item.data.length);
   const xCount = Math.max(1, ...normalizedSeries.map((item) => item.data.length), labels.length);
-  const xLabels = labels.length ? labels : nonEmptySeries[0]?.data.map((item) => item.label) ?? [];
+  const xLabels = labels.length
+    ? labels
+    : (nonEmptySeries[0]?.data.map((item) => item.label) ?? []);
   const domain = normalizeDomain(yDomain);
   const legend = showLegend
     ? normalizedSeries.map((item) => ({ id: item.id, label: item.label, color: item.color }))
@@ -372,7 +398,14 @@ export function EmotionLineChart({
               })
             : null}
 
-          {renderGridLines({ ticks: gridTicks, domain, width, height: chartHeight, margin, showGrid })}
+          {renderGridLines({
+            ticks: gridTicks,
+            domain,
+            width,
+            height: chartHeight,
+            margin,
+            showGrid,
+          })}
           {renderThresholds({ thresholds, domain, width, height: chartHeight, margin })}
           {renderAnnotations({ annotations, domain, width, height: chartHeight, margin, xCount })}
 
@@ -403,16 +436,25 @@ export function EmotionLineChart({
                   ? points.map((point, pointIndex) => (
                       <g
                         key={`${item.id}-${point.id}`}
-                        className={onPointClick ? "chart-click-target" : ""}
-                        onClick={() => onPointClick?.(point, item)}
+                        className={onPointClick || isClickMode ? "chart-click-target" : undefined}
+                        onClick={() => {
+                          onPointClick?.(point, item);
+                          if (isClickMode) {
+                            setActiveIndex((prev) => (prev === pointIndex ? null : pointIndex));
+                          }
+                        }}
                       >
                         <circle
                           cx={point.x}
                           cy={point.y}
-                          r={compact ? 6 : 10}
+                          r={
+                            (compact ? 6 : 10) + (isClickMode && activeIndex === pointIndex ? 2 : 0)
+                          }
                           fill={point.color ?? point.state.surface}
                           stroke={series ? item.color : point.state.color}
-                          strokeWidth={compact ? 2 : 3}
+                          strokeWidth={
+                            (compact ? 2 : 3) + (isClickMode && activeIndex === pointIndex ? 2 : 0)
+                          }
                         />
                         {!compact && !series ? (
                           <text x={point.x} y={point.y + 4} textAnchor="middle" fontSize="12">
@@ -436,13 +478,30 @@ export function EmotionLineChart({
         </svg>
       </div>
 
-      {showLabels ? (
+      {showLabels && !isClickMode ? (
         <div className={`chart-labels ${compact ? "is-compact" : ""}`}>
           {xLabels.map((label, index) => (
             <div key={`${label}-${index}`} className="chart-label">
               <span>{label}</span>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {showLabels && isClickMode ? (
+        <div className="chart-active-label">
+          {activeIndex !== null && xLabels[activeIndex] ? (
+            <>
+              <span className="chart-active-label-hint">
+                {activeIndex + 1} из {xLabels.length}
+              </span>
+              <strong>{xLabels[activeIndex]}</strong>
+            </>
+          ) : (
+            <span className="chart-active-label-empty">
+              Нажмите на точку, чтобы увидеть название мероприятия
+            </span>
+          )}
         </div>
       ) : null}
     </ChartShell>
@@ -471,7 +530,13 @@ export function Sparkline({
   yDomain,
 }) {
   const pointsData = normalizeData({ data, values });
-  const domain = normalizeDomain(yDomain ?? getAutoDomain(pointsData.map((item) => item.value), DEFAULT_DOMAIN));
+  const domain = normalizeDomain(
+    yDomain ??
+      getAutoDomain(
+        pointsData.map((item) => item.value),
+        DEFAULT_DOMAIN,
+      ),
+  );
   const margin = { top: 8, right: 8, bottom: 8, left: 8 };
   const points = pointsData.map((point, index) => ({
     ...point,
@@ -519,7 +584,11 @@ export function HeatmapGrid({
       description={description}
       empty={empty}
       emptyLabel={emptyLabel}
-      legend={showLegend ? stateScale.map((state) => ({ id: state.id, label: state.label, color: state.color })) : []}
+      legend={
+        showLegend
+          ? stateScale.map((state) => ({ id: state.id, label: state.label, color: state.color }))
+          : []
+      }
     >
       <div className="heatmap">
         <div
@@ -583,10 +652,16 @@ export function DistributionBars({
   emptyLabel = "Нет данных распределения",
   showValues = true,
 }) {
-  const computedTotal = total ?? items.reduce((sum, item) => sum + Number(item.count ?? item.value ?? 0), 0);
+  const computedTotal =
+    total ?? items.reduce((sum, item) => sum + Number(item.count ?? item.value ?? 0), 0);
 
   return (
-    <ChartShell title={title} description={description} empty={!items.length} emptyLabel={emptyLabel}>
+    <ChartShell
+      title={title}
+      description={description}
+      empty={!items.length}
+      emptyLabel={emptyLabel}
+    >
       <div className="distribution">
         {items.map((item) => {
           const count = Number(item.count ?? item.value ?? 0);
@@ -602,7 +677,10 @@ export function DistributionBars({
                 {showValues ? <strong>{percentage}%</strong> : null}
               </div>
               <div className="distribution-track">
-                <div className="distribution-fill" style={{ width: `${percentage}%`, background: item.color }} />
+                <div
+                  className="distribution-fill"
+                  style={{ width: `${percentage}%`, background: item.color }}
+                />
               </div>
             </div>
           );
@@ -631,15 +709,32 @@ export function EventImpactBarChart({
   const items = normalizeData({ data, values, labels });
   const width = 760;
   const margin = { top: 24, right: 24, bottom: 34, left: 34 };
-  const domain = normalizeDomain(yDomain ?? getAutoDomain(items.map((item) => item.value), [-2, 2], true));
+  const domain = normalizeDomain(
+    yDomain ??
+      getAutoDomain(
+        items.map((item) => item.value),
+        [-2, 2],
+        true,
+      ),
+  );
   const zeroY = getY(0, domain, height, margin);
   const bandWidth = (width - margin.left - margin.right) / Math.max(items.length, 1);
   const barWidth = Math.max(18, Math.min(72, bandWidth - 18));
 
   return (
-    <ChartShell title={title} description={description} empty={!items.length} emptyLabel={emptyLabel}>
+    <ChartShell
+      title={title}
+      description={description}
+      empty={!items.length}
+      emptyLabel={emptyLabel}
+    >
       <div className="chart-svg-wrap">
-        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" preserveAspectRatio="xMidYMid meet">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="chart-svg"
+          role="img"
+          preserveAspectRatio="xMidYMid meet"
+        >
           {renderGridLines({
             ticks: [domain[0], 0, domain[1]].map((value) => ({ value, label: String(value) })),
             domain,
@@ -648,11 +743,20 @@ export function EventImpactBarChart({
             margin,
             showGrid,
           })}
-          <line x1={margin.left} x2={width - margin.right} y1={zeroY} y2={zeroY} stroke="rgba(45,55,65,.42)" strokeWidth="2" />
+          <line
+            x1={margin.left}
+            x2={width - margin.right}
+            y1={zeroY}
+            y2={zeroY}
+            stroke="rgba(45,55,65,.42)"
+            strokeWidth="2"
+          />
           {items.map((item, index) => {
             const x = margin.left + index * bandWidth + bandWidth / 2 - barWidth / 2;
             const y = getY(item.value, domain, height, margin);
-            const fill = item.color ?? (item.value > 0 ? positiveColor : item.value < 0 ? negativeColor : neutralColor);
+            const fill =
+              item.color ??
+              (item.value > 0 ? positiveColor : item.value < 0 ? negativeColor : neutralColor);
             const rectY = Math.min(y, zeroY);
             const rectHeight = Math.max(3, Math.abs(zeroY - y));
 
@@ -660,7 +764,13 @@ export function EventImpactBarChart({
               <g key={item.id}>
                 <rect x={x} y={rectY} width={barWidth} height={rectHeight} rx="10" fill={fill} />
                 {showValues ? (
-                  <text x={x + barWidth / 2} y={item.value >= 0 ? rectY - 8 : rectY + rectHeight + 16} textAnchor="middle" fontSize="12" fill={fill}>
+                  <text
+                    x={x + barWidth / 2}
+                    y={item.value >= 0 ? rectY - 8 : rectY + rectHeight + 16}
+                    textAnchor="middle"
+                    fontSize="12"
+                    fill={fill}
+                  >
                     {item.value > 0 ? "+" : ""}
                     {item.value}
                   </text>
@@ -726,13 +836,25 @@ export function StackedDistributionChart({
   const legend = showLegend ? Array.from(segmentMap.values()) : [];
 
   return (
-    <ChartShell title={title} description={description} empty={!rows.length} emptyLabel={emptyLabel} legend={legend}>
+    <ChartShell
+      title={title}
+      description={description}
+      empty={!rows.length}
+      emptyLabel={emptyLabel}
+      legend={legend}
+    >
       <div className="chart-svg-wrap">
-        <svg viewBox={`0 0 ${width} ${chartHeight}`} className="chart-svg" role="img" preserveAspectRatio="xMidYMid meet">
+        <svg
+          viewBox={`0 0 ${width} ${chartHeight}`}
+          className="chart-svg"
+          role="img"
+          preserveAspectRatio="xMidYMid meet"
+        >
           {rows.map((row, rowIndex) => {
             const y = margin.top + rowIndex * rowHeight;
             const segments = row.segments ?? [];
-            const total = row.total ?? segments.reduce((sum, segment) => sum + Number(segment.value ?? 0), 0);
+            const total =
+              row.total ?? segments.reduce((sum, segment) => sum + Number(segment.value ?? 0), 0);
             let offset = margin.left;
             const barWidth = width - margin.left - margin.right;
 
@@ -741,7 +863,14 @@ export function StackedDistributionChart({
                 <text x={12} y={y + 28} fontSize="12" fill="rgba(49, 59, 66, 0.74)">
                   {row.label}
                 </text>
-                <rect x={margin.left} y={y + 8} width={barWidth} height="28" rx="14" fill="rgba(71,81,91,.08)" />
+                <rect
+                  x={margin.left}
+                  y={y + 8}
+                  width={barWidth}
+                  height="28"
+                  rx="14"
+                  fill="rgba(71,81,91,.08)"
+                />
                 {segments.map((segment, index) => {
                   const percentage = total ? Number(segment.value ?? 0) / total : 0;
                   const widthValue = barWidth * percentage;
@@ -759,7 +888,13 @@ export function StackedDistributionChart({
                   offset += widthValue;
                   return rect;
                 })}
-                <text x={width - margin.right} y={y + 28} textAnchor="end" fontSize="12" fill="rgba(49, 59, 66, 0.64)">
+                <text
+                  x={width - margin.right}
+                  y={y + 28}
+                  textAnchor="end"
+                  fontSize="12"
+                  fill="rgba(49, 59, 66, 0.64)"
+                >
                   {total}
                 </text>
               </g>
@@ -794,13 +929,22 @@ export function RiskScatterChart({
   const yValues = data.map((item) => Number(item.y ?? item.amplitude ?? 0));
   const resolvedXDomain = normalizeDomain(xDomain ?? getAutoDomain(xValues, DEFAULT_DOMAIN));
   const resolvedYDomain = normalizeDomain(yDomain ?? getAutoDomain(yValues, [0, 4], true));
-  const ticks = [resolvedYDomain[0], (resolvedYDomain[0] + resolvedYDomain[1]) / 2, resolvedYDomain[1]].map((value) => ({
+  const ticks = [
+    resolvedYDomain[0],
+    (resolvedYDomain[0] + resolvedYDomain[1]) / 2,
+    resolvedYDomain[1],
+  ].map((value) => ({
     value,
     label: value.toFixed(1),
   }));
 
   return (
-    <ChartShell title={title} description={description} empty={!data.length} emptyLabel={emptyLabel}>
+    <ChartShell
+      title={title}
+      description={description}
+      empty={!data.length}
+      emptyLabel={emptyLabel}
+    >
       <div className="chart-svg-wrap">
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -811,12 +955,30 @@ export function RiskScatterChart({
         >
           {renderGridLines({ ticks, domain: resolvedYDomain, width, height, margin, showGrid })}
           {renderThresholds({ thresholds, domain: resolvedYDomain, width, height, margin })}
-          <line x1={margin.left} x2={width - margin.right} y1={height - margin.bottom} y2={height - margin.bottom} stroke="rgba(45,55,65,.34)" />
-          <line x1={margin.left} x2={margin.left} y1={margin.top} y2={height - margin.bottom} stroke="rgba(45,55,65,.34)" />
+          <line
+            x1={margin.left}
+            x2={width - margin.right}
+            y1={height - margin.bottom}
+            y2={height - margin.bottom}
+            stroke="rgba(45,55,65,.34)"
+          />
+          <line
+            x1={margin.left}
+            x2={margin.left}
+            y1={margin.top}
+            y2={height - margin.bottom}
+            stroke="rgba(45,55,65,.34)"
+          />
           <text x={width / 2} y={height - 8} textAnchor="middle" className="chart-axis-label">
             {xLabel}
           </text>
-          <text x={14} y={height / 2} textAnchor="middle" transform={`rotate(-90 14 ${height / 2})`} className="chart-axis-label">
+          <text
+            x={14}
+            y={height / 2}
+            textAnchor="middle"
+            transform={`rotate(-90 14 ${height / 2})`}
+            className="chart-axis-label"
+          >
             {yLabel}
           </text>
 
@@ -830,9 +992,13 @@ export function RiskScatterChart({
             const y = getY(yValue, resolvedYDomain, height, margin);
             const color = item.color ?? palette[index % palette.length];
             const radius = clamp(6 + Math.sqrt(Math.max(size, 0)) * 2.4, 6, 22);
-            const isSelected = selectedId !== undefined && selectedId !== null && selectedId === (item.id ?? item.label);
+            const isSelected =
+              selectedId !== undefined &&
+              selectedId !== null &&
+              selectedId === (item.id ?? item.label);
             const calloutLabel = String(item.label ?? "");
-            const visibleCalloutLabel = calloutLabel.length > 26 ? `${calloutLabel.slice(0, 25)}…` : calloutLabel;
+            const visibleCalloutLabel =
+              calloutLabel.length > 26 ? `${calloutLabel.slice(0, 25)}…` : calloutLabel;
             const calloutWidth = clamp(visibleCalloutLabel.length * 7 + 24, 104, 220);
             const calloutHeight = 30;
             const calloutX = clamp(x - calloutWidth / 2, 8, width - calloutWidth - 8);
@@ -848,13 +1014,27 @@ export function RiskScatterChart({
                 }}
               >
                 <circle cx={x} cy={y} r={Math.max(radius + 10, 26)} fill="transparent" />
-                <circle cx={x} cy={y} r={radius} fill={color} opacity="0.78" stroke="rgba(255,255,255,.9)" strokeWidth="2" />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={radius}
+                  fill={color}
+                  opacity="0.78"
+                  stroke="rgba(255,255,255,.9)"
+                  strokeWidth="2"
+                />
                 <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fill="#22313a">
                   {item.shortLabel ?? index + 1}
                 </text>
                 {isSelected ? (
                   <g className="chart-point-callout" pointerEvents="none">
-                    <rect x={calloutX} y={calloutY} width={calloutWidth} height={calloutHeight} rx="15" />
+                    <rect
+                      x={calloutX}
+                      y={calloutY}
+                      width={calloutWidth}
+                      height={calloutHeight}
+                      rx="15"
+                    />
                     <text x={calloutX + calloutWidth / 2} y={calloutY + 20} textAnchor="middle">
                       {visibleCalloutLabel}
                     </text>

@@ -50,12 +50,11 @@ function ReflectionEditor({
           return (
             <label key={axis} className="reflection-axis">
               <span className="reflection-axis-name">{meta.ru}</span>
-              {!compact ? <span className="reflection-axis-prompt">{prompt}</span> : null}
               <textarea
                 className="reflection-axis-input"
                 rows={compact ? 2 : 3}
                 value={fieldValue}
-                placeholder={compact ? prompt : ""}
+                placeholder={prompt}
                 onChange={(e) => patch(axis, e.target.value)}
               />
             </label>
