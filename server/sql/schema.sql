@@ -619,3 +619,7 @@ create table if not exists invite_batches (
 
 create index if not exists invite_batches_session_created_idx
   on invite_batches(session_id, created_at desc);
+
+-- ── Multi-use magic-links (migration 1759) ─────────────────────────
+alter table auth_magic_links add column if not exists max_uses int default 1;
+alter table auth_magic_links add column if not exists uses_count int not null default 0;

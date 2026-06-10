@@ -72,6 +72,7 @@ function InvitationsPanel({ sessionId, groupId, invitations, loading, onChanged 
   const [fullName, setFullName] = useState("");
   const [ttlMinutes, setTtlMinutes] = useState(60 * 24);
   const [copyHint, setCopyHint] = useState("");
+  const [reissuingFor, setReissuingFor] = useState(null);
 
   const {
     createSingle,
@@ -116,6 +117,25 @@ function InvitationsPanel({ sessionId, groupId, invitations, loading, onChanged 
     const ok = await copyToClipboard(url);
     setCopyHint(ok ? "Скопировано" : "Не удалось");
     setTimeout(() => setCopyHint(""), 1500);
+  }
+
+  /**
+   * Перевыпуск magic-link для того же ФИО (когда участник уже прошёл по
+   * прошлой ссылке, но потерял доступ — нужна свежая). Дедуп на бэке
+   * подставит targetUserId на существующего пользователя.
+   */
+  async function handleReissue(inv) {
+    const name = (inv.fullName || "").trim();
+    if (name.length < 2) return;
+    setReissuingFor(inv.magicLinkId || `${name}-${inv.createdAt}`);
+    try {
+      await createSingle({ fullName: name, ttlMinutes });
+      onChanged?.();
+    } catch {
+      // toast уже показан
+    } finally {
+      setReissuingFor(null);
+    }
   }
 
   return (
@@ -249,6 +269,26 @@ function InvitationsPanel({ sessionId, groupId, invitations, loading, onChanged 
                       </button>
                     </div>
                   ) : null}
+                  <button
+                    type="button"
+                    className="ghost-button curator-invite-reissue"
+                    onClick={() => handleReissue(inv)}
+                    disabled={
+                      creatingSingle ||
+                      reissuingFor === (inv.magicLinkId || `${inv.fullName}-${inv.createdAt}`)
+                    }
+                    title={
+                      inv.status === "consumed"
+                        ? "Участник уже прошёл по ссылке — выпустить новую"
+                        : "Выпустить свежую ссылку для того же ФИО"
+                    }
+                  >
+                    {reissuingFor === (inv.magicLinkId || `${inv.fullName}-${inv.createdAt}`)
+                      ? "Выпускаем…"
+                      : inv.status === "consumed"
+                        ? "Выпустить новую"
+                        : "Перевыпустить"}
+                  </button>
                 </div>
               </li>
             ))}

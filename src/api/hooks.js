@@ -263,6 +263,56 @@ export function useCuratorBrief(sessionId, groupId, dayId = null) {
   return queryShape(query, queryKey, queryClient);
 }
 
+/**
+ * Список участников группы для организатора + мутация выпуска многоразового
+ * QR-magic-link для выбранного участника.
+ */
+export function useOrganizerReusableQr(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "group-members", userId, sessionId, groupId];
+
+  const membersQuery = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getOrganizerGroupMembers(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  const issueMutation = useMutation({
+    mutationFn: ({ memberUserId, ttlMinutes }) =>
+      jsonApi.createOrganizerReusableQr(userId, sessionId, groupId, memberUserId, {
+        ttlMinutes,
+      }),
+  });
+
+  const issueReusableQr = useCallback(
+    async (memberUserId, ttlMinutes) => {
+      if (!userId || !sessionId || !groupId || !memberUserId) return null;
+      try {
+        const result = await issueMutation.mutateAsync({ memberUserId, ttlMinutes });
+        addToast("Многоразовый QR выпущен", "success");
+        return result?.invite || null;
+      } catch (error) {
+        addToast(error?.message || "Не удалось выпустить QR", "error");
+        throw error;
+      }
+    },
+
+    [userId, sessionId, groupId, issueMutation, addToast],
+  );
+
+  return {
+    members: membersQuery.data?.members || [],
+    loadingMembers: membersQuery.isPending,
+    membersError: membersQuery.error,
+    refreshMembers: () => queryClient.invalidateQueries({ queryKey }),
+    issueReusableQr,
+    issuingQr: issueMutation.isPending,
+  };
+}
+
 export function useCuratorGroupOverview(sessionId, groupId) {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();

@@ -56,6 +56,9 @@ const audience = require("../services/surveyAudienceService.cjs");
 const eventConceptsStore = require("../db/repositories/eventConceptsStore.cjs");
 const { documentUploader, inviteBulkUploader, persistUpload } = require("../lib/uploads.cjs");
 const inviteDocumentService = require("../services/inviteDocumentService.cjs");
+const inviteBatchesStore = require("../db/repositories/inviteBatchesStore.cjs");
+const { createMagicLink } = require("../db/repositories/authStore.cjs");
+const { query } = require("../db/postgres.cjs");
 const { extractText } = require("../services/documentExtraction.cjs");
 const { logAuditEvent } = require("../services/auditLog.cjs");
 const { getSessionUsageReport } = require("../services/curatorLlmGuard.cjs");
@@ -1556,6 +1559,149 @@ router.post(
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("X-Invites-Created", String(invites.length));
     res.status(200).send(pdfBuffer);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Многоразовые QR для уже-существующих участников группы.
+// Organizer выпускает magic-link с max_uses=NULL (безлимит) и большим TTL —
+// участник может сканировать его многократно в течение смены.
+// ---------------------------------------------------------------------------
+
+// GET /api/organizer/sessions/:sid/groups/:gid/members
+// Список активных участников группы (для UI-пикера).
+router.get(
+  "/sessions/:sessionId/groups/:groupId/members",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const result = await query(
+      `
+        select u.id, u.full_name, su.journey_stage, su.created_at
+          from session_users su
+          join users u on u.id = su.user_id
+         where su.session_id = $1 and su.group_id = $2
+           and su.role = 'participant' and su.status = 'active'
+         order by u.full_name
+      `,
+      [req.params.sessionId, req.params.groupId],
+    );
+    res.json({
+      members: result.rows.map((row) => ({
+        userId: row.id,
+        fullName: row.full_name || "",
+        journeyStage: row.journey_stage || null,
+        joinedAt: row.created_at,
+      })),
+    });
+  }),
+);
+
+// POST /api/organizer/sessions/:sid/groups/:gid/members/:userId/reusable-qr
+// body: { ttlMinutes? } → создаёт multi-use magic-link (max_uses=NULL).
+// Возвращает invite-объект с qrDataUrl, что позволяет фронту сразу показать
+// QR/URL/копирование.
+router.post(
+  "/sessions/:sessionId/groups/:groupId/members/:userId/reusable-qr",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const ttlMinutes = Math.max(
+      60,
+      Math.min(60 * 24 * 365, Number(req.body?.ttlMinutes) || 60 * 24 * 30),
+    );
+
+    // Достаём ФИО и подтверждаем, что user реально в группе.
+    const userRow = await query(
+      `
+        select u.id, u.full_name
+          from session_users su
+          join users u on u.id = su.user_id
+         where su.session_id = $1 and su.group_id = $2 and u.id = $3
+           and su.role = 'participant' and su.status = 'active'
+         limit 1
+      `,
+      [req.params.sessionId, req.params.groupId, req.params.userId],
+    );
+    if (!userRow.rows[0]) {
+      throw createHttpError(404, "Участник не найден в этой группе");
+    }
+    const fullName = userRow.rows[0].full_name || "";
+
+    const groupRow = await query(`select name from groups where id = $1 limit 1`, [
+      req.params.groupId,
+    ]);
+    const groupName = groupRow.rows[0]?.name || null;
+
+    const link = await createMagicLink({
+      creatorId: req.viewer.id,
+      purpose: "invite",
+      targetUserId: req.params.userId,
+      sessionId: req.params.sessionId,
+      role: "participant",
+      groupId: req.params.groupId,
+      fullName,
+      ttlMinutes,
+      maxUses: null, // ← безлимит = многоразовый
+      meta: {
+        source: "organizer-reusable-qr",
+        reusable: true,
+      },
+    });
+
+    const invite = {
+      groupId: req.params.groupId,
+      groupName,
+      role: "participant",
+      fullName,
+      url: link.url,
+      expiresAt: link.expiresAt,
+      magicLinkId: link.id,
+    };
+
+    try {
+      await inviteBatchesStore.persistInviteBatch({
+        sessionId: req.params.sessionId,
+        actorId: req.viewer.id,
+        invites: [invite],
+        layout: "card",
+        title: "Многоразовый QR",
+        ttlMinutes,
+      });
+    } catch (error) {
+      console.warn("[organizer] reusable-qr batch persist failed:", error?.message || error);
+    }
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.reusable_qr",
+      entityType: "magic_link",
+      entityId: link.id,
+      payload: {
+        userId: req.params.userId,
+        groupId: req.params.groupId,
+        fullName,
+        ttlMinutes,
+      },
+    });
+
+    let qrDataUrl = null;
+    try {
+      qrDataUrl = await inviteDocumentService.renderQrDataUrl(link.url, 320);
+    } catch {
+      // Не критично — фронт обойдётся без QR.
+    }
+
+    res.status(201).json({
+      invite: {
+        ...invite,
+        createdAt: new Date().toISOString(),
+        createdBy: req.viewer.id,
+        consumedAt: null,
+        status: "pending",
+        qrDataUrl,
+        maxUses: null,
+      },
+    });
   }),
 );
 

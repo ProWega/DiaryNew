@@ -1,5 +1,10 @@
 const { createHash, createHmac, randomBytes } = require("node:crypto");
-const { getAppBaseUrl, getAuthSessionSecret, getAuthSessionTtlDays, getMagicLinkTtlMinutes } = require("../../config.cjs");
+const {
+  getAppBaseUrl,
+  getAuthSessionSecret,
+  getAuthSessionTtlDays,
+  getMagicLinkTtlMinutes,
+} = require("../../config.cjs");
 const { query } = require("../postgres.cjs");
 const { createId } = require("./common.cjs");
 const { createUser, getUser, upsertUserAssignment } = require("./userStore.cjs");
@@ -12,11 +17,16 @@ function createToken() {
 }
 
 function hashToken(token) {
-  return createHmac("sha256", getAuthSessionSecret()).update(String(token || "")).digest("hex");
+  return createHmac("sha256", getAuthSessionSecret())
+    .update(String(token || ""))
+    .digest("hex");
 }
 
 function shortHash(value) {
-  return createHash("sha256").update(String(value || "")).digest("hex").slice(0, 12);
+  return createHash("sha256")
+    .update(String(value || ""))
+    .digest("hex")
+    .slice(0, 12);
 }
 
 function addMinutes(minutes) {
@@ -115,6 +125,8 @@ async function createMagicLink({
   fullName = "",
   ttlMinutes = getMagicLinkTtlMinutes(),
   meta = {},
+  // null = безлимит (многоразовая ссылка); по умолчанию 1 = одноразовая.
+  maxUses = 1,
 } = {}) {
   const nextPurpose = normalizeMagicPurpose(purpose);
   const nextRole = INVITE_ROLES.has(role) ? role : "participant";
@@ -134,13 +146,17 @@ async function createMagicLink({
   const token = createToken();
   const expiresAt = addMinutes(Number(ttlMinutes) || getMagicLinkTtlMinutes());
   const id = createId("magic-link");
+  const safeMaxUses =
+    maxUses === null || maxUses === undefined
+      ? null
+      : Math.max(1, Math.floor(Number(maxUses) || 1));
   await query(
     `
       insert into auth_magic_links (
         id, token_hash, purpose, target_user_id, session_id, role, group_id,
-        full_name, created_by, expires_at, meta
+        full_name, created_by, expires_at, meta, max_uses, uses_count
       )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,0)
     `,
     [
       id,
@@ -154,6 +170,7 @@ async function createMagicLink({
       creatorId || null,
       expiresAt,
       JSON.stringify(meta || {}),
+      safeMaxUses,
     ],
   );
 
@@ -165,6 +182,7 @@ async function createMagicLink({
     expiresAt,
     tokenPreview: shortHash(token),
     url: url.toString(),
+    maxUses: safeMaxUses,
   };
 }
 
@@ -175,12 +193,17 @@ async function consumeMagicLink({ token, userAgent = "", ipAddress = "" } = {}) 
     throw error;
   }
 
+  // Многоразовые ссылки: max_uses = NULL → безлимит; max_uses = N → до N
+  // потреблений. uses_count инкрементируется на каждом успешном consume.
+  // `consumed_at` ставится при ПЕРВОМ consume (backward-compat для legacy-
+  // кода, который смотрит только на эту колонку для «использована ли»).
   const result = await query(
     `
       update auth_magic_links
-      set consumed_at = now()
+      set uses_count = uses_count + 1,
+          consumed_at = coalesce(consumed_at, now())
       where token_hash = $1
-        and consumed_at is null
+        and (max_uses is null or uses_count < max_uses)
         and expires_at > now()
       returning *
     `,

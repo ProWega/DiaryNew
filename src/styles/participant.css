@@ -2293,3 +2293,46 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* «Сохранено и отправлено организаторам» — visible сигнал, что рефлексия
+   ушла. Показывается над текстаэрами, если reflectionAnswered. */
+.participant-reflection-saved {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(155, 212, 11, 0.16) 0%, rgba(106, 168, 79, 0.1) 100%);
+  border: 1px solid rgba(60, 81, 6, 0.25);
+}
+
+.participant-reflection-saved strong {
+  display: block;
+  color: #3c5106;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.participant-reflection-saved small {
+  display: block;
+  color: rgba(60, 81, 6, 0.78);
+  margin-top: 2px;
+  font-size: 0.82rem;
+  line-height: 1.32;
+}
+
+.participant-reflection-saved-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #6aa84f;
+  color: white;
+  font-weight: 900;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 10px rgba(60, 81, 6, 0.16);
+}

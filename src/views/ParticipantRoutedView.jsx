@@ -1149,6 +1149,20 @@ function ParticipantRoutedView({
                       {reflectionAnswered ? "учтена" : "черновик"}
                     </span>
                   </div>
+                  {reflectionAnswered ? (
+                    <div className="participant-reflection-saved" role="status" aria-live="polite">
+                      <span className="participant-reflection-saved-check" aria-hidden="true">
+                        ✓
+                      </span>
+                      <div>
+                        <strong>Сохранено и отправлено организаторам</strong>
+                        <small>
+                          Ваш ответ ниже — можно дополнить или изменить, изменения сохранятся
+                          автоматически.
+                        </small>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="reflection-list participant-reflection-list">
                     {showArchivedReflection ? (

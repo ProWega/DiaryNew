@@ -20,6 +20,7 @@ import SessionsTabPanel from "./SessionsTabPanel";
 import ParticipantsTabPanel from "./ParticipantsTabPanel";
 import AiAssistantTabPanel from "./AiAssistantTabPanel";
 import InviteBulkPanel from "./InviteBulkPanel";
+import ReusableQrPanel from "./ReusableQrPanel";
 
 const TAB_OPTIONS = [
   { id: "sessions", label: "Мои заезды" },
@@ -27,6 +28,7 @@ const TAB_OPTIONS = [
   { id: "groups", label: "Группы" },
   { id: "participants", label: "Участники" },
   { id: "bulk-invites", label: "Пригласить участников" },
+  { id: "reusable-qr", label: "Многоразовые QR" },
   { id: "ai-assistant", label: "ИИ-помощник" },
 ];
 
@@ -894,6 +896,13 @@ function OrganizerCabinetView({
             const selected = safeWorkspace.sessionCatalog?.find((s) => s.id === sessionId);
             if (selected) onSessionCreated?.(selected);
           }}
+        />
+      ) : null}
+
+      {activeTab === "reusable-qr" ? (
+        <ReusableQrPanel
+          sessionId={safeWorkspace.sessionId}
+          groups={safeWorkspace.groupsSummary.groups}
         />
       ) : null}
 

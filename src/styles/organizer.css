@@ -1425,3 +1425,69 @@
   font-size: 0.82rem;
   margin: 0;
 }
+
+/* === Organizer → «Многоразовые QR» === */
+.reusable-qr-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.reusable-qr-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.reusable-qr-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 12px;
+}
+
+.reusable-qr-row {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(71, 81, 91, 0.12);
+  background: rgba(255, 252, 244, 0.6);
+}
+
+.reusable-qr-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reusable-qr-issued {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(71, 81, 91, 0.18);
+}
+
+.reusable-qr-issued img {
+  width: 100%;
+  height: auto;
+  background: white;
+  border-radius: 10px;
+}
+
+.reusable-qr-issued-body {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+@media (max-width: 540px) {
+  .reusable-qr-issued {
+    grid-template-columns: 1fr;
+  }
+  .reusable-qr-issued img {
+    max-width: 240px;
+    margin: 0 auto;
+  }
+}

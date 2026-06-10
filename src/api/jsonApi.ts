@@ -715,6 +715,35 @@ export const jsonApi = {
     return response.blob();
   },
 
+  // ── Organizer: reusable QR for existing group members ─────────────────────
+
+  getOrganizerGroupMembers(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/members`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  createOrganizerReusableQr(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    userId: string | number,
+    payload: { ttlMinutes?: number } = {},
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/members/${userId}/reusable-qr`,
+      {
+        method: "POST",
+        headers: viewerHeaders(viewerId),
+        body: payload,
+      },
+    );
+  },
+
   // ── Curator: group overview + invitations ───────────────────────────────
 
   getCuratorGroupOverview(
