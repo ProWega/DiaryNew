@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jsonApi } from "./jsonApi";
 import { useAuth } from "../auth/AuthContext";
@@ -157,13 +157,21 @@ export function useParticipantDiary(sessionId) {
     [userId, sessionId, queryClient, addToast],
   );
 
+  // Хранит debounce-таймеры и накапливаемый patch по dayId. Намеренно НЕ
+  // подвешиваем cleanup-эффект — pending-сейв с захваченным в closure
+  // userId/sessionId должен дойти до сервера даже если юзер успел уйти
+  // со страницы (иначе теряем последние напечатанные буквы).
+  const reflectionDebounceRef = useRef({});
+
   const updateReflection = useCallback(
-    async (dayId, patch) => {
+    (dayId, patch) => {
       if (!userId) return null;
 
       const key = qk.participantDiary(userId, sessionId);
-      const previousData = queryClient.getQueryData(key);
 
+      // Оптимистично применяем patch в кэш — UI сразу показывает напечатанный
+      // текст. На ошибке cache НЕ откатываем (иначе при флэки сети у юзера
+      // пропадает то, что он только что напечатал).
       queryClient.setQueryData(key, (prev) => {
         if (!prev) return prev;
         return {
@@ -191,16 +199,44 @@ export function useParticipantDiary(sessionId) {
         };
       });
 
-      try {
-        const nextData = await jsonApi.updateParticipantReflection(userId, sessionId, dayId, patch);
-        queryClient.setQueryData(key, nextData);
-        addToast("Сохранено", "success");
-        return nextData;
-      } catch (error) {
-        queryClient.setQueryData(key, previousData);
-        addToast("Ошибка сохранения", "error");
-        throw error;
+      // Аккумулируем clean-patch в debounce-слоте для этого dayId. Каждый
+      // новый keystroke перезапускает таймер (700 мс простоя → отправка
+      // на сервер). Это снимает per-keystroke сетевой спам и тосты.
+      const slot = reflectionDebounceRef.current[dayId] || { timer: null, pending: {} };
+      const next = { ...slot.pending };
+      for (const field of ["q1", "q2", "q3", "mind", "heart", "will", "freeText"]) {
+        if (field in patch) next[field] = patch[field];
       }
+      if (patch.answers && typeof patch.answers === "object") {
+        next.answers = { ...(next.answers || {}), ...patch.answers };
+      }
+      for (const flag of ["isAnonymous", "isHiddenFromCurator"]) {
+        if (flag in patch) next[flag] = patch[flag];
+      }
+      slot.pending = next;
+      if (slot.timer) clearTimeout(slot.timer);
+      slot.timer = setTimeout(async () => {
+        const payload = slot.pending;
+        slot.pending = {};
+        slot.timer = null;
+        try {
+          const nextData = await jsonApi.updateParticipantReflection(
+            userId,
+            sessionId,
+            dayId,
+            payload,
+          );
+          // Не дёргаем тост на каждый автосейв — это спам. Подменяем кэш
+          // на серверный ответ только если за время запроса юзер ничего
+          // нового не напечатал (slot.timer всё ещё null) — иначе свежий
+          // ввод бы перетёрся.
+          if (!slot.timer) queryClient.setQueryData(key, nextData);
+        } catch (error) {
+          addToast(error?.message || "Не удалось сохранить рефлексию", "error");
+        }
+      }, 700);
+      reflectionDebounceRef.current[dayId] = slot;
+      return null;
     },
     [userId, sessionId, queryClient, addToast],
   );
