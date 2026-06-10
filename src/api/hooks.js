@@ -287,6 +287,15 @@ export function useOrganizerReusableQr(sessionId, groupId) {
       }),
   });
 
+  const quickAddMutation = useMutation({
+    mutationFn: ({ fullName, ttlMinutes }) =>
+      jsonApi.createOrganizerGroupQuickAdd(userId, sessionId, groupId, {
+        fullName,
+        role: "participant",
+        ttlMinutes,
+      }),
+  });
+
   const issueReusableQr = useCallback(
     async (memberUserId, ttlMinutes) => {
       if (!userId || !sessionId || !groupId || !memberUserId) return null;
@@ -303,6 +312,28 @@ export function useOrganizerReusableQr(sessionId, groupId) {
     [userId, sessionId, groupId, issueMutation, addToast],
   );
 
+  const quickAdd = useCallback(
+    async (fullName, ttlMinutes) => {
+      if (!userId || !sessionId || !groupId || !fullName) return null;
+      try {
+        const result = await quickAddMutation.mutateAsync({ fullName, ttlMinutes });
+        addToast(
+          result?.reusedExistingUser
+            ? "Участник уже был в заезде — переназначен в эту группу"
+            : "Участник добавлен в группу",
+          "success",
+        );
+        // Подтягиваем свежий список членов группы (новый юзер появится).
+        queryClient.invalidateQueries({ queryKey });
+        return result || null;
+      } catch (error) {
+        addToast(error?.message || "Не удалось добавить участника", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, groupId, quickAddMutation, addToast, queryClient, queryKey],
+  );
+
   return {
     members: membersQuery.data?.members || [],
     loadingMembers: membersQuery.isPending,
@@ -310,6 +341,8 @@ export function useOrganizerReusableQr(sessionId, groupId) {
     refreshMembers: () => queryClient.invalidateQueries({ queryKey }),
     issueReusableQr,
     issuingQr: issueMutation.isPending,
+    quickAdd,
+    quickAdding: quickAddMutation.isPending,
   };
 }
 
@@ -338,6 +371,15 @@ export function useOrganizerCuratorReusableQr(sessionId, groupId) {
       }),
   });
 
+  const quickAddMutation = useMutation({
+    mutationFn: ({ fullName, ttlMinutes }) =>
+      jsonApi.createOrganizerGroupQuickAdd(userId, sessionId, groupId, {
+        fullName,
+        role: "curator",
+        ttlMinutes,
+      }),
+  });
+
   const issueReusableQr = useCallback(
     async (curatorId, ttlMinutes) => {
       if (!userId || !sessionId || !groupId || !curatorId) return null;
@@ -353,6 +395,27 @@ export function useOrganizerCuratorReusableQr(sessionId, groupId) {
     [userId, sessionId, groupId, issueMutation, addToast],
   );
 
+  const quickAdd = useCallback(
+    async (fullName, ttlMinutes) => {
+      if (!userId || !sessionId || !groupId || !fullName) return null;
+      try {
+        const result = await quickAddMutation.mutateAsync({ fullName, ttlMinutes });
+        addToast(
+          result?.reusedExistingUser
+            ? "Куратор уже был в заезде — переназначен в эту группу"
+            : "Куратор добавлен в группу",
+          "success",
+        );
+        queryClient.invalidateQueries({ queryKey });
+        return result || null;
+      } catch (error) {
+        addToast(error?.message || "Не удалось добавить куратора", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, groupId, quickAddMutation, addToast, queryClient, queryKey],
+  );
+
   // listCuratorsForGroup возвращает массив объектов { id, fullName, ... }
   const curators = Array.isArray(curatorsQuery.data) ? curatorsQuery.data : [];
 
@@ -363,6 +426,8 @@ export function useOrganizerCuratorReusableQr(sessionId, groupId) {
     refreshCurators: () => queryClient.invalidateQueries({ queryKey }),
     issueReusableQr,
     issuingQr: issueMutation.isPending,
+    quickAdd,
+    quickAdding: quickAddMutation.isPending,
   };
 }
 

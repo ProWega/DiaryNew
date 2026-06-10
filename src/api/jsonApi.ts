@@ -771,11 +771,28 @@ export const jsonApi = {
     );
   },
 
+  createOrganizerGroupQuickAdd(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { fullName: string; role: "participant" | "curator"; ttlMinutes?: number },
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/quick-add`, {
+      method: "POST",
+      headers: viewerHeaders(viewerId),
+      body: payload,
+    });
+  },
+
   async createOrganizerReusableQrBulkPdf(
     viewerId: string | number,
     sessionId: string | number,
     groupId: string | number,
-    payload: { role: "participant" | "curator"; ttlMinutes?: number },
+    payload: {
+      role: "participant" | "curator";
+      ttlMinutes?: number;
+      userIds?: Array<string | number>;
+    },
   ) {
     const path = `/api/organizer/sessions/${sessionId}/groups/${groupId}/reusable-qr/bulk-pdf`;
     const send = () =>

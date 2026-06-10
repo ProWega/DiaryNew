@@ -19,7 +19,7 @@ const {
   updateRegistration,
   updateSession,
 } = require("../db/repositories/sessionStore.cjs");
-const { getUser } = require("../db/repositories/userStore.cjs");
+const { createUser, getUser, upsertUserAssignment } = require("../db/repositories/userStore.cjs");
 const {
   asyncHandler,
   createHttpError,
@@ -1708,11 +1708,154 @@ router.post(
   }),
 );
 
+// POST /api/organizer/sessions/:sid/groups/:gid/quick-add
+// body: { fullName, role: 'participant'|'curator', ttlMinutes? }
+// Создаёт нового пользователя (или переиспользует существующего из этой
+// сессии по совпадению ФИО), привязывает к группе с указанной ролью и сразу
+// выпускает многоразовый QR (max_uses=NULL). Удобный one-call для
+// «добавить человека и выдать ему QR» из вкладки «Многоразовые QR».
+router.post(
+  "/sessions/:sessionId/groups/:groupId/quick-add",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const fullName = String(req.body?.fullName || "").trim();
+    if (fullName.length < 2) {
+      throw createHttpError(400, "ФИО должно содержать минимум 2 символа");
+    }
+    const role = req.body?.role === "curator" ? "curator" : "participant";
+    const ttlMinutes = Math.max(
+      60,
+      Math.min(60 * 24 * 365, Number(req.body?.ttlMinutes) || 60 * 24 * 30),
+    );
+
+    const groupRow = await query(`select name from groups where id = $1 limit 1`, [
+      req.params.groupId,
+    ]);
+    const groupName = groupRow.rows[0]?.name || null;
+    if (!groupName) throw createHttpError(404, "Группа не найдена");
+
+    // Дедуп по ФИО внутри сессии: если человек уже есть в заезде —
+    // переиспользуем существующего user_id и только переназначаем группу/роль.
+    const existingUserId = await inviteDocumentService.findExistingSessionUserId({
+      sessionId: req.params.sessionId,
+      fullName,
+    });
+
+    let userId = existingUserId;
+    if (!userId) {
+      const user = await createUser({
+        actorId: req.viewer.id,
+        payload: {
+          fullName,
+          role,
+          status: "active",
+          meta: { source: "organizer-quick-add" },
+        },
+      });
+      userId = user.id;
+    }
+
+    await upsertUserAssignment({
+      actorId: req.viewer.id,
+      userId,
+      payload: {
+        sessionId: req.params.sessionId,
+        groupId: req.params.groupId,
+        role,
+        status: "active",
+      },
+    });
+
+    const link = await createMagicLink({
+      creatorId: req.viewer.id,
+      purpose: "invite",
+      targetUserId: userId,
+      sessionId: req.params.sessionId,
+      role,
+      groupId: req.params.groupId,
+      fullName,
+      ttlMinutes,
+      maxUses: null,
+      meta: {
+        source: "organizer-quick-add",
+        reusable: true,
+        role,
+        reusedExistingUser: Boolean(existingUserId),
+      },
+    });
+
+    const invite = {
+      groupId: req.params.groupId,
+      groupName,
+      role,
+      fullName,
+      url: link.url,
+      expiresAt: link.expiresAt,
+      magicLinkId: link.id,
+    };
+
+    let batchId = null;
+    try {
+      const persisted = await inviteBatchesStore.persistInviteBatch({
+        sessionId: req.params.sessionId,
+        actorId: req.viewer.id,
+        invites: [invite],
+        layout: "card",
+        title: role === "curator" ? "Многоразовый QR куратора" : "Многоразовый QR",
+        ttlMinutes,
+      });
+      batchId = persisted?.id || null;
+    } catch (error) {
+      console.warn("[organizer] quick-add batch persist failed:", error?.message || error);
+    }
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.quick_add",
+      entityType: "magic_link",
+      entityId: link.id,
+      payload: {
+        userId,
+        groupId: req.params.groupId,
+        role,
+        fullName,
+        ttlMinutes,
+        reusedExistingUser: Boolean(existingUserId),
+      },
+    });
+
+    let qrDataUrl = null;
+    try {
+      qrDataUrl = await inviteDocumentService.renderQrDataUrl(link.url, 320);
+    } catch {
+      // ignore
+    }
+
+    res.status(201).json({
+      userId,
+      reusedExistingUser: Boolean(existingUserId),
+      invite: {
+        ...invite,
+        userId,
+        createdAt: new Date().toISOString(),
+        createdBy: req.viewer.id,
+        consumedAt: null,
+        status: "pending",
+        qrDataUrl,
+        maxUses: null,
+        batchId,
+      },
+    });
+  }),
+);
+
 // POST /api/organizer/sessions/:sid/groups/:gid/reusable-qr/bulk-pdf
-// body: { role?: 'participant'|'curator', ttlMinutes?: number }
-// Выпускает multi-use magic-link для всех активных людей группы в выбранной
-// роли, сохраняет одним батчем и отдаёт PDF (layout='card' → 1 QR на лист
-// A4, тот же формат, что у одноразовых пакетных приглашений).
+// body: { role?: 'participant'|'curator', ttlMinutes?: number, userIds?: string[] }
+// Выпускает multi-use magic-link для всех (или выбранных через userIds[])
+// активных людей группы в указанной роли, сохраняет одним батчем и отдаёт
+// PDF (layout='card' → 1 QR на лист A4, тот же формат, что у одноразовых
+// пакетных приглашений).
 router.post(
   "/sessions/:sessionId/groups/:groupId/reusable-qr/bulk-pdf",
   requireOrganizer,
@@ -1722,6 +1865,9 @@ router.post(
       60,
       Math.min(60 * 24 * 365, Number(req.body?.ttlMinutes) || 60 * 24 * 30),
     );
+    const requestedUserIds = Array.isArray(req.body?.userIds)
+      ? req.body.userIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : null;
 
     const groupRow = await query(`select name from groups where id = $1 limit 1`, [
       req.params.groupId,
@@ -1770,12 +1916,20 @@ router.post(
       people = result.rows;
     }
 
+    // Фильтрация по выбранным userIds (если указано). Не падаем на
+    // несуществующих id — просто оставляем только пересечение, чтобы UI с
+    // stale-checkbox-стейтом не получал 404.
+    if (requestedUserIds && requestedUserIds.length) {
+      const wanted = new Set(requestedUserIds);
+      people = people.filter((p) => wanted.has(p.id));
+    }
+
     if (!people.length) {
       throw createHttpError(
         404,
         role === "curator"
-          ? "В этой группе нет назначенных кураторов"
-          : "В этой группе нет активных участников",
+          ? "Не выбран ни один куратор для печати"
+          : "Не выбран ни один участник для печати",
       );
     }
 

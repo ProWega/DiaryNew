@@ -1510,6 +1510,59 @@
   min-width: 0;
 }
 
+.reusable-qr-bulk-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reusable-qr-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.reusable-qr-check input[type="checkbox"] {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--istoki-burgundy, #4a111b);
+}
+
+.reusable-qr-check strong {
+  word-break: break-word;
+}
+
+.reusable-qr-add-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.reusable-qr-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.reusable-qr-add-row input[type="text"] {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.16));
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.reusable-qr-add-row button {
+  flex: 0 0 auto;
+}
+
 /* Переключатель «Кому выпускаем»: участники / кураторы. */
 .role-toggle {
   display: inline-flex;

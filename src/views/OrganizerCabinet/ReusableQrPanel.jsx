@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/ui/Toast";
 import { jsonApi } from "../../api/jsonApi";
@@ -137,10 +137,9 @@ function IssuedQrCard({ issued, sessionId, onCopyHint, fileNamePrefix }) {
 }
 
 /**
- * Скачивает PDF с многоразовыми QR для всех людей группы в выбранной роли.
- * Бэкенд сам выпускает magic-link'и (max_uses=NULL) и рендерит layout='card'
- * — каждый QR занимает отдельный лист A4 (тот же формат, что у одноразовых
- * пакетных приглашений).
+ * Скачивает PDF с многоразовыми QR. Если передан `userIds` — печатает только
+ * для них; иначе — для всех людей группы в роли. Backend сам выпускает
+ * magic-link'и (max_uses=NULL) и рендерит layout='card' (1 QR на лист A4).
  */
 function useBulkReusablePdf({ sessionId, groupId, role, ttlMinutes, groupName }) {
   const { currentUser } = useAuth();
@@ -148,13 +147,14 @@ function useBulkReusablePdf({ sessionId, groupId, role, ttlMinutes, groupName })
   const userId = currentUser?.id;
   const [downloading, setDownloading] = useState(false);
 
-  async function download() {
+  async function download(userIds) {
     if (!userId || !sessionId || !groupId) return;
     setDownloading(true);
     try {
       const blob = await jsonApi.createOrganizerReusableQrBulkPdf(userId, sessionId, groupId, {
         role,
         ttlMinutes,
+        userIds: Array.isArray(userIds) && userIds.length ? userIds : undefined,
       });
       const safeGroup = (groupName || groupId)
         .toString()
@@ -173,18 +173,140 @@ function useBulkReusablePdf({ sessionId, groupId, role, ttlMinutes, groupName })
   return { download, downloading };
 }
 
-function GroupSection({ sessionId, group, ttlMinutes }) {
-  const { members, loadingMembers, issueReusableQr, issuingQr } = useOrganizerReusableQr(
-    sessionId,
-    group.id,
+/**
+ * Хук, поддерживающий состояние «выбранных через чекбоксы» людей.
+ *
+ * Хранит `unchecked` (исключения), а не «включённые», чтобы:
+ *  — при появлении новых людей в `people` (quick-add) они автоматически
+ *    оказывались выбранными без useEffect+setState (cascading renders);
+ *  — выборка по умолчанию = все, что и нужно для bulk-PDF.
+ */
+function useSelection(people) {
+  const allIds = useMemo(() => people.map((p) => p.id), [people]);
+  const [unchecked, setUnchecked] = useState(() => new Set());
+
+  // Чистим из unchecked id'ы, которых уже нет в people — derived,
+  // без useEffect.
+  const effectiveUnchecked = useMemo(() => {
+    const validIds = new Set(allIds);
+    const next = new Set();
+    for (const id of unchecked) {
+      if (validIds.has(id)) next.add(id);
+    }
+    return next;
+  }, [unchecked, allIds]);
+
+  const selectedIds = useMemo(
+    () => allIds.filter((id) => !effectiveUnchecked.has(id)),
+    [allIds, effectiveUnchecked],
   );
-  const [issuedByMember, setIssuedByMember] = useState({});
-  const [activeMemberId, setActiveMemberId] = useState(null);
+
+  function toggle(id) {
+    setUnchecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setUnchecked(new Set());
+  }
+
+  function selectNone() {
+    setUnchecked(new Set(allIds));
+  }
+
+  return {
+    isSelected: (id) => !effectiveUnchecked.has(id),
+    selectedCount: selectedIds.length,
+    totalCount: allIds.length,
+    toggle,
+    selectAll,
+    selectNone,
+    selectedIds,
+  };
+}
+
+/**
+ * Форма «Добавить нового X в группу». Создаёт юзера (или переиспользует
+ * существующего по совпадению ФИО в заезде), привязывает к группе и сразу
+ * выпускает многоразовый QR. После успеха — новый человек появляется в
+ * списке (members/curators query инвалидируется в хуке).
+ */
+function AddPersonForm({ personRole, busy, onAdd }) {
+  const role = personRole;
+  const [fullName, setFullName] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const trimmed = fullName.trim();
+    if (trimmed.length < 2 || busy) return;
+    try {
+      await onAdd(trimmed);
+      setFullName("");
+    } catch {
+      // toast уже показан хуком
+    }
+  }
+
+  return (
+    <form className="reusable-qr-add-form" onSubmit={handleSubmit}>
+      <label className="invite-bulk-field">
+        <span>Добавить нового {role === "curator" ? "куратора" : "участника"} в группу</span>
+        <div className="reusable-qr-add-row">
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder={role === "curator" ? "Захарова Виктория Ясиновна" : "Иванов Иван Иванович"}
+            disabled={busy}
+          />
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={busy || fullName.trim().length < 2}
+          >
+            {busy ? "Добавляем…" : "Добавить и выдать QR"}
+          </button>
+        </div>
+      </label>
+      <small className="subtle">
+        Создаётся новый аккаунт и привязывается к группе. Сразу же выпускается многоразовый QR — он
+        попадёт в список ниже отмеченным галочкой.
+      </small>
+    </form>
+  );
+}
+
+/**
+ * Универсальная секция «Список людей группы + чекбоксы выбора + bulk-PDF +
+ * форма добавления». Используется и для участников, и для кураторов —
+ * разница только в источнике данных (передаётся уже извлечённый список).
+ */
+function PeopleSection({
+  sessionId,
+  group,
+  ttlMinutes,
+  personRole,
+  people,
+  loading,
+  emptyHint,
+  issueReusableQr,
+  issuingQr,
+  quickAdd,
+  quickAdding,
+}) {
+  const role = personRole;
+  const [issuedByPerson, setIssuedByPerson] = useState({});
+  const [activePersonId, setActivePersonId] = useState(null);
   const [copyHint, setCopyHint] = useState("");
+  const selection = useSelection(people);
   const bulkPdf = useBulkReusablePdf({
     sessionId,
     groupId: group.id,
-    role: "participant",
+    role,
     ttlMinutes,
     groupName: group.name,
   });
@@ -194,64 +316,123 @@ function GroupSection({ sessionId, group, ttlMinutes }) {
     setTimeout(() => setCopyHint(""), 1500);
   }
 
-  async function handleIssue(memberId) {
-    setActiveMemberId(memberId);
+  async function handleIssue(personId) {
+    setActivePersonId(personId);
     try {
-      const invite = await issueReusableQr(memberId, ttlMinutes);
+      const invite = await issueReusableQr(personId, ttlMinutes);
       if (invite) {
-        setIssuedByMember((prev) => ({ ...prev, [memberId]: invite }));
+        setIssuedByPerson((prev) => ({ ...prev, [personId]: invite }));
       }
     } catch {
       // toast
     } finally {
-      setActiveMemberId(null);
+      setActivePersonId(null);
     }
   }
+
+  async function handleQuickAdd(fullName) {
+    const result = await quickAdd(fullName, ttlMinutes);
+    if (result?.invite) {
+      // Сразу кладём свежий invite в issuedByPerson — UI покажет QR без
+      // отдельного клика «Сгенерировать».
+      const newId = result.userId || result.invite.userId || result.invite.magicLinkId;
+      if (newId) {
+        setIssuedByPerson((prev) => ({ ...prev, [newId]: result.invite }));
+      }
+    }
+  }
+
+  const noun = role === "curator" ? "кураторов" : "участников";
+  const eyebrow = role === "curator" ? "Кураторы" : "Участники";
+  const filePrefix = role === "curator" ? "qr-куратор" : "qr-участник";
+
+  const bulkDisabled = bulkPdf.downloading || selection.selectedCount === 0 || people.length === 0;
+  const bulkLabel = bulkPdf.downloading
+    ? "Готовим PDF…"
+    : selection.selectedCount === selection.totalCount
+      ? `Скачать PDF всем (${selection.totalCount})`
+      : `Скачать PDF выбранным (${selection.selectedCount} из ${selection.totalCount})`;
 
   return (
     <article className="panel-card reusable-qr-group">
       <header className="panel-head">
         <div>
-          <p className="eyebrow">Участники</p>
+          <p className="eyebrow">{eyebrow}</p>
           <h3>{group.name || "(без названия)"}</h3>
         </div>
-        <span className="confidence-tag">{members.length} участников</span>
+        <span className="confidence-tag">
+          {people.length} {noun}
+        </span>
       </header>
+
+      <AddPersonForm personRole={role} busy={quickAdding} onAdd={handleQuickAdd} />
 
       <div className="reusable-qr-bulk-row">
         <button
           type="button"
           className="primary-button"
-          onClick={bulkPdf.download}
-          disabled={bulkPdf.downloading || members.length === 0}
-          title="PDF: 1 QR на лист A4 для каждого участника группы (как у одноразовых пакетных приглашений)"
+          onClick={() => {
+            const ids =
+              selection.selectedCount === selection.totalCount ? undefined : selection.selectedIds;
+            bulkPdf.download(ids);
+          }}
+          disabled={bulkDisabled}
+          title="PDF: 1 QR на лист A4 для каждого выбранного человека"
         >
-          {bulkPdf.downloading ? "Готовим PDF…" : "Скачать PDF всем"}
+          {bulkLabel}
         </button>
+        {people.length > 1 ? (
+          <div className="reusable-qr-bulk-toggle">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={selection.selectAll}
+              disabled={selection.selectedCount === selection.totalCount}
+            >
+              Выбрать всех
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={selection.selectNone}
+              disabled={selection.selectedCount === 0}
+            >
+              Снять выбор
+            </button>
+          </div>
+        ) : null}
         <small className="subtle">
-          Выпустит свежие многоразовые QR для всех участников и сложит их в один PDF.
+          Снимите галочки рядом с теми, кого не нужно включать в распечатку.
         </small>
       </div>
 
       {copyHint ? <p className="subtle">{copyHint}</p> : null}
 
-      {loadingMembers ? (
-        <p className="subtle">Загружаем участников…</p>
-      ) : members.length === 0 ? (
-        <p className="subtle">В этой группе пока нет активных участников.</p>
+      {loading ? (
+        <p className="subtle">Загружаем {noun}…</p>
+      ) : people.length === 0 ? (
+        <p className="subtle">{emptyHint}</p>
       ) : (
         <ul className="reusable-qr-list">
-          {members.map((m) => {
-            const issued = issuedByMember[m.userId];
-            const isBusy = issuingQr && activeMemberId === m.userId;
+          {people.map((p) => {
+            const issued = issuedByPerson[p.id];
+            const isBusy = issuingQr && activePersonId === p.id;
+            const isChecked = selection.isSelected(p.id);
             return (
-              <li key={m.userId} className="reusable-qr-row">
+              <li key={p.id} className="reusable-qr-row">
                 <div className="reusable-qr-row-head">
-                  <strong>{m.fullName || "(без имени)"}</strong>
+                  <label className="reusable-qr-check">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => selection.toggle(p.id)}
+                    />
+                    <strong>{p.fullName || "(без имени)"}</strong>
+                  </label>
                   <button
                     type="button"
                     className="ghost-button"
-                    onClick={() => handleIssue(m.userId)}
+                    onClick={() => handleIssue(p.id)}
                     disabled={isBusy}
                   >
                     {isBusy ? "Выпускаем…" : issued ? "Выпустить ещё" : "Сгенерировать QR"}
@@ -262,7 +443,7 @@ function GroupSection({ sessionId, group, ttlMinutes }) {
                     issued={issued}
                     sessionId={sessionId}
                     onCopyHint={showHint}
-                    fileNamePrefix="qr-участник"
+                    fileNamePrefix={filePrefix}
                   />
                 ) : null}
               </li>
@@ -274,112 +455,51 @@ function GroupSection({ sessionId, group, ttlMinutes }) {
   );
 }
 
-/**
- * Секция «Кураторы группы». Аналог GroupSection, но для кураторов:
- * — список приходит из listCuratorsForGroup (groups.curator_id +
- *   session_users role='curator');
- * — magic-link выпускается с role='curator' (consume переназначит куратора
- *   на эту группу через upsertUserAssignment);
- * — PDF в формате 1 QR/лист тот же, что у участников.
- */
-function CuratorSection({ sessionId, group, ttlMinutes }) {
-  const { curators, loadingCurators, issueReusableQr, issuingQr } = useOrganizerCuratorReusableQr(
-    sessionId,
-    group.id,
+function ParticipantsSection({ sessionId, group, ttlMinutes }) {
+  const { members, loadingMembers, issueReusableQr, issuingQr, quickAdd, quickAdding } =
+    useOrganizerReusableQr(sessionId, group.id);
+
+  // Унифицируем форму к {id, fullName} — members API отдаёт userId.
+  const people = useMemo(
+    () => members.map((m) => ({ id: m.userId, fullName: m.fullName })),
+    [members],
   );
-  const [issuedByCurator, setIssuedByCurator] = useState({});
-  const [activeCuratorId, setActiveCuratorId] = useState(null);
-  const [copyHint, setCopyHint] = useState("");
-  const bulkPdf = useBulkReusablePdf({
-    sessionId,
-    groupId: group.id,
-    role: "curator",
-    ttlMinutes,
-    groupName: group.name,
-  });
-
-  function showHint(message) {
-    setCopyHint(message);
-    setTimeout(() => setCopyHint(""), 1500);
-  }
-
-  async function handleIssue(curatorId) {
-    setActiveCuratorId(curatorId);
-    try {
-      const invite = await issueReusableQr(curatorId, ttlMinutes);
-      if (invite) {
-        setIssuedByCurator((prev) => ({ ...prev, [curatorId]: invite }));
-      }
-    } catch {
-      // toast
-    } finally {
-      setActiveCuratorId(null);
-    }
-  }
 
   return (
-    <article className="panel-card reusable-qr-group">
-      <header className="panel-head">
-        <div>
-          <p className="eyebrow">Кураторы</p>
-          <h3>{group.name || "(без названия)"}</h3>
-        </div>
-        <span className="confidence-tag">{curators.length} кураторов</span>
-      </header>
+    <PeopleSection
+      sessionId={sessionId}
+      group={group}
+      ttlMinutes={ttlMinutes}
+      personRole="participant"
+      people={people}
+      loading={loadingMembers}
+      emptyHint="В этой группе пока нет активных участников. Добавьте первого через форму выше."
+      issueReusableQr={issueReusableQr}
+      issuingQr={issuingQr}
+      quickAdd={quickAdd}
+      quickAdding={quickAdding}
+    />
+  );
+}
 
-      <div className="reusable-qr-bulk-row">
-        <button
-          type="button"
-          className="primary-button"
-          onClick={bulkPdf.download}
-          disabled={bulkPdf.downloading || curators.length === 0}
-          title="PDF: 1 QR на лист A4 для каждого куратора группы"
-        >
-          {bulkPdf.downloading ? "Готовим PDF…" : "Скачать PDF всем"}
-        </button>
-        <small className="subtle">
-          Выпустит свежие многоразовые QR для всех кураторов и сложит их в один PDF.
-        </small>
-      </div>
+function CuratorsSection({ sessionId, group, ttlMinutes }) {
+  const { curators, loadingCurators, issueReusableQr, issuingQr, quickAdd, quickAdding } =
+    useOrganizerCuratorReusableQr(sessionId, group.id);
 
-      {copyHint ? <p className="subtle">{copyHint}</p> : null}
-
-      {loadingCurators ? (
-        <p className="subtle">Загружаем кураторов…</p>
-      ) : curators.length === 0 ? (
-        <p className="subtle">В этой группе пока нет назначенных кураторов.</p>
-      ) : (
-        <ul className="reusable-qr-list">
-          {curators.map((c) => {
-            const issued = issuedByCurator[c.id];
-            const isBusy = issuingQr && activeCuratorId === c.id;
-            return (
-              <li key={c.id} className="reusable-qr-row">
-                <div className="reusable-qr-row-head">
-                  <strong>{c.fullName || "(без имени)"}</strong>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => handleIssue(c.id)}
-                    disabled={isBusy}
-                  >
-                    {isBusy ? "Выпускаем…" : issued ? "Выпустить ещё" : "Сгенерировать QR"}
-                  </button>
-                </div>
-                {issued ? (
-                  <IssuedQrCard
-                    issued={issued}
-                    sessionId={sessionId}
-                    onCopyHint={showHint}
-                    fileNamePrefix="qr-куратор"
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </article>
+  return (
+    <PeopleSection
+      sessionId={sessionId}
+      group={group}
+      ttlMinutes={ttlMinutes}
+      personRole="curator"
+      people={curators}
+      loading={loadingCurators}
+      emptyHint="В этой группе пока нет назначенных кураторов. Добавьте через форму выше."
+      issueReusableQr={issueReusableQr}
+      issuingQr={issuingQr}
+      quickAdd={quickAdd}
+      quickAdding={quickAdding}
+    />
   );
 }
 
@@ -391,6 +511,10 @@ function CuratorSection({ sessionId, group, ttlMinutes }) {
  * и большим TTL (по умолчанию 30 дней). Каждый QR можно скачать как PDF в
  * формате 1 QR на лист A4 (используется тот же layout='card', что у
  * одноразовых кураторских приглашений из bulk-flow).
+ *
+ * Чекбоксы перед каждым именем позволяют выбрать подмножество для bulk-PDF.
+ * Форма «Добавить нового» создаёт юзера, привязывает к группе и сразу
+ * выпускает QR.
  */
 function ReusableQrPanel({ sessionId, groups = [] }) {
   const [ttlMinutes, setTtlMinutes] = useState(60 * 24 * 30);
@@ -423,7 +547,8 @@ function ReusableQrPanel({ sessionId, groups = [] }) {
               Выпускайте QR-коды, которые человек может сканировать многократно — удобно как бейдж
               на смену. Каждый сгенерированный QR безлимитен по числу использований и работает до
               выбранной даты. Magic-link можно показывать на экране, копировать ссылку или скачать
-              PDF (1 QR на лист A4 — как у одноразовых кураторских приглашений).
+              PDF (1 QR на лист A4 — как у одноразовых кураторских приглашений). Чекбоксами
+              отметьте, кого включать в распечатку — или добавьте нового человека прямо из секции.
             </p>
           </div>
         </header>
@@ -469,14 +594,14 @@ function ReusableQrPanel({ sessionId, groups = [] }) {
       <div className="reusable-qr-groups">
         {groups.map((group) =>
           audience === "curators" ? (
-            <CuratorSection
+            <CuratorsSection
               key={`cur-${group.id}`}
               sessionId={sessionId}
               group={group}
               ttlMinutes={ttlMinutes}
             />
           ) : (
-            <GroupSection
+            <ParticipantsSection
               key={`mem-${group.id}`}
               sessionId={sessionId}
               group={group}
