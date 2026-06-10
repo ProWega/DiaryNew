@@ -1491,3 +1491,20 @@
     margin: 0 auto;
   }
 }
+
+/* === Mobile collapse organizer-grid'ов ===
+   Без этого блока layout.css не может перебить эти декларации (см.
+   components.css final block для аналогичной проблемы). */
+@media (max-width: 1160px) {
+  .organizer-cabinet-grid,
+  .organizer-focus-grid,
+  .organizer-table-mode-grid,
+  .organizer-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* В organizer-grid'е card'ы тоже надо в одну колонку */
+  .organizer-grid {
+    grid-template-columns: 1fr;
+  }
+}

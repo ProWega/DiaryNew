@@ -1476,3 +1476,21 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* === Mobile collapse для 2-колоночных layout'ов ===
+   layout.css задаёт эти grid → 1fr в @media (max-width: 1160px), НО
+   components.css загружается ПОСЛЕ layout.css и без media query определяет
+   `.dynamics-layout { grid-template-columns: minmax(0, 1.2fr)... }`,
+   что перетирает collapse из layout.css на маленьких экранах (media query
+   не повышает specificity). Дублируем collapse здесь, чтобы оно гарантированно
+   сработало на мобильных. Аналогично — для остальных «дисплейных» grid'ов. */
+@media (max-width: 1160px) {
+  .dynamics-layout,
+  .curator-layout,
+  .organizer-grid,
+  .member-grid,
+  .group-compare-grid,
+  .theme-wrap {
+    grid-template-columns: 1fr;
+  }
+}

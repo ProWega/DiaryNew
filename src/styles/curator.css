@@ -2042,3 +2042,13 @@
     margin: 0 auto;
   }
 }
+
+/* === Mobile collapse curator grid'ов === */
+@media (max-width: 1160px) {
+  .curator-layout,
+  .curator-brief-grid,
+  .curator-reflection-columns,
+  .curator-comments-layout {
+    grid-template-columns: 1fr;
+  }
+}
