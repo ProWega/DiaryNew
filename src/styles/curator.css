@@ -1961,6 +1961,26 @@
   display: grid;
   gap: 12px;
   margin-top: 12px;
+  min-width: 0;
+}
+
+/* Внутри .curator-group-invites input/select/file-input должны влезать в
+   контейнер, иначе на узких экранах (или когда дефолтная ширина input
+   шире контейнера) карточка уходит вправо за экран — см. скриншот с
+   «Иванов Иван Иванович» наезжающим на правый край вьюпорта. */
+.curator-group-invites .invite-bulk-field input[type="text"],
+.curator-group-invites .invite-bulk-field input[type="file"],
+.curator-group-invites .invite-bulk-field select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.curator-group-invites .invite-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .curator-invite-list {
@@ -1974,7 +1994,7 @@
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -2041,6 +2061,31 @@
     max-width: 240px;
     margin: 0 auto;
   }
+  /* URL+кнопка «Копировать» — на узких в столбик, иначе input
+     с длинной magic-link-ссылкой раздувает grid и карточка вылезает. */
+  .curator-invite-url-row {
+    grid-template-columns: 1fr;
+  }
+  .curator-group-invites .panel-head h3,
+  .curator-group-invites .panel-head h4 {
+    word-break: break-word;
+  }
+}
+
+/* Все непосредственные элементы карточки приглашений должны иметь min-width: 0
+   — иначе grid/flex пускают их раскрыться по min-content (длинная URL-ссылка
+   делает контейнер шире экрана). */
+.curator-group-invites,
+.curator-group-invites .curator-invite-card,
+.curator-group-invites .curator-invite-body,
+.curator-group-invites .curator-invite-url-row {
+  min-width: 0;
+}
+
+.curator-group-invites .curator-invite-url-row input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* === Mobile collapse curator grid'ов === */

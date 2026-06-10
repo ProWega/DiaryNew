@@ -1492,6 +1492,49 @@
   }
 }
 
+/* Кнопка «Скачать PDF всем» в шапке секции. */
+.reusable-qr-bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(154, 122, 50, 0.06);
+  border: 1px dashed rgba(154, 122, 50, 0.3);
+}
+
+.reusable-qr-bulk-row small {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* Переключатель «Кому выпускаем»: участники / кураторы. */
+.role-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.role-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(71, 81, 91, 0.18);
+  background: rgba(255, 252, 244, 0.6);
+  cursor: pointer;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.role-toggle input[type="radio"] {
+  margin: 0;
+}
+
 /* === Mobile collapse organizer-grid'ов ===
    Без этого блока layout.css не может перебить эти декларации (см.
    components.css final block для аналогичной проблемы). */

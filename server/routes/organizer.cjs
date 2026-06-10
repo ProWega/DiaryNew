@@ -1657,8 +1657,9 @@ router.post(
       magicLinkId: link.id,
     };
 
+    let batchId = null;
     try {
-      await inviteBatchesStore.persistInviteBatch({
+      const persisted = await inviteBatchesStore.persistInviteBatch({
         sessionId: req.params.sessionId,
         actorId: req.viewer.id,
         invites: [invite],
@@ -1666,6 +1667,7 @@ router.post(
         title: "Многоразовый QR",
         ttlMinutes,
       });
+      batchId = persisted?.id || null;
     } catch (error) {
       console.warn("[organizer] reusable-qr batch persist failed:", error?.message || error);
     }
@@ -1700,6 +1702,287 @@ router.post(
         status: "pending",
         qrDataUrl,
         maxUses: null,
+        batchId,
+      },
+    });
+  }),
+);
+
+// POST /api/organizer/sessions/:sid/groups/:gid/reusable-qr/bulk-pdf
+// body: { role?: 'participant'|'curator', ttlMinutes?: number }
+// Выпускает multi-use magic-link для всех активных людей группы в выбранной
+// роли, сохраняет одним батчем и отдаёт PDF (layout='card' → 1 QR на лист
+// A4, тот же формат, что у одноразовых пакетных приглашений).
+router.post(
+  "/sessions/:sessionId/groups/:groupId/reusable-qr/bulk-pdf",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const role = req.body?.role === "curator" ? "curator" : "participant";
+    const ttlMinutes = Math.max(
+      60,
+      Math.min(60 * 24 * 365, Number(req.body?.ttlMinutes) || 60 * 24 * 30),
+    );
+
+    const groupRow = await query(`select name from groups where id = $1 limit 1`, [
+      req.params.groupId,
+    ]);
+    const groupName = groupRow.rows[0]?.name || null;
+    if (!groupName) throw createHttpError(404, "Группа не найдена");
+
+    let people = [];
+    if (role === "participant") {
+      const result = await query(
+        `
+          select u.id, u.full_name
+            from session_users su
+            join users u on u.id = su.user_id
+           where su.session_id = $1 and su.group_id = $2
+             and su.role = 'participant' and su.status = 'active'
+             and u.status = 'active'
+           order by u.full_name
+        `,
+        [req.params.sessionId, req.params.groupId],
+      );
+      people = result.rows;
+    } else {
+      // Куратор: тот же UNION, что в /curators (groups.curator_id +
+      // session_users role='curator')
+      const result = await query(
+        `
+          with curators as (
+            select g.curator_id as user_id
+              from groups g
+              where g.id = $2 and g.session_id = $1 and g.curator_id is not null
+            union
+            select su.user_id
+              from session_users su
+              where su.session_id = $1 and su.group_id = $2
+                and su.role = 'curator' and su.status = 'active'
+          )
+          select u.id, u.full_name
+            from curators c
+            join users u on u.id = c.user_id
+           where u.status = 'active'
+           order by u.full_name
+        `,
+        [req.params.sessionId, req.params.groupId],
+      );
+      people = result.rows;
+    }
+
+    if (!people.length) {
+      throw createHttpError(
+        404,
+        role === "curator"
+          ? "В этой группе нет назначенных кураторов"
+          : "В этой группе нет активных участников",
+      );
+    }
+
+    const invites = [];
+    for (const person of people) {
+      const fullName = person.full_name || "";
+      const link = await createMagicLink({
+        creatorId: req.viewer.id,
+        purpose: "invite",
+        targetUserId: person.id,
+        sessionId: req.params.sessionId,
+        role,
+        groupId: req.params.groupId,
+        fullName,
+        ttlMinutes,
+        maxUses: null,
+        meta: {
+          source: "organizer-reusable-qr-bulk",
+          reusable: true,
+          role,
+        },
+      });
+      invites.push({
+        groupId: req.params.groupId,
+        groupName,
+        role,
+        fullName,
+        url: link.url,
+        expiresAt: link.expiresAt,
+        magicLinkId: link.id,
+      });
+    }
+
+    const title =
+      role === "curator"
+        ? `Многоразовые QR кураторов · ${groupName}`
+        : `Многоразовые QR участников · ${groupName}`;
+
+    let batchId = null;
+    try {
+      const persisted = await inviteBatchesStore.persistInviteBatch({
+        sessionId: req.params.sessionId,
+        actorId: req.viewer.id,
+        invites,
+        layout: "card",
+        title,
+        ttlMinutes,
+      });
+      batchId = persisted?.id || null;
+    } catch (error) {
+      console.warn("[organizer] reusable-qr bulk persist failed:", error?.message || error);
+    }
+
+    let pdfBuffer;
+    try {
+      pdfBuffer = await inviteDocumentService.renderInvitesPdf({
+        invites,
+        layout: "card",
+        title,
+        footer: "",
+      });
+    } catch (error) {
+      throw createHttpError(500, `Ошибка рендера PDF: ${error.message}`);
+    }
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.reusable_qr.bulk",
+      entityType: "invite_batch",
+      entityId: batchId,
+      payload: {
+        groupId: req.params.groupId,
+        role,
+        count: invites.length,
+        ttlMinutes,
+      },
+    });
+
+    const filename = `reusable-qr-${role}-${req.params.groupId}-${Date.now()}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Invites-Created", String(invites.length));
+    if (batchId) res.setHeader("X-Invite-Batch-Id", batchId);
+    res.status(201).send(pdfBuffer);
+  }),
+);
+
+// POST /api/organizer/sessions/:sid/groups/:gid/curators/:curatorId/reusable-qr
+// body: { ttlMinutes? } → multi-use magic-link для куратора. Возвращает invite
+// с qrDataUrl + batchId (через который фронт качает PDF в формате 1 QR/лист
+// через POST /invite-batches/:batchId/render). Зеркало participant-эндпоинта
+// выше, но для роли curator: проверяем что user реально куратор группы (либо
+// groups.curator_id, либо session_users role='curator').
+router.post(
+  "/sessions/:sessionId/groups/:groupId/curators/:curatorId/reusable-qr",
+  requireOrganizer,
+  asyncHandler(async (req, res) => {
+    const ttlMinutes = Math.max(
+      60,
+      Math.min(60 * 24 * 365, Number(req.body?.ttlMinutes) || 60 * 24 * 30),
+    );
+
+    const userRow = await query(
+      `
+        with curator_match as (
+          select 1 from groups g
+            where g.id = $2 and g.session_id = $1 and g.curator_id = $3
+          union
+          select 1 from session_users su
+            where su.session_id = $1 and su.group_id = $2 and su.user_id = $3
+              and su.role = 'curator' and su.status = 'active'
+        )
+        select u.id, u.full_name
+          from users u
+         where u.id = $3 and u.status = 'active'
+           and exists (select 1 from curator_match)
+         limit 1
+      `,
+      [req.params.sessionId, req.params.groupId, req.params.curatorId],
+    );
+    if (!userRow.rows[0]) {
+      throw createHttpError(404, "Куратор не найден в этой группе");
+    }
+    const fullName = userRow.rows[0].full_name || "";
+
+    const groupRow = await query(`select name from groups where id = $1 limit 1`, [
+      req.params.groupId,
+    ]);
+    const groupName = groupRow.rows[0]?.name || null;
+
+    const link = await createMagicLink({
+      creatorId: req.viewer.id,
+      purpose: "invite",
+      targetUserId: req.params.curatorId,
+      sessionId: req.params.sessionId,
+      role: "curator",
+      groupId: req.params.groupId,
+      fullName,
+      ttlMinutes,
+      maxUses: null,
+      meta: {
+        source: "organizer-reusable-qr",
+        reusable: true,
+        role: "curator",
+      },
+    });
+
+    const invite = {
+      groupId: req.params.groupId,
+      groupName,
+      role: "curator",
+      fullName,
+      url: link.url,
+      expiresAt: link.expiresAt,
+      magicLinkId: link.id,
+    };
+
+    let batchId = null;
+    try {
+      const persisted = await inviteBatchesStore.persistInviteBatch({
+        sessionId: req.params.sessionId,
+        actorId: req.viewer.id,
+        invites: [invite],
+        layout: "card",
+        title: "Многоразовый QR куратора",
+        ttlMinutes,
+      });
+      batchId = persisted?.id || null;
+    } catch (error) {
+      console.warn(
+        "[organizer] curator reusable-qr batch persist failed:",
+        error?.message || error,
+      );
+    }
+
+    logAuditEvent({
+      actorId: req.viewer.id,
+      sessionId: req.params.sessionId,
+      action: "organizer.invite.reusable_qr.curator",
+      entityType: "magic_link",
+      entityId: link.id,
+      payload: {
+        curatorId: req.params.curatorId,
+        groupId: req.params.groupId,
+        fullName,
+        ttlMinutes,
+      },
+    });
+
+    let qrDataUrl = null;
+    try {
+      qrDataUrl = await inviteDocumentService.renderQrDataUrl(link.url, 320);
+    } catch {
+      // ignore
+    }
+
+    res.status(201).json({
+      invite: {
+        ...invite,
+        createdAt: new Date().toISOString(),
+        createdBy: req.viewer.id,
+        consumedAt: null,
+        status: "pending",
+        qrDataUrl,
+        maxUses: null,
+        batchId,
       },
     });
   }),

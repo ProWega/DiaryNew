@@ -313,6 +313,59 @@ export function useOrganizerReusableQr(sessionId, groupId) {
   };
 }
 
+/**
+ * То же, что useOrganizerReusableQr, но для кураторов группы. Используется
+ * в кабинете организатора во вкладке «Многоразовые QR» для выпуска
+ * безлимитных QR-инвайтов кураторам (по аналогии с участниками).
+ */
+export function useOrganizerCuratorReusableQr(sessionId, groupId) {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const addToast = useToast();
+  const userId = currentUser?.id;
+  const queryKey = ["organizer", "group-curators", userId, sessionId, groupId];
+
+  const curatorsQuery = useQuery({
+    queryKey,
+    queryFn: () => jsonApi.getOrganizerGroupCurators(userId, sessionId, groupId),
+    enabled: Boolean(userId && sessionId && groupId),
+  });
+
+  const issueMutation = useMutation({
+    mutationFn: ({ curatorId, ttlMinutes }) =>
+      jsonApi.createOrganizerCuratorReusableQr(userId, sessionId, groupId, curatorId, {
+        ttlMinutes,
+      }),
+  });
+
+  const issueReusableQr = useCallback(
+    async (curatorId, ttlMinutes) => {
+      if (!userId || !sessionId || !groupId || !curatorId) return null;
+      try {
+        const result = await issueMutation.mutateAsync({ curatorId, ttlMinutes });
+        addToast("Многоразовый QR куратора выпущен", "success");
+        return result?.invite || null;
+      } catch (error) {
+        addToast(error?.message || "Не удалось выпустить QR", "error");
+        throw error;
+      }
+    },
+    [userId, sessionId, groupId, issueMutation, addToast],
+  );
+
+  // listCuratorsForGroup возвращает массив объектов { id, fullName, ... }
+  const curators = Array.isArray(curatorsQuery.data) ? curatorsQuery.data : [];
+
+  return {
+    curators,
+    loadingCurators: curatorsQuery.isPending,
+    curatorsError: curatorsQuery.error,
+    refreshCurators: () => queryClient.invalidateQueries({ queryKey }),
+    issueReusableQr,
+    issuingQr: issueMutation.isPending,
+  };
+}
+
 export function useCuratorGroupOverview(sessionId, groupId) {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();

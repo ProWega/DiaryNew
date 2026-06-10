@@ -744,6 +744,73 @@ export const jsonApi = {
     );
   },
 
+  getOrganizerGroupCurators(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+  ) {
+    return requestJson(`/api/organizer/sessions/${sessionId}/groups/${groupId}/curators`, {
+      headers: viewerHeaders(viewerId),
+    });
+  },
+
+  createOrganizerCuratorReusableQr(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    curatorId: string | number,
+    payload: { ttlMinutes?: number } = {},
+  ) {
+    return requestJson(
+      `/api/organizer/sessions/${sessionId}/groups/${groupId}/curators/${curatorId}/reusable-qr`,
+      {
+        method: "POST",
+        headers: viewerHeaders(viewerId),
+        body: payload,
+      },
+    );
+  },
+
+  async createOrganizerReusableQrBulkPdf(
+    viewerId: string | number,
+    sessionId: string | number,
+    groupId: string | number,
+    payload: { role: "participant" | "curator"; ttlMinutes?: number },
+  ) {
+    const path = `/api/organizer/sessions/${sessionId}/groups/${groupId}/reusable-qr/bulk-pdf`;
+    const send = () =>
+      fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": getCsrfToken() ?? "",
+          ...viewerHeaders(viewerId),
+        },
+        body: JSON.stringify(payload),
+      });
+    let response = await send();
+    if (response.status === 403) {
+      try {
+        await fetch("/api/auth/me", { credentials: "include" });
+      } catch {
+        // ignore
+      }
+      response = await send();
+    }
+    if (!response.ok) {
+      let message = "Не удалось сгенерировать PDF";
+      try {
+        const payloadJson = (await response.json()) as { message?: string };
+        message = payloadJson.message ?? message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response.blob();
+  },
+
   // ── Curator: group overview + invitations ───────────────────────────────
 
   getCuratorGroupOverview(
